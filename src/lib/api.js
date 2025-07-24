@@ -912,6 +912,16 @@ const api = {
     return response.data;
   },
 
+  createBanxaOrder: async (params) => {
+    const response = await instance.post(`/${apiVersion}/banxa`, params);
+    return response.data;
+  },
+
+  getBanxaOrder: async (orderId) => {
+    const response = await instance.get(`/${apiVersion}/banxa/${orderId}`);
+    return response.data;
+  },
+
   getStripePayments: async () => {
     const response = await instance.get(`/${apiVersion}/stripe/payments`);
     return response.data;

@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import { createPortal } from 'react-dom';
-import { PropagateLoader as Loader } from 'react-spinners';
-import { RampInstantSDK } from '@ramp-network/ramp-instant-sdk';
+import { PropagateLoader as Loader, PuffLoader as AltLoader } from 'react-spinners';
 
 import { appConfig } from '~/appConfig';
 import Button from '~/components/ButtonAlt';
-import { ChevronRightIcon, CloseIcon, LinkIcon, WalletIcon } from '~/components/Icons';
+import { ChevronRightIcon, CloseIcon, WalletIcon } from '~/components/Icons';
 import Details from '~/components/DetailsV2';
 import useSession from '~/hooks/useSession';
 import BrightButton from '~/components/BrightButton';
-import MouseoverInfoPane from '~/components/MouseoverInfoPane';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import UserPrice from '~/components/UserPrice';
-import { TOKEN, TOKEN_FORMAT, TOKEN_FORMATTER } from '~/lib/priceUtils';
+import { TOKEN, TOKEN_FORMAT, TOKEN_FORMATTER, TOKEN_SCALE } from '~/lib/priceUtils';
 import usePriceHelper from '~/hooks/usePriceHelper';
 import useStore from '~/hooks/useStore';
 import EthFaucetButton from './components/EthFaucetButton';
 import { areChainsEqual, fireTrackingEvent, resolveChainId, safeBigInt } from '~/lib/utils';
+import api from '~/lib/api';
+import PageLoader from '~/components/PageLoader';
 
 const layerSwapChains = {
   SN_MAIN: { ethereum: 'ETHEREUM_MAINNET', starknet: 'STARKNET_MAINNET' },
@@ -227,76 +227,13 @@ const WaitingWrapper = styled.div`
   }
 `;
 
-const RampWrapper = styled.div`
-  background: linear-gradient(225deg, black, rgba(${p => p.theme.colors.mainRGB}, 0.3));
-  ${p => !p.display && `
-    height: 0;
-    overflow: hidden;
-    width: 0;
-  `}
-  & > div {
-    height: 600px;
-    width: 900px;
-  }
+const LoaderWrapper = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  width: 400px;
 `;
-
-const RAMP_PURCHASE_STATUS = {
-  INITIALIZED: {
-    statusText: 'The purchase has been initialized.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_STARTED: {
-    statusText: 'Automated payment has been initiated.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_IN_PROGRESS: {
-    statusText: 'Payment process has been completed.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_FAILED: {
-    statusText: 'The payment was cancelled, rejected, or otherwise failed.',
-    isSuccess: false,
-    isError: true
-  },
-  PAYMENT_EXECUTED: {
-    statusText: 'Payment approved, waiting for funds to be received.',
-    isSuccess: false,
-    isError: false
-  },
-  FIAT_SENT: {
-    statusText: 'Outgoing bank transfer has been confirmed.',
-    isSuccess: false,
-    isError: false
-  },
-  FIAT_RECEIVED: {
-    statusText: 'Payment confirmed, final checks before crypto transfer.',
-    isSuccess: false,
-    isError: false
-  },
-  RELEASING: {
-    statusText: 'Funds received, initiating crypto transfer...',
-    isSuccess: false,
-    isError: false
-  },
-  RELEASED: {
-    statusText: 'Waiting for funds to be received by user\'s wallet...',
-    isSuccess: true,
-    isError: false
-  },
-  EXPIRED: {
-    statusText: 'Time to pay for the purchase was exceeded. Please try again, making sure to follow all prompts.',
-    isSuccess: false,
-    isError: true
-  },
-  CANCELLED: {
-    statusText: 'The purchase was been cancelled.',
-    isSuccess: false,
-    isError: true
-  }
-};
 
 export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
@@ -306,8 +243,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   const { data: wallet, refetch: refetchBalances } = useWalletPurchasableBalances();
   const preferredUiCurrency = useStore(s => s.getPreferredUiCurrency());
 
-  const [hoveredRampButton, setHoveredRampButton] = useState(false);
-  const [ramping, setRamping] = useState();
+  const [banxaing, setBanxaing] = useState();
   const [waiting, setWaiting] = useState();
 
   const startingBalance = useRef();
@@ -393,82 +329,44 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
     return [needed]
   }, [fundsNeeded]);
 
-  const to = useRef();
-  const onRampHover = useCallback((which) => (e) => {
-    if (to.current) clearTimeout(to.current);
-    if (which) {
-      setHoveredRampButton(e.target);
-    } else {  // close on delay so have time to click the link
-      to.current = setTimeout(() => {
-        setHoveredRampButton();
-      }, 1500);
+
+  const [banxaOrder, setBanxaOrder] = useState({});
+
+  const checkBanxaOrder = useCallback(async (purchase) => {
+    console.log('Checking Banxa order', purchase);
+    if (!purchase?.id) return;
+
+    const order = await api.getBanxaOrder(purchase.id);
+    if (order?.id) {
+      setBanxaOrder((o) => ({ ...o, order }));
     }
   }, []);
 
-  const [rampPurchase, setRampPurchase] = useState();
-  const checkRampPurchase = useCallback(async (purchase) => {
-    try {
-      const response = await fetch(
-        `${appConfig.get('Api.ramp')}/api/host-api/purchase/${purchase.id}?secret=${purchase.purchaseViewToken}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-      if (response.ok) {
-        const updatePurchaseObject = await response.json();
-        setRampPurchase(updatePurchaseObject);
-
-        // stop checking if terminal status
-        const status = RAMP_PURCHASE_STATUS[updatePurchaseObject.status];
-        if (status.isError || status.isSuccess) {
-          return;
-        }
-      } else {
-        console.error('Response not ok:', response);
-      }
-    } catch (error) {
-      console.error('Error fetching purchase info:', error);
-    }
-  }, []);
   useEffect(() => {
-    if (rampPurchase) {
-      const i = setInterval(() => { checkRampPurchase(rampPurchase); }, 5000);
+    if (banxaOrder) {
+      const i = setInterval(() => { checkBanxaOrder(banxaOrder); }, 5000);
       return () => clearInterval(i);
     }
-  }, [checkRampPurchase, rampPurchase])
-  
-  const onClickCC = useCallback((amount) => () => {
+  }, [checkBanxaOrder, banxaOrder]);
+
+  const onClickCC = useCallback((amount) => async () => {
     fireTrackingEvent('funding_start', { externalId: accountAddress });
-    setRamping(true);
-    setRampPurchase();
+    console.log('amount', amount);
+    try {
+      setBanxaing(true);
 
-    setTimeout(() => {
-      const embeddedRamp = new RampInstantSDK({
-        hostAppName: 'Influence',
-        hostLogoUrl: window.location.origin + '/maskable-logo-192x192.png',
-        hostApiKey: appConfig.get('Api.ClientId.ramp'),
-        userAddress: accountAddress,
-        swapAsset: 'STARKNET_ETH',  // TODO: STARKNET_USDC once enabled
-        fiatCurrency: 'USD',
-        fiatValue: Math.ceil(amount / 1e6),
-        url: appConfig.get('Api.ramp'),
-
-        variant: 'embedded-desktop',
-        containerNode: document.getElementById('ramp-container')
-      })
-      embeddedRamp.on('PURCHASE_CREATED', (e) => {
-        console.log('PURCHASE_CREATED', e);
-        try {
-          setRampPurchase(e.payload.purchase);
-        } catch (e) {
-          console.warn('purchase_created event missing payload!', e);
-        }
+      const order = await api.createBanxaOrder({ 
+        // TODO: should this be the USDC amount instead?
+        // TODO: can alternatively support an amount in crypto here too
+        usd: Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
+        crypto: appConfig.get('App.deployment') === 'production' ? 'USDC' : 'USDT',
       });
-      embeddedRamp.show();
-    }, 100);
+
+      setBanxaOrder(order);
+    } catch (error) {
+      console.error('Error fetching Banxa checkout URL:', error);
+      fireTrackingEvent('funding_error', { externalId: accountAddress });
+    }
   }, [accountAddress]);
 
   const [layerswapUrl, setLayerswapUrl] = useState();
@@ -514,41 +412,50 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
     onClose();
   }, [onClose]);
 
+  const banxaOrderStatusMessage = useMemo(() => {
+    switch (banxaOrder?.status) {
+      case 'pendingPayment': return 'Awaiting payment...';
+      case 'waitingPayment': return 'Processing payment...';
+      case 'paymentReceived': return 'Payment received, processing...';
+      case 'inProgress': return 'Final verification, processing...';
+      case 'cryptoTransferred': return 'Crypto transfer initiated...';
+
+      case 'cancelled': return 'Order has been cancelled by Banxa due to internal risk and compliance alerts.';
+      case 'declined': return 'Payment method declined.';
+      case 'expired': return 'Checkout has expired. Please start over.';
+    };
+  }, [banxaOrder?.status]);
+
+  const hasTrackedExecution = useRef(false);
+
   useEffect(() => {
-    // error: clear ramp purchase + close funding dialog
-    if (RAMP_PURCHASE_STATUS[rampPurchase?.status]?.isError) {
-      // fire error
-      fireTrackingEvent('funding_error', { externalId: accountAddress, status: rampPurchase?.status });
 
-      // alert user
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: <>RAMP PAYMENT ERROR: "{RAMP_PURCHASE_STATUS[rampPurchase?.status].statusText}"<br/><br/>Click for more information.</> },
-        level: 'warning',
-      });
+    // as it's not pending, after pendingPayment, we know user has (attempted to) submit payment
+    // (just fire once per flow though)
+    if (banxaOrder?.status && banxaOrder?.status !== 'pendingPayment') {
+      if (!hasTrackedExecution.current) {
+        fireTrackingEvent('funding_payment_executed', { externalId: accountAddress });
+        hasTrackedExecution.current = true;
+      }
+    }
 
-      // clear purchase
-      setRampPurchase();
-      onClose();
+    // error: track but let Banxa explain (and user can close dialog)
+    if (['cancelled', 'declined', 'expired', 'extraVerification'].includes(banxaOrder?.status)) {
+      fireTrackingEvent('funding_error', { externalId: accountAddress, status: banxaOrder?.status });
+    }
 
-    // success: clear ramp purchase (don't close funding, let "waiting" handler do that)
-    } else if (RAMP_PURCHASE_STATUS[rampPurchase?.status]?.isSuccess) {
+    // complete: we close for them and switch to waiting state
+    else if (['complete'].includes(banxaOrder?.status)) {
       // fire success
       fireTrackingEvent('funding_success', { externalId: accountAddress });
 
       // clear purchase
-      setRampPurchase();
-      setRamping(); // (this should be redundant)
-      setWaiting(true);
-
-    // processing: switch from ramp widget to "waiting" once PAYMENT_EXECUTED
-    } else if (rampPurchase?.status === 'PAYMENT_EXECUTED') {
-      fireTrackingEvent('funding_payment_executed', { externalId: accountAddress });
-      setRamping();
+      setBanxaOrder();
+      setBanxaing(); // (this should be redundant)
       setWaiting(true);
     }
-  }, [rampPurchase?.status])
-  
+
+  }, [banxaOrder?.status]);
 
   return createPortal(
     (
@@ -557,7 +464,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
         onClose={onClose}
         modalMode
         style={{ zIndex: 9000 }}>
-        {!waiting && !ramping && !layerswapUrl && (
+        {!waiting && !banxaing && !layerswapUrl && (
           <FundingBody>
             {fundsNeeded && (
               <Receipt>
@@ -596,20 +503,6 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
 
                 <h4>
                   <span>Recharge Wallet</span>
-                  <label onMouseEnter={onRampHover(true)} onMouseLeave={onRampHover(false)}>Disclaimer</label>
-                  <MouseoverInfoPane
-                    referenceEl={hoveredRampButton}
-                    css={css`margin-top:10px;`}
-                    placement="bottom"
-                    visible={!!hoveredRampButton}
-                    zIndex={9001}>
-                    <Disclaimer visible={!!hoveredRampButton}>
-                      RAMP DISCLAIMER: Don't invest unless you're prepared to lose all the money you
-                      invest. This is a high-risk investment and you should not expect to be protected
-                      if something goes wrong.{' '}
-                      <a href="https://ramp.network/risk-warning" target="_blank" rel="noopener noreferrer">Take 2 minutes to learn more.</a>
-                    </Disclaimer>
-                  </MouseoverInfoPane>
                 </h4>
                 <ButtonRow>
                   {suggestedAmounts.map((usdc, i) => (
@@ -661,14 +554,12 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
             )}
           </FundingBody>
         )}
-        {ramping && (
+        {banxaing && (
           <>
-            <RampWrapper display>
-              <div id="ramp-container" />
-            </RampWrapper>
-            <div style={{ padding: '8px 0' }}>
-              <Button onClick={() => setRamping()}>Back</Button>
-            </div>
+            {banxaOrder?.checkoutUrl
+              ? <iframe src={banxaOrder.checkoutUrl} style={{ border: 0, maxWidth: 'calc(100vw - 40px)', minHeight: '80vh', width: 425 }} />
+              : <LoaderWrapper><PageLoader message="Generating Checkout..." /></LoaderWrapper>
+            }
           </>
         )}
         {layerswapUrl && (
@@ -688,8 +579,8 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
                 <WalletIcon />
               </GiantIcon>
               <h4>
-                {rampPurchase && !RAMP_PURCHASE_STATUS[rampPurchase.status].isSuccess
-                  ? RAMP_PURCHASE_STATUS[rampPurchase.status].statusText
+                {banxaOrder && banxaOrder?.status !== 'complete'
+                  ? banxaOrderStatusMessage
                   : `Waiting for funds to be received...`
                 }
               </h4>
