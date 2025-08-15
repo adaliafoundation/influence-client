@@ -29,7 +29,6 @@
     "Address": {
       "ethToken": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
       "usdcToken": "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
-      "usdtToken": "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
       "asteroidToken": "0x0603cf837055c64d026a3c5a9e3a83036cea6c4a3f68a9e19f7a687d726fe817",
       "crewmateToken": "0x0241b9c4ce12c06f49fee2ec7c16337386fa5185168f538a7631aacecdf3df74",
       "dispatcher": "0x0422d33a3638dcc4c62e72e1d6942cd31eb643ef596ccac2351e0e21f6cd4bf4",

@@ -359,8 +359,9 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
         // TODO: should this be the USDC amount instead?
         // TODO: can alternatively support an amount in crypto here too
         usd: Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
-        crypto: appConfig.get('App.deployment') === 'production' ? 'USDC' : 'USDT',
+        crypto: 'USDC'
       });
+      if (!order?.checkoutUrl) throw new Error('Banxa order creation returned empty');
 
       setBanxaOrder(order);
     } catch (error) {
