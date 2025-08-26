@@ -6,9 +6,8 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@argent/x-sessions": "^6.7.4",
-    "@avnu/avnu-sdk": "^2.1.1",
-    "@avnu/gasless-sdk": "^0.1.3",
+    "@argent/x-sessions": "^8.0.1",
+    "@avnu/avnu-sdk": "^3.1.1",
     "@influenceth/astro": "^0.2.5",
     "@influenceth/sdk": "^2.3.8",
     "@popperjs/core": "^2.11.6",
@@ -65,8 +64,8 @@
     "react-virtualized": "^9.22.5",
     "screenfull": "^5.1.0",
     "socket.io-client": "^4.7.5",
-    "starknet": "6.9",
-    "starknetkit": "^2.2.25",
+    "starknet": "^7.6.4",
+    "starknetkit": "^3.0.3",
     "styled-components": "^5.3.0",
     "three": "^0.164.1",
     "victory": "^36.6.8",

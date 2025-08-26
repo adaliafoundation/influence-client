@@ -3,7 +3,6 @@ import { Address, Asteroid, Entity, Order, Permission, System } from '@influence
 import { isEqual, get } from 'lodash';
 import { hash, num, shortString, uint256 } from 'starknet';
 import { fetchBuildExecuteTransaction, fetchQuotes } from '@avnu/avnu-sdk';
-import * as gasless from '@avnu/gasless-sdk';
 
 import { appConfig } from '~/appConfig';
 import useActivitiesContext from '~/hooks/useActivitiesContext';
@@ -237,7 +236,7 @@ const customConfigs = {
       return [
         lease && {
           system: 'AcceptPrepaidAgreement',
-          vars: { 
+          vars: {
             caller_crew: vars.caller_crew,
             target: vars.processor,
             permission: Permission.IDS.RUN_PROCESS,
@@ -261,7 +260,7 @@ const customConfigs = {
       return [
         lease && {
           system: 'AcceptPrepaidAgreement',
-          vars: { 
+          vars: {
             caller_crew: vars.caller_crew,
             target: vars.extractor,
             permission: Permission.IDS.EXTRACT_RESOURCES,
@@ -495,7 +494,6 @@ export function ChainTransactionProvider({ children }) {
     blockNumber,
     blockTime,
     chainId,
-    getOutsideExecutionData,
     isDeployed,
     logout,
     payGasWithSwayIfPossible,
@@ -537,7 +535,7 @@ export function ChainTransactionProvider({ children }) {
     };
 
     if (isDeployed && !nonce && !simulationEnabled && accountAddress && Number(accountAddress) !== 0) retrieveNonce();
-  }, [accountAddress, gameplay.useSessions, isDeployed, nonce, provider, simulationEnabled, starknetSession]);
+  }, [accountAddress, isDeployed, nonce, provider, simulationEnabled, starknetSession]);
 
   // Temporary logging for nonces
   useEffect(() => console.log('NONCE', nonce || null), [nonce]);
@@ -560,91 +558,14 @@ export function ChainTransactionProvider({ children }) {
       return { ...call, calldata: call.calldata.map(a => num.toHex(a)) };
     });
 
-    // Check if we can utilize a signed session to execute calls
-    const canUseSessionKey = !!gameplay.useSessions && !!starknetSession && !calls.some((c) => {
-      return !allowedMethods.find((m) => {
-        return m['Contract Address'] === c.contractAddress && m.selector === c.entrypoint;
-      });
-    });
-
-    // Use session wallet if possible, otherwise regular wallet
-    const account = canUseSessionKey ? starknetSession : walletAccount;
+    const account = walletAccount;
     const txOptions = {};
-
-    // Check and store the gasless compatibility status
-    if (payGasWithSwayIfPossible && swayRef.current > 0n) {
-      let canPayGasWithSway = false;
-      let gasToken;
-      let maxFee;
-      try {
-
-        // Use gasless via relayer for non-ETH / STRK transactions
-        const simulation = await account.simulateTransaction(
-          [{ type: 'INVOKE_FUNCTION', payload: calls }],
-          { skipValidate: true }
-        );
-        console.log('simulation', simulation);
-
-        const tokens = await gasless.fetchGasTokenPrices({ baseUrl: appConfig.get('Api.avnu') });
-        console.log('fetchGasTokenPrices', tokens);
-        gasToken = tokens.find((t) => Address.areEqual(t.tokenAddress, TOKEN.SWAY));
-        console.log('gasToken', gasToken);
-        console.log('swayBalance', swayRef.current);
-
-        // Triple the fee estimation and check for sufficient funds to ensure transaction success
-        // TODO: figure out why some txs require this
-        
-        maxFee = gasless.getGasFeesInGasToken(simulation[0].suggestedMaxFee, gasToken)
-          * (appConfig.get('App.deployment') === 'production' ? 3n : 100n);
-        
-        // (not sure why this would ever be negative, but it is on dev at least)
-        if (maxFee < 0n) maxFee *= -1n;
-        
-        console.log('maxFee', maxFee);
-
-        canPayGasWithSway = (swayRef.current >= maxFee);
-      } catch (e) {
-        console.warn('Could not pay gas with sway! Trying with eth/strk...', e);
-      }
-
-      // Check if wallet has sufficient funds for gas fees
-      // (skip this check in testnet since the allowed gas tokens are inconsistent)
-      // if (appConfig.get('App.deployment') !== 'production' || gasTokenBalance >= maxFee) {
-      if (canPayGasWithSway) {
-        const { typedData, signature } = await getOutsideExecutionData(formattedCalls, gasToken.tokenAddress, maxFee, canUseSessionKey);
-        return await gasless.fetchExecuteTransaction(
-          accountAddress,
-          JSON.stringify(typedData),
-          signature,
-          { baseUrl: appConfig.get('Api.avnu') }
-        );
-      }
-    }
-        
-    // Manage nonces locally when using sessions but not using relayer
-    // (relayer should have already returned if going to be used)
-    if (canUseSessionKey && nonce) {
-      txOptions.nonce = nonce;
-    }
-
-    if (nonce) setNonce(n => n + 1n);
-
-    // hacky fix for argentMobile
-    if (account?.walletProvider?.id === 'argentMobile') {
-      try {
-        return await account.walletProvider.account.execute(formattedCalls, txOptions);
-      } catch (e) {
-        console.log('argentMobile hacky fix is broken... falling through...', e);
-      }
-    }
-
     return await account.execute(formattedCalls, txOptions);
   }, [
     accountAddress,
     allowedMethods,
     createAlert,
     chainId,
-    getOutsideExecutionData,
     payGasWithSwayIfPossible,
     nonce,
     starknetSession,
@@ -1065,7 +986,7 @@ export function ChainTransactionProvider({ children }) {
       return true;
     }
   }, [walletAccount]);
-  
+
 
   const handleExecutionExeption = useCallback((e, executeCalls, txDetails = {}) => {
     if ((e.message || '').toLowerCase() === 'account not deployed') {
