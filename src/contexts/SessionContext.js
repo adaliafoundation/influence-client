@@ -14,6 +14,11 @@ import api from '~/lib/api';
 import { areChainsEqual, fireTrackingEvent, getBlockTime, resolveChainId } from '~/lib/utils';
 import useStore from '~/hooks/useStore';
 
+// TODO:
+// - restore sessions
+// - LoginPrompt was broken by upgrade; restore (see todo)
+//   (clicking to login with last wallet was throwing an error)
+
 const getErrorMessage = (error) => {
   console.error(error);
   if (typeof error === 'string') return error;
@@ -192,7 +197,9 @@ export function SessionProvider({ children }) {
         setConnectedAccount(Address.toStandard(connectorData.account));
         setConnectedChainId(chainId);
         setConnectedWalletId(wallet.id);
-        setWalletAccount(new WalletAccount(provider, wallet, '1'));
+
+        const newAccount = await WalletAccount.connect(provider, wallet);
+        setWalletAccount(newAccount);
 
         // Default to provider chainId if not set (starknetkit doesn't set for braavos)
         if (!isAllowedChain(chainId)) {
@@ -512,7 +519,10 @@ export function SessionProvider({ children }) {
   const [promptLogin, setPromptLogin] = useState();
   const login = useCallback(async () => {
     if ([STATUSES.AUTHENTICATING, STATUSES.AUTHENTICATED].includes(status)) return;
-    setPromptLogin(true);
+
+    // TODO: uncomment below and remove connect() to restore login prompt
+    // setPromptLogin(true);
+    connect();
   }, [authenticated, connect]);
 
   const handleLoginPrompt = useCallback((choice) => {
