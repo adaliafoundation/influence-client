@@ -1,23 +1,12 @@
 import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import { isExpired } from 'react-jwt';
-import { hash, num, RpcProvider, WalletAccount, shortString } from 'starknet';
+import { hash, RpcProvider, WalletAccount } from 'starknet';
 import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';
 import { ArgentMobileConnector, isInArgentMobileAppBrowser } from 'starknetkit/argentMobile';
 import { InjectedConnector } from 'starknetkit/injected';
 import { WebWalletConnector } from 'starknetkit/webwallet';
-import {
-  ArgentSessionService,
-  buildSessionAccount,
-  createSessionRequest,
-  getSessionTypedData,
-  openSession,
-  SessionDappService
-} from '@argent/x-sessions';
-import * as gasless from '@avnu/gasless-sdk';
-import { getStarkKey, utils } from 'micro-starknet';
 import { Address } from '@influenceth/sdk';
-
 import { appConfig } from '~/appConfig';
 import LoginPrompt from '~/components/LoginPrompt';
 import Reconnecting from '~/components/Reconnecting';
@@ -177,12 +166,12 @@ export function SessionProvider({ children }) {
         if (enabledConnectors.webWallet && !!appConfig.get('Api.argentWebWallet')) {
           connectors.push(new WebWalletConnector({ url: appConfig.get('Api.argentWebWallet'), provider }));
         }
-  
+
         if (enabledConnectors.argentX) connectors.push(new InjectedConnector({ options: { id: 'argentX', provider }}));
         if (enabledConnectors.braavos) connectors.push(new InjectedConnector({ options: { id: 'braavos', provider }}));
-        if (enabledConnectors.argentMobile) connectors.push(argentMobileConnector);  
+        if (enabledConnectors.argentMobile) connectors.push(argentMobileConnector);
       }
-  
+
       const connectionOptions = {
         dappName: 'Influence',
         modalMode: auto ? 'neverAsk' : 'alwaysAsk',
@@ -297,33 +286,6 @@ export function SessionProvider({ children }) {
     return stopListening;
   }, [ currentSession, sessions, status, walletAccount ]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Determines whether the wallet should use sessions based on user settings and wallet id
-  // useSessions: (null = default, true, false)
-  const shouldUseSessionKeys = useCallback(async (skipSettingsCheck = false) => {
-    const setting = skipSettingsCheck || gameplay.useSessions;
-
-    // explicitly disabled
-    if (setting === false) return false;
-    
-    // default == true if web wallet
-    if (connectedWalletId === 'argentWebWallet') return true;
-
-    // explicitly enabled
-    if (connectedWalletId === 'argentX' && !!setting) {
-      try {
-        const versionRes = await provider.callContract({ contractAddress: connectedAccount, entrypoint: 'getVersion' });
-        const correctVersion = Number(shortString.decodeShortString(versionRes[0]).replaceAll('.', '')) >= 40;
-        if (correctVersion) {
-          const guardianRes = await provider.callContract({ contractAddress: connectedAccount, entrypoint: 'get_guardian' });
-          return num.toBigInt(guardianRes[0]) !== 0n;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return false;
-  }, [connectedAccount, gameplay.useSessions, provider]);
-
   // Checks the account contract do determine if it's deployed on-chain yet
   const checkDeployed = useCallback(async () => {
     try {
@@ -339,56 +301,15 @@ export function SessionProvider({ children }) {
   const authenticate = useCallback(async ({ isUpgradeInsecure = false, isUpgradeSessionKey = false } = {}) => {
     const newSession = {};
 
-    // Check if the account contract has been deployed yet and should use sessions
+    // Check if the account contract has been deployed yet
     newSession.isDeployed = await checkDeployed();
-    const useSessionKeys = isUpgradeSessionKey || await shouldUseSessionKeys(isUpgradeSessionKey);
 
     // Start authenticating by requesting a login message from API
     if (!isUpgradeInsecure) setStatus(STATUSES.AUTHENTICATING);
     const loginMessage = await api.requestLogin(connectedAccount);
 
     try {
-      if (newSession.isDeployed && useSessionKeys) {
-        // Connect via Argent Web Wallet and automatically create a session
-        const privateKey = '0x' + Buffer.from(utils.randomPrivateKey()).toString('hex');
-        const dappKey = {
-          privateKey,
-          publicKey: getStarkKey(privateKey),
-        };
-
-        const gasFees = {
-          tokenAddress: appConfig.get('Starknet.Address.ethToken'),
-          maxAmount: areChainsEqual(appConfig.get('Starknet.chainId'), 'SN_MAIN')
-            ? '10000000000000000'
-            : '100000000000000000'
-        };
-
-        const expiry = Math.floor(Date.now() / 1000) + 86400 * 7;
-        const metaData = { projectID: 'influence', txFees: [ gasFees ] };
-        const sessionParams = { allowedMethods, expiry, metaData, publicDappKey: dappKey.publicKey };
-
-        const hexChainId = resolveChainId(appConfig.get('Starknet.chainId'), 'hex');
-        console.log('waiting 2 seconds...');
-        await new Promise(resolve => setTimeout(resolve, 2000)); // deal with timeout delay from Argent
-        const sessionSignature = await openSession({
-          chainId: hexChainId, wallet: walletAccount?.walletProvider, sessionParams
-        });
-
-        if (sessionSignature) {
-          const sessionRequest = createSessionRequest(allowedMethods, expiry, metaData, dappKey.publicKey);
-          const message = getSessionTypedData(sessionRequest, hexChainId);
-          const newToken = await api.verifyLogin(connectedAccount, { message, signature: sessionSignature.join(','), referredBy });
-          Object.assign(newSession, {
-            walletId: connectedWalletId,
-            accountAddress: connectedAccount,
-            token: newToken,
-            sessionDappKey: dappKey,
-            sessionRequest: sessionRequest,
-            sessionSignature
-          });
-        }
-      } else if (newSession.isDeployed) {
-        // Connect via a traditional browser extension wallet
+      if (newSession.isDeployed) {
         let signature;
 
         try {
@@ -432,7 +353,6 @@ export function SessionProvider({ children }) {
     connectedWalletId,
     createAlert,
     dispatchSessionStarted,
-    gameplay.useSessions,
     referredBy,
     walletAccount,
     disconnect,
@@ -464,68 +384,6 @@ export function SessionProvider({ children }) {
     await authenticate();
   }, [authenticate, connectedAccount, walletAccount, sessions, disconnect, dispatchSessionStarted]);
 
-  // Upgrades a current session to use a session key
-  const upgradeToSessionKey = useCallback(async () => {
-    if (currentSession?.isDeployed && !currentSession?.sessionRequest) {
-      return authenticate({ isUpgradeSessionKey: true });
-    }
-  }, [authenticate, currentSession, gameplay.useSessions]);
-
-  const createSessionAccount = useCallback(async () => {
-    const offchainSessionAccount = await buildSessionAccount({
-      accountSessionSignature: currentSession.sessionSignature,
-      sessionRequest: currentSession.sessionRequest,
-      provider,
-      chainId: resolveChainId(appConfig.get('Starknet.chainId'), 'hex'),
-      address: currentSession.accountAddress,
-      dappKey: currentSession.sessionDappKey,
-      argentSessionServiceBaseUrl: appConfig.get('Api.argent')
-    });
-
-    setStarknetSession(offchainSessionAccount);
-  }, [currentSession, provider]);
-
-  const deployWithSubsidy = useCallback(async () => {
-    if ((currentSession?.walletId === 'argentWebWallet' || appConfig.get('App.feeRewardsForAllWallets')) && walletAccount?.walletProvider && !currentSession.isDeployed) {
-      try {
-        const deploymentData = await walletAccount.walletProvider.request({ type: 'wallet_deploymentData' });
-        try {
-          const deployment = await api.deployWallet({
-            calldata: [
-              deploymentData.class_hash,
-              deploymentData.salt,
-              '0x0',
-              `0x${deploymentData.calldata.length.toString(16)}`,
-              ...deploymentData.calldata
-            ]
-          });
-          if (deployment?.transaction_hash) {
-            await provider.waitForTransaction(deployment.transaction_hash);
-            upgradeInsecureSession();
-          }
-        } catch (e) {
-          console.log('e', e);
-          createAlert({
-            type: 'GenericAlert',
-            level: 'warning',
-            data: { content: `Subsidized account deployment failed: "${e.message}". Please refresh the page to try again.` },
-            duration: 0
-          });
-        }
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-  }, [currentSession, upgradeInsecureSession, walletAccount]);
-
-  // Start a session with the Argent Web Wallet
-  useEffect(() => {
-    if (!currentSession?.isDeployed) return;
-    if (authenticated && gameplay.useSessions !== false && currentSession.sessionSignature) {
-      createSessionAccount();
-    }
-  }, [authenticated, currentSession, gameplay.useSessions]);
-
   // End session and disconnect wallet if session expires
   useEffect(() => {
     if (currentSession.token && isExpired(currentSession.token)) logout();
@@ -540,8 +398,6 @@ export function SessionProvider({ children }) {
       } else {
         setReadyForChildren(true);
       }
-
-      setStarknetSession(null); // clear session key if it exists
     } else if (status === STATUSES.CONNECTED) {
       resumeOrAuthenticate().finally(() => {
         setReadyForChildren(true);
@@ -566,92 +422,9 @@ export function SessionProvider({ children }) {
     }
   }, [error, createAlert, logout]);
 
-  const [feeAbstractionCompatibility, setFeeAbstractionCompatibility] = useState();
-
-  useEffect(() => {
-    if (currentSession?.isDeployed) {
-      gasless.fetchAccountCompatibility(currentSession.accountAddress, { baseUrl: appConfig.get('Api.avnu') })
-        .then((compatibility) => setFeeAbstractionCompatibility(compatibility));
-    } else {
-      setFeeAbstractionCompatibility();
-    }
-  }, [currentSession.accountAddress, currentSession?.isDeployed]);
-
-  // if logged in webwallet and not deployed, check payments endpoint... if there are payments, do subsidized deployment
-  useEffect(() => {
-    if (status === STATUSES.AUTHENTICATED && (currentSession?.walletId === 'argentWebWallet' || appConfig.get('App.feeRewardsForAllWallets')) && !currentSession.isDeployed) {
-      api.getStripePayments()
-        .then((payments) => {
-          if (payments?.length) {
-            deployWithSubsidy();
-          }
-        })
-        .catch((err) => {
-          console.error(err);
-        })
-    }
-  }, [currentSession?.walletId, currentSession?.isDeployed, deployWithSubsidy, status]);
-
-  const payGasWith = useMemo(() => {
-    if (authenticated && feeAbstractionCompatibility?.isCompatible) {
-      // if wallet has gas rewards available, use those
-      if (feeRewards > 0) {
-        return {
-          method: 'REWARDS',
-          gasConsumedOverhead: feeAbstractionCompatibility.gasConsumedOverhead,
-          dataGasConsumedOverhead: feeAbstractionCompatibility.dataGasConsumedOverhead
-        };
-
-      // check if we should use fee abstraction (is set to use sway or is set to default + using webwallet)
-      } else if (gameplay.feeToken === 'SWAY' || (!gameplay.feeToken && currentSession?.walletId === 'argentWebWallet')) {
-        return { method: 'SWAY' };
-      }
-    }
-    return null;
-  }, [
-    authenticated,
-    currentSession?.walletId,
-    gameplay.feeToken,
-    feeRewards,
-    feeAbstractionCompatibility
-  ]);
-
-  // Retrieves an outside execution call and signs it
-  const getOutsideExecutionData = useCallback(async (calldata, gasTokenAddress, maxGasTokenAmount, canUseSessionKey) => {
-    let typedData = await gasless.fetchBuildTypedData(
-      currentSession.accountAddress,
-      calldata,
-      gasTokenAddress,
-      maxGasTokenAmount,
-      { baseUrl: appConfig.get('Api.avnu') }
-    );
-
-    let signature;
-
-    if (canUseSessionKey && gameplay.useSessions && currentSession.sessionRequest) {
-      const dappKey = currentSession.sessionDappKey;
-      const sessionSignature = currentSession.sessionSignature;
-      const beService = new ArgentSessionService(dappKey.publicKey, sessionSignature, appConfig.get('Api.argent'));
-      const chainId = shortString.encodeShortString(connectedChainId);
-      const sessionDappService = new SessionDappService(beService, chainId, dappKey);
-      const { Calldata: feeCalldata } = typedData.message.Calls[0];
-
-      // Add the fee call to the calldata
-      calldata.unshift({ contractAddress: gasTokenAddress, entrypoint: 'transfer', calldata: feeCalldata });
-      signature = await sessionDappService.getSessionSignatureForOutsideExecutionTypedData(
-        currentSession.sessionSignature,
-        currentSession.sessionRequest,
-        calldata,
-        currentSession.accountAddress,
-        typedData,
-        false
-      );
-    } else {
-      signature = await walletAccount.signMessage(typedData);
-    }
-
-    return { typedData, signature };
-  }, [currentSession, gameplay.useSessions, connectedChainId, connectedWalletId, walletAccount]);
+  const payGasWithSwayIfPossible = useMemo(() => {
+    return gameplay.feeToken === 'SWAY';
+  }, [ currentSession?.walletId, gameplay.feeToken ]);
 
   // Block management -------------------------------------------------------------------------------------------------
 
@@ -748,7 +521,7 @@ export function SessionProvider({ children }) {
       connect(); // show all wallets
     } else if (choice) {
       connect(undefined, { [choice]: true });
-    } 
+    }
   }, [connect]);
 
   // TODO: memoize value
@@ -762,17 +535,12 @@ export function SessionProvider({ children }) {
       authenticating: [STATUSES.AUTHENTICATING, STATUSES.CONNECTING].includes(status),
       chainId: authenticated ? connectedChainId : null,
       connecting: connecting || !!promptLogin,
-      deployWithSubsidy,
-      payGasWith,
-      getOutsideExecutionData,
       isDeployed: authenticated ? currentSession?.isDeployed : null,
       provider,
-      shouldUseSessionKeys,
       starknetSession,
       status,
       token: authenticated ? currentSession?.token : null,
       upgradeInsecureSession,
-      upgradeToSessionKey,
       walletAccount,
       walletId: authenticated ? currentSession?.walletId : null,
 
