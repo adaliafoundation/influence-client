@@ -582,26 +582,30 @@ export function ChainTransactionProvider({ children }) {
       return { ...call, calldata: call.calldata.map(a => num.toHex(a)) };
     });
 
-    const gasTokens = [
-      payGasWithSwayIfPossible && appConfig.get('Starknet.Address.swayToken'),
-      appConfig.get('Starknet.Address.strkToken'),
-      appConfig.get('Starknet.Address.ethToken')
-    ].filter((t) => !!t);
-    
+    // handle paymaster for gas (must be deployed)
     let paymasterToken;
-    for (let gasToken of gasTokens) {
-      try {
-        const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
-        const gasTokenBalance = gasToken === appConfig.get('Starknet.Address.swayToken')
-          ? (swayRef.current || 0n)
-          : (walletRef.current?.tokenBalances[Address.toStandard(gasToken)] || 0n);
-        
-        if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
-          paymasterToken = gasToken;
-          break;
+
+    if (isDeployed) {
+      const gasTokens = [
+        payGasWithSwayIfPossible && appConfig.get('Starknet.Address.swayToken'),
+        appConfig.get('Starknet.Address.strkToken'),
+        appConfig.get('Starknet.Address.ethToken')
+      ].filter((t) => !!t);
+      
+      for (let gasToken of gasTokens) {
+        try {
+          const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
+          const gasTokenBalance = gasToken === appConfig.get('Starknet.Address.swayToken')
+            ? (swayRef.current || 0n)
+            : (walletRef.current?.tokenBalances[Address.toStandard(gasToken)] || 0n);
+          
+          if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
+            paymasterToken = gasToken;
+            break;
+          }
+        } catch (err) {
+          console.error('error estimating fee with token', gasToken, err);
         }
-      } catch (err) {
-        console.error('error estimating fee with token', gasToken, err);
       }
     }
 
@@ -615,6 +619,7 @@ export function ChainTransactionProvider({ children }) {
     allowedMethods,
     createAlert,
     chainId,
+    isDeployed,
     payGasWithSwayIfPossible,
     nonce,
     starknetSession,
@@ -1038,7 +1043,11 @@ export function ChainTransactionProvider({ children }) {
 
 
   const handleExecutionExeption = useCallback((e, executeCalls, txDetails = {}) => {
-    if ((e.message || '').toLowerCase() === 'account not deployed') {
+    const isNotDeployed = e?.message && (
+      e?.message.toLowerCase().includes('account not deployed')
+      || e?.message.toLowerCase().includes('account is not compatible with snip-9')
+    );
+    if (isNotDeployed) {
       createAlert({
         type: 'DeployAccount',
         level: 'warning',
