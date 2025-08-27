@@ -40,6 +40,7 @@
     "chainId": "",
     "provider": "",
     "providerBackup": "",
+    "paymaster": "",
     "Address": {
       "ethToken": "",
       "usdcToken": "",
