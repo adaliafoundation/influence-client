@@ -496,7 +496,7 @@ export function ChainTransactionProvider({ children }) {
     chainId,
     isDeployed,
     logout,
-    payGasWithSwayIfPossible,
+    gasTokens,
     provider,
     starknetSession,
     upgradeInsecureSession,
@@ -562,22 +562,21 @@ export function ChainTransactionProvider({ children }) {
     let paymasterToken;
 
     if (isDeployed) {
-      const gasTokens = [
-        payGasWithSwayIfPossible && appConfig.get('Starknet.Address.swayToken'),
-        appConfig.get('Starknet.Address.strkToken'),
-        appConfig.get('Starknet.Address.ethToken')
-      ].filter((t) => !!t);
-      
       for (let gasToken of gasTokens) {
         try {
-          const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
+          // get wallet balance of gas token
           const gasTokenBalance = gasToken === appConfig.get('Starknet.Address.swayToken')
             ? (swayRef.current || 0n)
             : (walletRef.current?.tokenBalances[Address.toStandard(gasToken)] || 0n);
-          
-          if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
-            paymasterToken = gasToken;
-            break;
+
+          // if non-zero, check if have enough to cover estimated fee
+          // NOTE: if stark sponsoring fees, should allow zero balance in relevant token
+          if (gasTokenBalance > 0n) {
+            const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
+            if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
+              paymasterToken = gasToken;
+              break;
+            }
           }
         } catch (err) {
           console.error('error estimating fee with token', gasToken, err);
@@ -585,6 +584,7 @@ export function ChainTransactionProvider({ children }) {
       }
     }
 
+    console.log('paymasterToken', paymasterToken, gasTokens);
     if (paymasterToken) {
       return await walletAccount.executePaymasterTransaction(formattedCalls, { feeMode: { gasToken: paymasterToken } });
     } else {
@@ -595,8 +595,8 @@ export function ChainTransactionProvider({ children }) {
     allowedMethods,
     createAlert,
     chainId,
+    gasTokens,
     isDeployed,
-    payGasWithSwayIfPossible,
     nonce,
     starknetSession,
     walletAccount
@@ -1030,18 +1030,20 @@ export function ChainTransactionProvider({ children }) {
         duration: 0,
         hideCloseIcon: true,
         onRemoval: () => {
+          walletAccount.deploy({ classHash: walletAccount.address });
+          // walletAccount.deploySelf({ classHash: walletAccount.address });
           // TODO: would be nice if could use this format instead, but it's not clear how that works
           // walletAccount.deployAccount({ contractAddress: accountAddress });
-          executeCalls([
-            System.getFormattedCall(
-              appConfig.get('Starknet.Address.ethToken'),
-              'transfer',
-              [
-                { value: accountAddress, type: 'ContractAddress' },
-                { value: 0n, type: 'u256' }
-              ]
-            )
-          ]);
+          // executeCalls([
+          //   System.getFormattedCall(
+          //     appConfig.get('Starknet.Address.usdcToken'),
+          //     'transfer',
+          //     [
+          //       { value: accountAddress, type: 'ContractAddress' },
+          //       { value: 0n, type: 'u256' }
+          //     ]
+          //   )
+          // ]);
         }
       });
     }

@@ -18,7 +18,9 @@ non-entity based
 - [ 'referrals', token ],
 - [ 'search', assetType, query ],
 - [ 'walletBalance', 'eth', accountAddress ],
+- [ 'walletBalance', 'strk', accountAddress ],
 - [ 'walletBalance', 'sway', accountAddress ],
+- [ 'walletBalance', 'usdc', accountAddress ],
 - [ 'user', token ],
 - [ 'watchlist', token ],
 

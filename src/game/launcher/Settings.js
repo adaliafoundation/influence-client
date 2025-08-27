@@ -384,7 +384,7 @@ const GameplayPane = () => {
   const dispatchPreferredUiCurrency = useStore(s => s.dispatchPreferredUiCurrency);
   const dispatchTutorialDisabled = useStore(s => s.dispatchTutorialDisabled);
   const dispatchUseSessionsSet = useStore(s => s.dispatchUseSessionsSet);
-  const dispatchFeeTokenSet = useStore(s => s.dispatchFeeTokenSet);
+  const dispatchFeeTokenToggle = useStore(s => s.dispatchFeeTokenToggle);
 
   const tutorialIsDisabled = useMemo(() => {
     if (gameplay.dismissTutorial) {
@@ -518,37 +518,32 @@ const GameplayPane = () => {
             <HelperText>Never use sessions</HelperText>
           )}
 
-          <StyledDataReadout label="Use SWAY for Gas Fees">
+          <StyledDataReadout label="Use for Gas Fees">
             <ControlGroup>
+              {/* TODO: could have this use paymaster supported tokens if want to add in future */}
               <Button
-                active={gameplay.feeToken === null || gameplay.feeToken === undefined}
-                onClick={() => dispatchFeeTokenSet(null)}>
-                Default
+                active={gameplay.feeTokens.includes(TOKEN.SWAY)}
+                onClick={() => dispatchFeeTokenToggle(TOKEN.SWAY)}>
+                SWAY
               </Button>
               <Button
-                active={gameplay.feeToken === 'SWAY'}
-                onClick={() => dispatchFeeTokenSet('SWAY')}>
-                If Supported
+                active={gameplay.feeTokens.includes(TOKEN.USDC)}
+                onClick={() => dispatchFeeTokenToggle(TOKEN.USDC)}>
+                USDC
               </Button>
               <Button
-                active={gameplay.feeToken === 'ETH'}
-                onClick={() => dispatchFeeTokenSet('ETH')}>
-                Never
+                active={gameplay.feeTokens.includes(TOKEN.ETH)}
+                onClick={() => dispatchFeeTokenToggle(TOKEN.ETH)}>
+                ETH
+              </Button>
+              <Button
+                active={gameplay.feeTokens.includes(TOKEN.STRK)}
+                onClick={() => dispatchFeeTokenToggle(TOKEN.STRK)}>
+                STRK
               </Button>
             </ControlGroup>
           </StyledDataReadout>
-          {(gameplay.feeToken === null || gameplay.feeToken === undefined) && (
-            <HelperText>
-              For Argent Web Wallet accounts, SWAY is used when possible for transaction fees.
-              For all other wallets, ETH / STRK defaults are used for transaction fees.
-            </HelperText>
-          )}
-          {gameplay.feeToken === 'SWAY' && (
-            <HelperText>SWAY is used when possible for transaction fees</HelperText>
-          )}
-          {gameplay.feeToken === 'ETH' && (
-            <HelperText>ETH / STRK defaults are used for transaction fees</HelperText>
-          )}
+          <HelperText>Selected token balances will be applied to gas fees in this order.</HelperText>
         </div>
       </Section>
     </StyledSettings>
