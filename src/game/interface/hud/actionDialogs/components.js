@@ -4010,7 +4010,6 @@ export const ResourceGridSectionInner = ({
   style,
   theming = 'default'
 }) => {
-  console.log({ errorMessage })
   const { totalItems, totalMass, totalVolume } = useMemo(() => {
     return items.reduce((acc, { i, numerator, denominator, selected }) => {
       if (!Product.TYPES[i]) {

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import { isExpired } from 'react-jwt';
-import { hash, RpcProvider, WalletAccount } from 'starknet';
+import { hash, PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
 import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';
 import { ArgentMobileConnector, isInArgentMobileAppBrowser } from 'starknetkit/argentMobile';
 import { InjectedConnector } from 'starknetkit/injected';
@@ -198,7 +198,23 @@ export function SessionProvider({ children }) {
         setConnectedChainId(chainId);
         setConnectedWalletId(wallet.id);
 
-        const newAccount = await WalletAccount.connect(provider, wallet);
+        let paymaster;
+        if (appConfig.get('Starknet.paymaster')) {
+          paymaster = new PaymasterRpc({
+            nodeUrl: appConfig.get('Starknet.paymaster'),
+            // TODO: add x-paymaster-api-key if we are going to sponsor gas
+            // headers: { 'api-key': process.env.PAYMASTER_API_KEY },
+          });
+        }
+
+        const newAccount = await WalletAccount.connect(
+          provider,
+          wallet,
+          undefined,
+          paymaster
+        );
+        // const supported = await newAccount.paymaster.getSupportedTokens();
+        // console.log('supported', supported);
         setWalletAccount(newAccount);
 
         // Default to provider chainId if not set (starknetkit doesn't set for braavos)

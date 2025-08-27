@@ -582,9 +582,34 @@ export function ChainTransactionProvider({ children }) {
       return { ...call, calldata: call.calldata.map(a => num.toHex(a)) };
     });
 
-    const account = walletAccount;
-    const txOptions = {};
-    return await account.execute(formattedCalls, txOptions);
+    const gasTokens = [
+      payGasWithSwayIfPossible && appConfig.get('Starknet.Address.swayToken'),
+      appConfig.get('Starknet.Address.strkToken'),
+      appConfig.get('Starknet.Address.ethToken')
+    ].filter((t) => !!t);
+    
+    let paymasterToken;
+    for (let gasToken of gasTokens) {
+      try {
+        const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
+        const gasTokenBalance = gasToken === appConfig.get('Starknet.Address.swayToken')
+          ? (swayRef.current || 0n)
+          : (walletRef.current?.tokenBalances[Address.toStandard(gasToken)] || 0n);
+        
+        if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
+          paymasterToken = gasToken;
+          break;
+        }
+      } catch (err) {
+        console.error('error estimating fee with token', gasToken, err);
+      }
+    }
+
+    if (paymasterToken) {
+      return await walletAccount.executePaymasterTransaction(formattedCalls, { feeMode: { gasToken: paymasterToken } });
+    } else {
+      return await walletAccount.execute(formattedCalls, {});
+    }
   }, [
     accountAddress,
     allowedMethods,

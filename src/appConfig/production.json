@@ -26,8 +26,10 @@
   "Starknet": {
     "chainId": "0x534e5f4d41494e",
     "provider": "https://free-rpc.nethermind.io/mainnet-juno/v0_8",
+    "paymaster": "https://starknet.paymaster.avnu.fi",
     "Address": {
       "ethToken": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "strkToken": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
       "usdcToken": "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
       "asteroidToken": "0x0603cf837055c64d026a3c5a9e3a83036cea6c4a3f68a9e19f7a687d726fe817",
       "crewmateToken": "0x0241b9c4ce12c06f49fee2ec7c16337386fa5185168f538a7631aacecdf3df74",
