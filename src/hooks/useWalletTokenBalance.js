@@ -35,12 +35,16 @@ export const useEthBalance = (overrideAccount) => {
   return useWalletTokenBalance('eth', TOKEN.ETH, overrideAccount);
 };
 
+export const useStrkBalance = (overrideAccount) => {
+  return useWalletTokenBalance('strk', TOKEN.STRK, overrideAccount);
+};
+
 export const useSwayBalance = (overrideAccount) => {
   return useWalletTokenBalance('sway', TOKEN.SWAY, overrideAccount);
-}
+};
 
 export const useUSDCBalance = (overrideAccount) => {
   return useWalletTokenBalance('usdc', TOKEN.USDC, overrideAccount);
-}
+};
 
 export default useWalletTokenBalance;

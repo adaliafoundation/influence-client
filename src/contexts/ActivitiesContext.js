@@ -12,6 +12,7 @@ import { hydrateActivities } from '~/lib/activities';
 import api from '~/lib/api';
 import useSimulationState from '~/hooks/useSimulationState';
 import { appConfig } from '~/appConfig';
+import { TOKEN } from '~/lib/priceUtils';
 
 // TODO (enhancement): rather than invalidating, make optimistic updates to cache value directly
 // (i.e. update asteroid name wherever asteroid referenced rather than invalidating large query results)
@@ -47,7 +48,7 @@ export function ActivitiesProvider({ children }) {
     accountAddress,
     blockNumber,
     blockNumberIsProvisional,
-    payGasWith,
+    gasTokens,
     setBlockNumber,
     setIsBlockMissing,
     token,
@@ -161,16 +162,15 @@ export function ActivitiesProvider({ children }) {
             activityInvalidations.push([ 'activities', 'ongoing' ]);
           }
 
-          // sway gas invalidation
+          // gas token invalidation
           // (if no caller or if caller matches my account)
-          if (accountAddress) {
+          if (gasTokens?.length && accountAddress) {
             if (!activity.event?.returnValues?.caller || Address.areEqual(accountAddress, activity.event.returnValues.caller)) {
-              if (payGasWith?.method === 'REWARDS') {
-                extraInvalidations.push(['walletRewards', accountAddress]);
-              }
-              if (payGasWith?.method === 'SWAY') {
-                extraInvalidations.push(['walletBalance', 'sway', accountAddress]);
-              }
+              gasTokens.forEach((t) => {
+                const tokenName = Object.keys(TOKEN).find((k) => Address.areEqual(TOKEN[k], t))?.toLowerCase();
+                console.log('INVALIDATE GAS TOKEN', tokenName);
+                extraInvalidations.push(['walletBalance', tokenName, accountAddress]);
+              });
             }
           }
 
@@ -320,7 +320,7 @@ export function ActivitiesProvider({ children }) {
       }
 
     }, 2500);
-  }, [accountAddress, crew, getActivityConfig, payGasWith?.method, pendingTransactions, refreshReadyAt]);
+  }, [accountAddress, crew, getActivityConfig, gasTokens, pendingTransactions, refreshReadyAt]);
 
   // try to process WS activities grouped by block
   const processPendingWSBatch = useCallback(async () => {

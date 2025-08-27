@@ -137,7 +137,8 @@ const useStore = create(
           activeCrewsDisplay: 'all', // selected, delegated, all
           autoswap: true,
           dismissTutorial: false,
-          feeToken: null,
+          feeToken: null, // deprecated
+          feeTokens: [TOKEN.SWAY, TOKEN.USDC],
           useSessions: null
         },
 
@@ -751,8 +752,12 @@ const useStore = create(
           state.gameplay.useSessions = which;
         })),
 
-        dispatchFeeTokenSet: (which) => set(produce(state => {
-          state.gameplay.feeToken = which;
+        dispatchFeeTokenToggle: (which) => set(produce(state => {
+          if (state.gameplay.feeTokens.includes(which)) {
+            state.gameplay.feeTokens = state.gameplay.feeTokens.filter((token) => token !== which);
+          } else {
+            state.gameplay.feeTokens.push(which);
+          }
         })),
 
         dispatchActiveCrewsDisplaySet: (which) => set(produce(state => {
@@ -828,7 +833,7 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 7,
+      version: 8,
       migrate: (persistedState, oldVersion) => {
         const migrations = [
           (state, version) => {
@@ -865,6 +870,14 @@ const useStore = create(
           (state, version) => {
             if (version >= 7) return; // reset simulation to ensure bug fixed
             state.simulation = { ...simulationStateDefault };
+            return state;
+          },
+          (state, version) => {
+            if (version >= 8) return;
+            state.gameplay.feeTokens = [TOKEN.USDC, TOKEN.ETH, TOKEN.STRK];
+            if (state.gameplay.feeToken !== 'ETH') {
+              state.gameplay.feeTokens.unshift(TOKEN.SWAY);
+            }
             return state;
           },
         ];

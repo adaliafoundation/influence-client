@@ -128,6 +128,8 @@ export function SessionProvider({ children }) {
   const [connectedWalletId, setConnectedWalletId] = useState();
   const [walletAccount, setWalletAccount] = useState();
 
+  const [paymasterTokens, setPaymasterTokens] = useState([]);
+
   const [blockNumber, setBlockNumber] = useState(0);
   const [provisionalBlockNumber, setProvisionalBlockNumber] = useState(0);
   const [blockTime, setBlockTime] = useState(0);
@@ -213,8 +215,7 @@ export function SessionProvider({ children }) {
           undefined,
           paymaster
         );
-        // const supported = await newAccount.paymaster.getSupportedTokens();
-        // console.log('supported', supported);
+        setPaymasterTokens(await newAccount.paymaster.getSupportedTokens() || []);
         setWalletAccount(newAccount);
 
         // Default to provider chainId if not set (starknetkit doesn't set for braavos)
@@ -445,9 +446,14 @@ export function SessionProvider({ children }) {
     }
   }, [error, createAlert, logout]);
 
-  const payGasWithSwayIfPossible = useMemo(() => {
-    return gameplay.feeToken === 'SWAY';
-  }, [ currentSession?.walletId, gameplay.feeToken ]);
+  const gasTokens = useMemo(() => {
+    if (gameplay.feeTokens?.length > 0 && paymasterTokens?.length > 0) {
+      return gameplay.feeTokens.filter((t) => {
+        return !!paymasterTokens.find((pt) => Address.areEqual(pt.token_address, t));
+      });
+    }
+    return [];
+  }, [gameplay.feeTokens, paymasterTokens]);
 
   // Block management -------------------------------------------------------------------------------------------------
 
@@ -562,6 +568,7 @@ export function SessionProvider({ children }) {
       chainId: authenticated ? connectedChainId : null,
       connecting: connecting || !!promptLogin,
       isDeployed: authenticated ? currentSession?.isDeployed : null,
+      gasTokens: authenticated ? gasTokens : null,
       provider,
       starknetSession,
       status,
