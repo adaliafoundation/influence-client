@@ -303,7 +303,7 @@ const useStarterPackPricing = () => {
     const introMinPrice = priceHelper.from(introPackPriceUSD * TOKEN_SCALE[TOKEN.USDC], TOKEN.USDC);
     const introMinSwayValue = priceHelper.from(introPackSwayMin * TOKEN_SCALE[TOKEN.SWAY], TOKEN.SWAY);
     const introCrewmatesValue = priceHelper.from(introPackCrewmates * adalianPrice.usdcValue, TOKEN.USDC);
-    const introEthValue = priceHelper.from(wallet?.shouldMaintainEthGasReserve ? GAS_BUFFER_VALUE_USDC : 0, TOKEN.USDC);
+    const introEthValue = priceHelper.from(wallet?.shouldMaintainGasReserve ? GAS_BUFFER_VALUE_USDC : 0, TOKEN.USDC);
     const introSwayValue = priceHelper.from(
       Math.max(
         introMinSwayValue.usdcValue,
@@ -316,7 +316,7 @@ const useStarterPackPricing = () => {
     const basicMinPrice = priceHelper.from(basicPackPriceUSD * TOKEN_SCALE[TOKEN.USDC], TOKEN.USDC);
     const basicMinSwayValue = priceHelper.from(basicPackSwayMin * TOKEN_SCALE[TOKEN.SWAY], TOKEN.SWAY);
     const basicCrewmatesValue = priceHelper.from(basicPackCrewmates * adalianPrice.usdcValue, TOKEN.USDC);
-    const basicEthValue = priceHelper.from(wallet?.shouldMaintainEthGasReserve ? GAS_BUFFER_VALUE_USDC : 0, TOKEN.USDC);
+    const basicEthValue = priceHelper.from(wallet?.shouldMaintainGasReserve ? GAS_BUFFER_VALUE_USDC : 0, TOKEN.USDC);
     const basicSwayValue = priceHelper.from(
       Math.max(
         basicMinSwayValue.usdcValue,
@@ -373,7 +373,7 @@ const useStarterPackPricing = () => {
 
 export const StarterPack = ({
   packLabel,
-  shouldMaintainEthGasReserve = false,
+  shouldMaintainGasReserve = false,
   ...props
 }) => {
   const { execute } = useContext(ChainTransactionContext);
@@ -520,7 +520,7 @@ export const StarterPack = ({
               <CrewmateCreditIcon />
               <span style={{ marginLeft: 8 }}>{pack.crewmates} Crewmate{pack.crewmates === 1 ? '' : 's'}</span>
             </SKUHighlight>
-            {shouldMaintainEthGasReserve && (
+            {shouldMaintainGasReserve && (
               <SKUHighlight color={color}>
                 <UserPrice
                   price={pack.ethValue.usdcValue}
