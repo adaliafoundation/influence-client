@@ -31,6 +31,15 @@ export const useSwayPerUsdc = (accountAddress, amount) => {
   )
 };
 
+export const useStrkPerUsdc = (accountAddress, amount) => {
+  return useSwapQuote(
+    TOKEN.USDC,
+    TOKEN.STRK,
+    amount || (10 * TOKEN_SCALE[TOKEN.USDC]), // approx $10 worth
+    accountAddress
+  )
+};
+
 export const useUsdcPerEth = (accountAddress, amount) => {
   return useSwapQuote(
     TOKEN.ETH,

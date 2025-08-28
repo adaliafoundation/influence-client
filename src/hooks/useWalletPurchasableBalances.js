@@ -28,12 +28,16 @@ const useWalletPurchasableBalances = (overrideAccount) => {
 
   const maintainGasReserve = useMemo(() => {
     // if can pay fees in sway and have >=10% of target reserve amount available in sway, don't need a reserve
-    if (gasTokens?.includes(TOKEN.SWAY) && swayBalance >= priceHelper.from(GAS_BUFFER_VALUE_USDC * 0.1, TOKEN.USDC).to(TOKEN.SWAY)) {
+    if (gasTokens?.includes(TOKEN.SWAY)) {
+      if (swayBalance >= priceHelper.from(GAS_BUFFER_VALUE_USDC * 0.1, TOKEN.USDC).to(TOKEN.SWAY)) {
         return false;
+      }
     }
     // if can pay fees in strk and have >=10% of target reserve amount available in strk, don't need a reserve
-    if (gasTokens?.includes(TOKEN.STRK) && strkBalance >= priceHelper.from(GAS_BUFFER_VALUE_USDC * 0.1, TOKEN.USDC).to(TOKEN.STRK)) {
-      return false;
+    if (gasTokens?.includes(TOKEN.STRK)) {
+      if (strkBalance >= priceHelper.from(GAS_BUFFER_VALUE_USDC * 0.1, TOKEN.USDC).to(TOKEN.STRK)) {
+        return false;
+      }
     }
     // else, need a reserve
     return true;
@@ -44,11 +48,11 @@ const useWalletPurchasableBalances = (overrideAccount) => {
     let ethReserve = priceHelper.from(0n, TOKEN.ETH);
     if (maintainGasReserve) {
       if (gasTokens?.includes(TOKEN.USDC)) {
-        usdcReserve = priceHelper.from(Math.min(usdcBalance, GAS_BUFFER_VALUE_USDC), TOKEN.USDC);
+        usdcReserve = priceHelper.from((usdcBalance < GAS_BUFFER_VALUE_USDC ? usdcBalance : GAS_BUFFER_VALUE_USDC), TOKEN.USDC);
       }
-      if (gasTokens?.includes(TOKEN.ETH) && usdcReserve?.usdcValue === 0n) {
+      if (gasTokens?.includes(TOKEN.ETH) && !(usdcReserve?.usdcValue > 0)) {
         const ethValueInUSDC = Math.floor(priceHelper.from(ethBalance, TOKEN.ETH)?.usdcValue);
-        ethReserve = priceHelper.from(Math.min(ethValueInUSDC, GAS_BUFFER_VALUE_USDC), TOKEN.USDC);
+        ethReserve = priceHelper.from((ethValueInUSDC < GAS_BUFFER_VALUE_USDC ? ethValueInUSDC : GAS_BUFFER_VALUE_USDC), TOKEN.USDC);
       }
     }
     return [usdcReserve, ethReserve];
