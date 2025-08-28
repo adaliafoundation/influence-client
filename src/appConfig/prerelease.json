@@ -25,7 +25,7 @@
   },
   "Starknet": {
     "chainId": "0x534e5f5345504f4c4941",
-    "provider": "https://free-rpc.nethermind.io/sepolia-juno/v0_8",
+    "provider": "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
     "paymaster": "https://sepolia.paymaster.avnu.fi",
     "Address": {
       "ethToken": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",

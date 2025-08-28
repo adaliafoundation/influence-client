@@ -4,8 +4,7 @@
     "hideSocial": false
   },
   "Api": {
-    "argent": "https://cloud.argent-api.com/v1",
-    "argentWebWallet": "https://web.argent.xyz",
+    "argentWebWallet": "https://web.ready.co",
     "avnu": "https://starknet.api.avnu.fi",
     "influence": "https://api.influenceth.io",
     "influenceImage": "https://images.influenceth.io",
@@ -25,7 +24,7 @@
   },
   "Starknet": {
     "chainId": "0x534e5f4d41494e",
-    "provider": "https://free-rpc.nethermind.io/mainnet-juno/v0_8",
+    "provider": "https://starknet-mainnet.public.blastapi.io/rpc/v0_8",
     "paymaster": "https://starknet.paymaster.avnu.fi",
     "Address": {
       "ethToken": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
