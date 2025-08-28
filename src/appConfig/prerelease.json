@@ -5,8 +5,7 @@
     "verboseLogs": true
   },
   "Api": {
-    "argent": "https://api.hydrogen.argent47.net/v1",
-    "argentWebWallet": "https://web-v2.hydrogen.argent47.net",
+    "argentWebWallet": "https://sepolia-web.ready.co",
     "avnu": "https://sepolia.api.avnu.fi",
     "influence": "https://api-prerelease.influenceth.io",
     "influenceImage": "https://images-prerelease.influenceth.io",
