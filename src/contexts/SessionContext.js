@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQueryClient } from 'react-query';
 import { isExpired } from 'react-jwt';
-import { hash, PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
+import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
 import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';
 import { ArgentMobileConnector, isInArgentMobileAppBrowser } from 'starknetkit/argentMobile';
 import { InjectedConnector } from 'starknetkit/injected';
@@ -47,59 +47,6 @@ const allowedMethods = [
   { 'Contract Address': appConfig.get('Starknet.Address.escrow'), selector: 'deposit' }
 ];
 
-const useAvnuRewards = (currentSession) => {
-  const [avnuRewardsEnabled, setAvnuRewardsEnabled] = useState(true);
-
-  const { data, isLoading, refetch: refreshFeeRewards } = useQuery(
-    ['walletRewards', currentSession?.accountAddress],
-    () => {
-      return gasless.fetchAccountsRewards(
-        currentSession?.accountAddress,
-        { baseUrl: appConfig.get('Api.avnu') }
-      );
-    },
-    { enabled: !!currentSession?.isDeployed && !!currentSession?.accountAddress }
-  );
-
-  const freeTxRemaining = useMemo(() => {
-    if (isLoading || !Array.isArray(data)) return null;
-
-    return data.reduce((acc, reward) => {
-      const isMatchingWhitelist = allowedMethods.every((allowed) => !!reward.whitelistedCalls.find((wlc) => (
-        Address.areEqual(wlc.contractAddress, allowed['Contract Address']) && wlc.entrypoint === hash.getSelectorFromName(allowed.selector)
-      )));
-      return acc + (isMatchingWhitelist ? reward.remainingTx : 0);
-    }, 0);
-  }, [data, isLoading]);
-
-  const requestMoreRewards = useCallback(async () => {
-    try {
-      const response = await api.requestFeeRewards();
-      if (response?.added) {
-        refreshFeeRewards();
-      } else {
-        // if gracefully failed, not eligible for any (more) rewards...
-        // do we want to show a message?
-        setAvnuRewardsEnabled(false);
-      }
-    } catch (e) {
-      // TODO: exponential backoff? eventually give up?
-      setTimeout(() => {
-        requestMoreRewards();
-      }, 15000);
-    }
-  }, [refreshFeeRewards]);
-
-  useEffect(() => {
-    if (freeTxRemaining === 0 && avnuRewardsEnabled) {
-      if (currentSession?.walletId === 'argentWebWallet' || appConfig.get('App.feeRewardsForAllWallets'))
-      requestMoreRewards();
-    }
-  }, [avnuRewardsEnabled, currentSession?.walletId, requestMoreRewards, freeTxRemaining]);
-
-  return useMemo(() => freeTxRemaining || 0, [freeTxRemaining]);
-};
-
 const SessionContext = createContext();
 
 export function SessionProvider({ children }) {
@@ -114,8 +61,6 @@ export function SessionProvider({ children }) {
   const dispatchSessionSuspended = useStore(s => s.dispatchSessionSuspended);
   const dispatchSessionResumed = useStore(s => s.dispatchSessionResumed);
   const dispatchSessionEnded = useStore(s => s.dispatchSessionEnded);
-
-  const feeRewards = useAvnuRewards(currentSession);
 
   const [readyForChildren, setReadyForChildren] = useState(false);
 
