@@ -37,7 +37,6 @@ const ShipInfo = () => {
           <HudMenuCollapsibleSection titleText="Description">
             <Description>
               {reactPreline(description)}
-              {reactPreline(description)}
             </Description>
           </HudMenuCollapsibleSection>
         )}
