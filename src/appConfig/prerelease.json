@@ -7,10 +7,10 @@
   "Api": {
     "argentWebWallet": "https://sepolia-web.ready.co",
     "avnu": "https://sepolia.api.avnu.fi",
+    "banxa": "https://api.banxa.com",
     "influence": "https://api-prerelease.influenceth.io",
     "influenceImage": "https://images-prerelease.influenceth.io",
-    "ipfs": "https://influence.infura-ipfs.io/ipfs",
-    "ramp": "https://app.demo.ramp.network"
+    "ipfs": "https://influence.infura-ipfs.io/ipfs"
   },
   "Cloudfront": {
     "imageUrl": "https://d2xo5vocah3zyk.cloudfront.net",

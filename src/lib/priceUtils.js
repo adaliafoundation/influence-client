@@ -58,7 +58,7 @@ export const TOKEN_FORMATTER = {
           ? <>${(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString(undefined, { maximumFractionDigits: 0 })}</>
           : <>${(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
       case TOKEN_FORMAT.FULL: return <>${(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString()}</>;
-      case TOKEN_FORMAT.VERBOSE: return <>{(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC</>;
+      case TOKEN_FORMAT.VERBOSE: return <>{(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {TOKEN.USDC}</>;
       default: return <>${(value / TOKEN_SCALE[TOKEN.USDC]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>;
     }
   }

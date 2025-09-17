@@ -6,10 +6,10 @@
   "Api": {
     "argentWebWallet": "https://web.ready.co",
     "avnu": "https://starknet.api.avnu.fi",
+    "banxa": "https://api.banxa.com",
     "influence": "https://api.influenceth.io",
     "influenceImage": "https://images.influenceth.io",
-    "ipfs": "https://influence.infura-ipfs.io/ipfs",
-    "ramp": "https://app.ramp.network"
+    "ipfs": "https://influence.infura-ipfs.io/ipfs"
   },
   "Cloudfront": {
     "imageUrl": "https://d2xo5vocah3zyk.cloudfront.net",
