@@ -354,7 +354,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
     try {
       setBanxaing(true);
 
-      const order = await api.createBanxaOrder({ 
+      const order = await api.createBanxaOrder({
         // TODO: should this be the USDC amount instead?
         // TODO: can alternatively support an amount in crypto here too
         usd: Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
@@ -556,7 +556,10 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
         {banxaing && (
           <>
             {banxaOrder?.checkoutUrl
-              ? <iframe src={banxaOrder.checkoutUrl} style={{ border: 0, maxWidth: 'calc(100vw - 40px)', minHeight: '80vh', width: 425 }} />
+              ? <iframe
+                  allow={"geolocation *; camera *; microphone *"}
+                  src={banxaOrder.checkoutUrl}
+                  style={{ border: 0, maxWidth: 'calc(100vw - 40px)', minHeight: '80vh', width: 425 }} />
               : <LoaderWrapper><PageLoader message="Generating Checkout..." /></LoaderWrapper>
             }
           </>
