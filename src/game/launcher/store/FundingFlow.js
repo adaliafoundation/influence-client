@@ -342,7 +342,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   }, []);
 
   useEffect(() => {
-    if (banxaOrder) {
+    if (banxaOrder?.id) {
       const i = setInterval(() => { checkBanxaOrder(banxaOrder); }, 5000);
       return () => clearInterval(i);
     }
@@ -357,15 +357,23 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
       const order = await api.createBanxaOrder({ 
         // TODO: should this be the USDC amount instead?
         // TODO: can alternatively support an amount in crypto here too
-        usd: Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
+        usd: 11,// Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
         crypto: 'USDC'
       });
       if (!order?.checkoutUrl) throw new Error('Banxa order creation returned empty');
 
       setBanxaOrder(order);
     } catch (error) {
+      createAlert({
+        type: 'GenericAlert',
+        data: { content: 'Error initiating checkout flow.' },
+        level: 'warning',
+        duration: 5000
+      });
+        
       console.error('Error fetching Banxa checkout URL:', error);
       fireTrackingEvent('funding_error', { externalId: accountAddress });
+      setBanxaing();
     }
   }, [accountAddress]);
 

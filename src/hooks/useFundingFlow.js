@@ -15,7 +15,7 @@ const useFundWrapper = () => {
 
   const onVerifyFunds = useCallback((totalPrice, purchaseFn) => {
     if (!accountAddress) return login();
-    if (totalPrice.usdcValue > wallet?.combinedBalance?.to(TOKEN.USDC)) {
+    if (true || totalPrice.usdcValue > wallet?.combinedBalance?.to(TOKEN.USDC)) {
       onFunded.current = purchaseFn;
       setIsFunding({
         totalPrice,
