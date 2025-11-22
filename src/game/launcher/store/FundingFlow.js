@@ -255,7 +255,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
     // if (waiting && !debug) {
     //   setTimeout(() => {
     //     console.log('hack', startingBalance.current, wallet.tokenBalances); // tokenBalances
-    //     startingBalance.current[TOKEN.ETH] -= safeBigInt(1e14);
+    //     startingBalance.current[TOKEN.USDC] -= safeBigInt(TOKEN_SCALE[TOKEN.USDC]);
     //     setDebug(1);
     //   }, 5000);
     // }
@@ -344,6 +344,12 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   useEffect(() => {
     if (banxaOrder?.id) {
       const i = setInterval(() => { checkBanxaOrder(banxaOrder); }, 5000);
+      // (part of debug)
+      // const i = setInterval(() => {
+      //   setBanxaOrder();
+      //   setBanxaing();
+      //   setWaiting(true);
+      // }, 5000);
       return () => clearInterval(i);
     }
   }, [checkBanxaOrder, banxaOrder]);
