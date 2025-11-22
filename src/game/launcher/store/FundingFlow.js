@@ -575,7 +575,10 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
         {banxaing && (
           <>
             {banxaOrder?.checkoutUrl
-              ? <iframe src={banxaOrder.checkoutUrl} style={{ border: 0, maxWidth: 'calc(100vw - 40px)', minHeight: '80vh', width: 425 }} />
+              ? <iframe
+                  allow={"geolocation *; camera *; microphone *"}
+                  src={banxaOrder.checkoutUrl}
+                  style={{ border: 0, maxWidth: 'calc(100vw - 40px)', minHeight: '80vh', width: 425 }} />
               : <LoaderWrapper><PageLoader message="Generating Checkout..." /></LoaderWrapper>
             }
           </>
