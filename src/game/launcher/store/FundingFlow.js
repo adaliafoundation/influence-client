@@ -342,7 +342,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   }, []);
 
   useEffect(() => {
-    if (banxaOrder) {
+    if (banxaOrder?.id) {
       const i = setInterval(() => { checkBanxaOrder(banxaOrder); }, 5000);
       return () => clearInterval(i);
     }
@@ -354,18 +354,28 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
     try {
       setBanxaing(true);
 
-      const order = await api.createBanxaOrder({ 
-        // TODO: should this be the USDC amount instead?
+      const order = await api.createBanxaOrder({
         // TODO: can alternatively support an amount in crypto here too
-        usd: Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]), // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
+        usd: Math.max( // <-- this is the fiat amount (fees deducted mean will result in less USDC than this)
+          appConfig.get('Banxa.minFiat'),
+          Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC])
+        ),
         crypto: 'USDC'
       });
       if (!order?.checkoutUrl) throw new Error('Banxa order creation returned empty');
 
       setBanxaOrder(order);
     } catch (error) {
+      createAlert({
+        type: 'GenericAlert',
+        data: { content: 'Error initiating checkout flow.' },
+        level: 'warning',
+        duration: 5000
+      });
+
       console.error('Error fetching Banxa checkout URL:', error);
       fireTrackingEvent('funding_error', { externalId: accountAddress });
+      setBanxaing();
     }
   }, [accountAddress]);
 
@@ -427,6 +437,9 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   }, [banxaOrder?.status]);
 
   const hasTrackedExecution = useRef(false);
+  const showSlowWarning = useMemo(() => (
+    ['paymentReceived', 'inProgress', 'cryptoTransferred'].includes(banxaOrder?.status)
+  ), [banxaOrder?.status]);
 
   useEffect(() => {
     // as it's not pending, after pendingPayment, we know user has (attempted to) submit payment
@@ -459,7 +472,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
   return createPortal(
     (
       <Details
-        title={fundsNeeded ? 'Insufficient Funds' : 'Add Funds'}
+        title={fundsNeeded ? (showSlowWarning ? 'This May Take Up To 20 Minutes' : 'Insufficient Funds') : 'Add Funds'}
         onClose={onClose}
         modalMode
         style={{ zIndex: 9000 }}>
@@ -583,7 +596,7 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
                   : `Waiting for funds to be received...`
                 }
               </h4>
-              <small>(this may take several moments)</small>
+              <small>(this may take up to 20 minutes)</small>
               <Button size="small" onClick={() => setWaiting(false)}>
                 <CloseIcon /> <span>Cancel</span>
               </Button>

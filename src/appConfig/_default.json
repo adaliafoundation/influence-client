@@ -29,6 +29,9 @@
       "stripe": ""
     }
   },
+  "Banxa": {
+    "minFiat": 11
+  },
   "Cloudfront": {
     "imageUrl": "",
     "otherUrl": "",
