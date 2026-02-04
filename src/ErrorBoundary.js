@@ -141,7 +141,7 @@ class ErrorBoundary extends Component {
               <h1>This Hopper's Gone Rogue...</h1>
               <h4>Influence has experienced an unexpected error.</h4>
               <p>
-                Please report the error in Discord by copying the error log below and then pasting it in the #bug-report channel.
+                Please report the error in Discord by copying the error log below and then pasting it in the #support channel.
               </p>
               <p>
                 You can then refresh the tab to try again. If the problem persists, click "Reload State" below
