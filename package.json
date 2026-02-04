@@ -1,6 +1,8 @@
 {
   "name": "influence-client",
   "version": "1.0.0",
+  "author": "Unstoppable Games, Inc.",
+  "license": "CC-BY-NC-4.0",
   "private": true,
   "engines": {
     "node": "20.x"
