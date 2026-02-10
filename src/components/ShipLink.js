@@ -29,6 +29,8 @@ export const useShipLink = ({ crewId, shipId, zoomToShip }) => {
     if (!ship) return;
 
     let delayToZoomScene = 500;
+    const isOnLot = !!ship?._location?.lotId;
+    const menuToOpen = (isOnLot && zoomToShip && zoomToShip !== true) ? 'LOT_INFORMATION' : zoomToShip;
 
     // if ship is in_flight, zoom "out", show zoomScene of ship
     if (ship.Ship?.transitDeparture > 0) {
@@ -39,7 +41,7 @@ export const useShipLink = ({ crewId, shipId, zoomToShip }) => {
       }
 
     // if ship is in_port / on_surface, zoom to lot, show zoomScene of ship
-    } else if (!!ship?._location.lotId) {
+    } else if (isOnLot) {
       zoomToLot();
 
     // if ship is landing/launching/in_orbit, zoom to asteroid, show zoomScene of ship
@@ -50,16 +52,20 @@ export const useShipLink = ({ crewId, shipId, zoomToShip }) => {
 
     // show zoomScene of ship
     const shipShipId = ship.label === Entity.IDS.SHIP ? ship.id : null;
-    if (zoomToShip && !(currentZoomScene?.type === 'SHIP' && currentZoomScene?.shipId === shipShipId)) {
+    if (!isOnLot && zoomToShip && !(currentZoomScene?.type === 'SHIP' && currentZoomScene?.shipId === shipShipId)) {
       setTimeout(() => {
         dispatchZoomScene(zoomToShip ? { type: 'SHIP', shipId: shipShipId } : null);
 
         // if this is not just a boolean, it is assumed to be a hudmenu to open upon arrival
-        if (zoomToShip && zoomToShip !== true) {
+        if (menuToOpen && menuToOpen !== true) {
           setTimeout(() => {
-            dispatchHudMenuOpened(zoomToShip);
+            dispatchHudMenuOpened(menuToOpen);
           }, 0);
         }
+      }, delayToZoomScene);
+    } else if (isOnLot && menuToOpen && menuToOpen !== true) {
+      setTimeout(() => {
+        dispatchHudMenuOpened(menuToOpen);
       }, delayToZoomScene);
     }
   }, [currentZoomScene, ship, zoomToAsteroid, zoomToLot, zoomToShip, dispatchZoomScene, dispatchHudMenuOpened]);

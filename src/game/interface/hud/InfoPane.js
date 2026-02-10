@@ -343,7 +343,7 @@ const InfoPane = () => {
 
   const dispatchOriginSelected = useStore(s => s.dispatchOriginSelected);
   const dispatchLotSelected = useStore(s => s.dispatchLotSelected);
-  const dispatchZoomScene = useStore(s => s.dispatchZoomScene);
+  const dispatchHudMenuOpened = useStore(s => s.dispatchHudMenuOpened);
   const updateZoomStatus = useStore(s => s.dispatchZoomStatusChanged);
   const playSound = useStore(s => s.dispatchEffectStartRequested);
   const stopSound = useStore(s => s.dispatchEffectStopRequested);
@@ -366,7 +366,7 @@ const InfoPane = () => {
   const onClickPane = useCallback(() => {
     // open lot
     if (asteroidId && lotId && zoomStatus === 'in') {
-      dispatchZoomScene({ type: 'LOT' });
+      dispatchHudMenuOpened('LOT_INFORMATION');
 
     // open asteroid details
     } else if (asteroidId && zoomStatus === 'in') {
@@ -376,7 +376,7 @@ const InfoPane = () => {
     } else if (asteroidId && zoomStatus === 'out') {
       updateZoomStatus('zooming-in');
     }
-  }, [asteroidId, lotId, zoomStatus, lot?.building]);
+  }, [asteroidId, lotId, zoomStatus, lot?.building, dispatchHudMenuOpened]);
 
   const onClosePane = useCallback((e) => {
     e.stopPropagation();
@@ -505,7 +505,7 @@ const InfoPane = () => {
         pane.title = formatters.shipName(lot.surfaceShip);
         pane.subtitle = getShipSubtitle(lot.surfaceShip, surfaceShipReady, { asteroid, lot });
         pane.captainCard = lot.surfaceShip.Control?.controller?.id;
-        pane.hoverSubtitle = 'Zoom to Lot';
+        pane.hoverSubtitle = 'Open Lot Info';
         pane.thumbVisible = true;
         pane.thumbnail = <ThumbBackground image={thumbUrl} />;
       } else if (lotId && lot) {
@@ -521,7 +521,7 @@ const InfoPane = () => {
 
         pane.subtitle = <>{formatters.asteroidName(asteroid)} &gt; <b>{formatters.lotName(lotId)}</b></>;
         pane.captainCard = lot.building?.Control?.controller?.id || explicitLotControllerId;
-        pane.hoverSubtitle = 'Zoom to Lot';
+        pane.hoverSubtitle = 'Open Lot Info';
 
         const assetType = lot?.building ? Building.TYPES[lot.building?.Building?.buildingType]?.name : undefined;
 

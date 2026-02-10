@@ -325,7 +325,7 @@ const HudMenu = () => {
       const category = openHudMenu.split('_').shift();
       if (category === 'BELT' && zoomStatus !== 'out') dispatchHudMenuOpened();
       if (category === 'ASTEROID' && !(zoomStatus === 'in' && !zoomScene)) dispatchHudMenuOpened();
-      if (category === 'LOT' && !(zoomStatus === 'in' && zoomScene?.type === 'LOT')) dispatchHudMenuOpened();
+      if (category === 'LOT' && !(zoomStatus === 'in' && lotId)) dispatchHudMenuOpened();
       if (category === 'SHIP' && !(zoomStatus === 'in' && zoomScene?.type === 'SHIP')) dispatchHudMenuOpened();
     }
   }, [dispatchHudMenuOpened, zoomScene, zoomStatus]);
@@ -362,7 +362,7 @@ const HudMenu = () => {
     if (!launcherPage) {
       let scope = 'belt'; // belt, asteroid, lot, ship
       if (zoomStatus === 'in') scope = 'asteroid';
-      if (zoomScene?.type === 'LOT') scope = 'lot';
+      if (lotId) scope = 'lot';
       if (zoomScene?.type === 'SHIP') scope = 'ship'; // TODO: probably only if ship is in flight should we change scope
 
       let focus = ''; // asteroid, lot, ship
