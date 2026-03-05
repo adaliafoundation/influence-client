@@ -61,17 +61,18 @@ const MOUSE_THROTTLE_DISTANCE = 50 ** 2;
 const MOUSE_THROTTLE_TIME = 1000 / 30; // ms
 
 const lotUseTextures = {
-  [Building.CATEGORIES.STORAGE]: `${process.env.PUBLIC_URL}/textures/buildings/Storage.png`,
-  [Building.CATEGORIES.EXTRACTION]: `${process.env.PUBLIC_URL}/textures/buildings/Extraction.png`,
-  [Building.CATEGORIES.REFINING]: `${process.env.PUBLIC_URL}/textures/buildings/Refining.png`,
-  [Building.CATEGORIES.AGRICULTURE]: `${process.env.PUBLIC_URL}/textures/buildings/Agriculture.png`,
-  [Building.CATEGORIES.MANUFACTURING]: `${process.env.PUBLIC_URL}/textures/buildings/Manufacturing.png`,
-  [Building.CATEGORIES.SHIPBUILDING]: `${process.env.PUBLIC_URL}/textures/buildings/Shipbuilding.png`,
-  [Building.CATEGORIES.TRANSPORT]: `${process.env.PUBLIC_URL}/textures/buildings/Transport.png`,
-  [Building.CATEGORIES.TRADE]: `${process.env.PUBLIC_URL}/textures/buildings/Trade.png`,
-  [Building.CATEGORIES.HOUSING]: `${process.env.PUBLIC_URL}/textures/buildings/Housing.png`,
-  14: `${process.env.PUBLIC_URL}/textures/buildings/Construction.png`,
-  15: `${process.env.PUBLIC_URL}/textures/buildings/Ship.png`
+  [Building.IDS.WAREHOUSE]: `${process.env.PUBLIC_URL}/textures/buildings/Warehouse.png`,
+  [Building.IDS.EXTRACTOR]: `${process.env.PUBLIC_URL}/textures/buildings/Extractor.png`,
+  [Building.IDS.REFINERY]: `${process.env.PUBLIC_URL}/textures/buildings/Refinery.png`,
+  [Building.IDS.BIOREACTOR]: `${process.env.PUBLIC_URL}/textures/buildings/Bioreactor.png`,
+  [Building.IDS.FACTORY]: `${process.env.PUBLIC_URL}/textures/buildings/Factory.png`,
+  [Building.IDS.SHIPYARD]: `${process.env.PUBLIC_URL}/textures/buildings/Shipyard.png`,
+  [Building.IDS.SPACEPORT]: `${process.env.PUBLIC_URL}/textures/buildings/Spaceport.png`,
+  [Building.IDS.MARKETPLACE]: `${process.env.PUBLIC_URL}/textures/buildings/Marketplace.png`,
+  [Building.IDS.HABITAT]: `${process.env.PUBLIC_URL}/textures/buildings/Habitat.png`,
+  [Building.IDS.TANK_FARM]: `${process.env.PUBLIC_URL}/textures/buildings/Tankfarm.png`,
+  62: `${process.env.PUBLIC_URL}/textures/buildings/Construction.png`,
+  63: `${process.env.PUBLIC_URL}/textures/buildings/Ship.png`
 };
 
 const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, cameraNormalized, config, getLockToSurface, getRotation }) => {

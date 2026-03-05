@@ -18,7 +18,8 @@ import {
   ShipIcon,
   ShipyardBuildingIcon,
   SpaceportBuildingIcon,
-  WarehouseBuildingIcon
+  WarehouseBuildingIcon,
+  TankfarmBuildingIcon
 } from '~/components/Icons';
 import useExtractionManager from '~/hooks/actionManagers/useExtractionManager';
 import useProcessManager from '~/hooks/actionManagers/useProcessManager';
@@ -186,16 +187,17 @@ const Bar = styled.div.attrs((p) => {
 `;
 
 const getBuildingIcon = (buildingType) => {
-  switch(Building.TYPES[buildingType].category) {
-    case Building.CATEGORIES.AGRICULTURE: return <BioreactorBuildingIcon />;
-    case Building.CATEGORIES.EXTRACTION: return <ExtractorBuildingIcon />;
-    case Building.CATEGORIES.MANUFACTURING: return <FactoryBuildingIcon />;
-    case Building.CATEGORIES.HOUSING: return <HabitatBuildingIcon />;
-    case Building.CATEGORIES.TRADE: return <MarketplaceBuildingIcon />;
-    case Building.CATEGORIES.REFINING: return <RefineryBuildingIcon />;
-    case Building.CATEGORIES.SHIPBUILDING: return <ShipyardBuildingIcon />;
-    case Building.CATEGORIES.TRANSPORT: return <SpaceportBuildingIcon />;
-    case Building.CATEGORIES.STORAGE: return <WarehouseBuildingIcon />;
+  switch(buildingType) {
+    case Building.IDS.BIOREACTOR: return <BioreactorBuildingIcon />;
+    case Building.IDS.EXTRACTOR: return <ExtractorBuildingIcon />;
+    case Building.IDS.FACTORY: return <FactoryBuildingIcon />;
+    case Building.IDS.HABITAT: return <HabitatBuildingIcon />;
+    case Building.IDS.MARKETPLACE: return <MarketplaceBuildingIcon />;
+    case Building.IDS.REFINERY: return <RefineryBuildingIcon />;
+    case Building.IDS.SHIPYARD: return <ShipyardBuildingIcon />;
+    case Building.IDS.SPACEPORT: return <SpaceportBuildingIcon />;
+    case Building.IDS.WAREHOUSE: return <WarehouseBuildingIcon />;
+    case Building.IDS.TANK_FARM: return <TankfarmBuildingIcon />;
     default: return <ConstructIcon />;
   }
 }
