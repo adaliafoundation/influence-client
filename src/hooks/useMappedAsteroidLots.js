@@ -21,6 +21,8 @@ const LotAttribute = {
   BUILDING_TYPE: { value: "buildingType", mask: 0b0000001111110000, shift: 4 },
 }
 
+const LotSpecialType = { EMPTY: 0, CONTRUCTION_SITE: 62, LANDED_SHIP: 63}
+
 const useMappedAsteroidLots = (i) => {
   const queryClient = useQueryClient();
 
@@ -186,13 +188,13 @@ const useMappedAsteroidLots = (i) => {
     // TODO: the above does not block prepopping of other activities, so any
     // getAndCacheEntity may result in double-fetches on invalidation via this event
 
-    // construction site planned (0 -> 62)
+    // construction site planned
     if (eventType === 'ConstructionPlanned') {
       asteroidId = body.event.returnValues.asteroid.id;
       lotIndex = Lot.toIndex(body.event.returnValues.lot.id);
-      buildingType = 62;
+      buildingType = LotSpecialType.CONTRUCTION_SITE;
 
-    // construction site -> building (62 -> buildingCategory)
+    // construction site -> building
     } else if (eventType === 'ConstructionFinished') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
@@ -200,39 +202,39 @@ const useMappedAsteroidLots = (i) => {
       lotIndex = _location.lotIndex;
       buildingType = building?.Building?.buildingType ?? 0;
 
-    // building -> construction site (buildingCategory -> 62)
+    // building -> construction site
     } else if (eventType === 'ConstructionDeconstructed') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
       asteroidId = _location.asteroidId;
       lotIndex = _location.lotIndex;
-      buildingType = 62;
+      buildingType = LotSpecialType.CONTRUCTION_SITE;
 
-    // construction site abandoned (62 -> 0)
+    // construction site abandoned
     } else if (eventType === 'ConstructionAbandoned') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
       asteroidId = _location.asteroidId;
       lotIndex = _location.lotIndex;
-      buildingType = 0;
+      buildingType = LotSpecialType.EMPTY;
 
-    // ship moved to empty lot (0 -> 63)
+    // ship moved to empty lot
     } else if (eventType === 'ShipDocked' || eventType === 'ShipAssemblyFinished') {
       const entityId = body.event.returnValues.dock || body.event.returnValues.destination;
       if (entityId?.label === Entity.IDS.LOT) {
         const position = Lot.toPosition(entityId);
         asteroidId = position.asteroidId;
         lotIndex = position.lotIndex;
-        buildingType = 63;
+        buildingType = LotSpecialType.LANDED_SHIP;
       }
 
-    // ship undocked from empty lot (63 -> 0)
+    // ship undocked from empty lot
     } else if (eventType === 'ShipUndocked') {
       if (body.event.returnValues.dock.label === Entity.IDS.LOT) {
         const position = Lot.toPosition(body.event.returnValues.dock);
         asteroidId = position.asteroidId;
         lotIndex = position.lotIndex;
-        buildingType = 0;
+        buildingType = LotSpecialType.EMPTY;
       }
     }
 
@@ -242,8 +244,8 @@ const useMappedAsteroidLots = (i) => {
       queryClient.setQueryData([ 'asteroidPackedLotData', Number(asteroidId) ], (currentLotsValue) => {
         const newLotsValue = currentLotsValue.slice();
         newLotsValue[lotIndex] =
-          (newLotsValue[lotIndex] & (~ 0b0000001111110000))  // clear existing building
-          | (buildingType << 4)                // set to new buildingCategory
+          (newLotsValue[lotIndex] & (~ LotAttribute.BUILDING_TYPE.mask))  // clear existing building
+          | (buildingType << LotAttribute.BUILDING_TYPE.shift)                // set to new buildingCategory
         return newLotsValue;
       });
     }
