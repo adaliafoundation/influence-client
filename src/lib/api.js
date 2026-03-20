@@ -399,25 +399,31 @@ const api = {
     const response = await instance.get(`/${apiVersion}/asteroids/${i}/lots/packed`, { responseType: 'arraybuffer' });
     const lotTally = Asteroid.getSurfaceArea(i);
 
-    let shift;
-    const mask = 0b11111111;
+    const PACKED_WIDTH = 10;  // align with server-side src/common/services/PackedData/LotData.js
 
     // TODO (enhancement?): any benefit to returning a sparse array here instead?
     // (probably yes unless going to send as a buffer to worker as part of a performance enhancement)
     if (response.data) {
-      return (new Uint32Array(response.data)).reduce((acc, byte, i) => {
-        for (let j = 0; j < 4; j++) {
-          const index = i * 4 + j;
-          if (index < lotTally) {
-            // shift right 24, 16, 8, then 0
-            shift = (3 - j) * 8;
+      
+      // handle the response as a pure bit stream that we'll split in PACKED_WIDTH chunks reading bit by bit
+      const bytes = new Uint32Array(response.data);
+      const packedData = new Array(lotTally + 1).fill(0);
 
-            // (adjust for one-index of lot ids)
-            acc[index + 1] = (Number(byte) >> shift) & mask;
-          }
+      let globalBitIndex = 0;
+
+      for (let l = 1 ; l <= lotTally ; l++) { // 1-indexed
+        let value = 0;
+        for (let j = 0 ; j < PACKED_WIDTH ; j++) {
+          const byteIndex = Math.floor(globalBitIndex / 32);
+          const bitIndex = globalBitIndex % 32;
+          const bitValue = (bytes[byteIndex] >>> (31 - bitIndex)) & 1;
+          value = (value << 1) | bitValue;
+          globalBitIndex++;
         }
-        return acc;
-      }, [0]);
+
+        packedData[l] = value;
+      }
+      return packedData;
     }
     return null;
   },
