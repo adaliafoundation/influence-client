@@ -21,7 +21,6 @@ import AsteroidDetails from './interface/details/AsteroidDetails';
 // import CrewAssignmentComplete from './interface/details/crewAssignments/Complete';
 import CrewmateDetails from './interface/details/CrewmateDetails';
 import Marketplace from './interface/details/Marketplace';
-import LotViewer from './interface/modelViewer/LotViewer';
 import ShipViewer from './interface/modelViewer/ShipViewer';
 import LinkedViewer from './interface/modelViewer/LinkedViewer';
 import DevToolsViewer from './interface/modelViewer/DevToolsViewer';
@@ -184,7 +183,6 @@ const Interface = () => {
             </Route>
           </Switch>
 
-          <LotViewer />
           <ShipViewer />
           <HUD />
           <MainMenu />

@@ -17,7 +17,7 @@ const ShipViewer = () => {
 
   // Play ship thruster loop
   useEffect(() => {
-    if (zoomScene?.type === 'SHIP') {
+    if (zoomScene?.type === 'SHIP' && !ship?._location?.lotId) {
       const id = setTimeout(() => playSound('ship'));
       setPendingSound(id);
 
@@ -27,7 +27,7 @@ const ShipViewer = () => {
         setPendingSound(null);
       }
     }
-  }, [zoomScene]);
+  }, [zoomScene, ship?._location?.lotId]);
 
   const modelUrl = useMemo(() => {
     return getShipModel(
@@ -36,7 +36,7 @@ const ShipViewer = () => {
     );
   }, [ship?.Ship?.shipType, ship?.Ship?.variant]);
 
-  if (zoomScene?.type !== 'SHIP' || isLoading) return null;
+  if (zoomScene?.type !== 'SHIP' || isLoading || ship?._location?.lotId) return null;
   return (
     <ModelViewer assetType="ship" modelUrl={modelUrl} />
   );

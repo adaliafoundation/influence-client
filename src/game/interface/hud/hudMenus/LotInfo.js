@@ -3,18 +3,16 @@ import ResourceRequirement from '~/components/ResourceRequirement';
 import { getBuildingRequirements } from '../actionDialogs/components';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import styled from 'styled-components';
 import { Building, Ship, Product } from '@influenceth/sdk';
 import moment from 'moment';
 
 import useStore from '~/hooks/useStore';
-import { MagnifyingIcon, TransferToSiteIcon } from '~/components/Icons';
 import useLot from '~/hooks/useLot';
-import Button from '~/components/ButtonAlt';
 import { reactBool, reactPreline } from '~/lib/utils';
 import CrewIndicator from '~/components/CrewIndicator';
-import { HudMenuCollapsibleSection, Scrollable, Tray } from './components/components';
+import { HudMenuCollapsibleSection, Scrollable } from './components/components';
 import LotTitleArea from './components/LotTitleArea';
 import PolicyPanels from './components/PolicyPanels';
 import useCrew from '~/hooks/useCrew';
@@ -87,25 +85,16 @@ const LotInfo = () => {
   const { data: description, isLoading: isContentLoading } = useIpfsContent(annotation?.ipfs?.hash);
   const { data: controller } = useCrew(lot?.building?.Control?.controller?.id);
 
-  const dispatchZoomScene = useStore(s => s.dispatchZoomScene);
-  const zoomScene = useStore(s => s.asteroids.zoomScene);
-
   const gracePeriodPretty = useMemo(() => {
     return moment(Date.now() - Building.GRACE_PERIOD * 1e3).fromNow(true)
   }, []);
-
-  const isZoomedToLot = zoomScene?.type === 'LOT';
-
-  const toggleZoomScene = useCallback(() => {
-    dispatchZoomScene(isZoomedToLot ? null : { type: 'LOT', lotId: lot?.id });
-  }, [isZoomedToLot, lot?.id]);
 
   const siteOrBuilding = (lot?.building?.Building?.status === Building.CONSTRUCTION_STATUSES.OPERATIONAL ? 'Building' : 'Site');
 
   if (!lot || isAnnotationLoading || isContentLoading) return null;
   return (
     <>
-      <Scrollable hasTray={reactBool(!isZoomedToLot)}>
+      <Scrollable hasTray={reactBool(false)}>
         <LotTitleArea lot={lot} />
 
         {description && (
@@ -166,13 +155,6 @@ const LotInfo = () => {
 
       </Scrollable>
     
-      {!isZoomedToLot && (
-        <Tray>
-          <Button onClick={toggleZoomScene}>
-            <MagnifyingIcon style={{ marginRight: 8 }} /> Zoom to Lot
-          </Button>
-        </Tray>
-      )}
     </>
   );
 };
