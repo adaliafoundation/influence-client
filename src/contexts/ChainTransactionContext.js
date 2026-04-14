@@ -15,6 +15,7 @@ import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
 import api from '~/lib/api';
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
+import { isHybrid } from '~/lib/gameMode';
 import { TOKEN } from '~/lib/priceUtils';
 
 const RETRY_INTERVAL = 5e3; // 5 seconds
@@ -796,14 +797,14 @@ export function ChainTransactionProvider({ children }) {
               }
             }
 
-            if (totalEscrow > 0n) {
+            if (!isHybrid() && totalEscrow > 0n) {
               calls.unshift(System.getApproveErc20Call(
                 totalEscrow, appConfig.get('Starknet.Address.swayToken'), appConfig.get('Starknet.Address.escrow')
               ));
             }
 
-            // approve totalPriceToken to make purchase
-            if (totalPrice > 0n) {
+            // approve totalPriceToken to make purchase (skip in hybrid — no on-chain tokens)
+            if (!isHybrid() && totalPrice > 0n) {
               calls.unshift(System.getApproveErc20Call(
                 totalPrice,
                 totalPriceToken,
@@ -941,6 +942,7 @@ export function ChainTransactionProvider({ children }) {
   // on initial load, set provider.waitForTransaction for any pendingTransactions
   // so that we can throw any extension-related or timeout errors needed
   useEffect(() => {
+    if (isHybrid()) return; // No pending chain transactions to recover in hybrid mode
     if (provider && contracts && pendingTransactions?.length) {
       pendingTransactions.forEach(({ key, vars, txHash }) => {
         // (sanity check) this should not be possible since pendingTransaction should not be created
@@ -1175,6 +1177,47 @@ export function ChainTransactionProvider({ children }) {
         waitingOn: 'TRANSACTION'
       });
       return;
+    }
+
+    // Hybrid mode: POST to local server instead of submitting Starknet transaction
+    if (isHybrid()) {
+      try {
+        const idempotencyKey = meta?._idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const response = await api.postAction(key, {
+          callerCrew: get(vars, 'caller_crew'),
+          vars,
+          meta
+        }, idempotencyKey);
+
+        const txHash = response?.event?.transactionHash || `0x${Date.now().toString(16).padStart(64, '0')}`;
+        dispatchPendingTransaction({
+          key,
+          vars,
+          meta,
+          timestamp: blockTime ? (blockTime * 1000) : null,
+          txHash,
+          waitingOn: 'TRANSACTION'
+        });
+        dispatchPendingTransactionComplete(txHash);
+        return;
+      } catch (error) {
+        if (error.response?.status === 409 && !meta?._retried) {
+          // WriteConflict - auto-retry once with same idempotency key
+          return executeSystem(key, vars, { ...meta, _retried: true, _idempotencyKey: idempotencyKey });
+        }
+        const errorMessage = error.response?.data?.error || error.message;
+        const { onTransactionError } = contracts?.[key] || {};
+        if (onTransactionError) {
+          onTransactionError(errorMessage, vars);
+        } else {
+          createAlert({
+            type: 'GenericAlert',
+            data: { content: `Action failed: ${errorMessage}` },
+            level: 'warning',
+          });
+        }
+        return;
+      }
     }
 
     if (!walletAccount || !contracts || !contracts[key]) {
