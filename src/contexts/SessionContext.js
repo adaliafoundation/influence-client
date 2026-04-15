@@ -443,6 +443,13 @@ export function SessionProvider({ children }) {
   }, [canCheckBlock, provider]);
   useEffect(() => { initializeBlockData(); }, [initializeBlockData]);
 
+  // In hybrid mode, use real wall-clock time if the provider can't supply blockTime
+  useEffect(() => {
+    if (!isHybrid()) return;
+    if (blockTime > 0) return;
+    setBlockTime(Math.floor(Date.now() / 1000));
+  }, [blockTime]);
+
   const reattempts = useRef();
   const capturePendingBlockTimestampUpdate = useCallback(async () => {
     if (!provider) return;
