@@ -1,4 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from 'react-query';
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
 import { isEqual, get } from 'lodash';
 import { hash, num, shortString, uint256 } from 'starknet';
@@ -527,6 +528,7 @@ export function ChainTransactionProvider({ children }) {
     upgradeInsecureSession,
     walletAccount
   } = useSession();
+  const queryClient = useQueryClient();
   const activities = useActivitiesContext();
   const { crew, pendingTransactions } = useCrewContext();
   const { data: walletSource } = useWalletPurchasableBalances();
@@ -1181,8 +1183,8 @@ export function ChainTransactionProvider({ children }) {
 
     // Hybrid mode: POST to local server instead of submitting Starknet transaction
     if (isHybrid()) {
+      const idempotencyKey = meta?._idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       try {
-        const idempotencyKey = meta?._idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const response = await api.postAction(key, {
           callerCrew: get(vars, 'caller_crew'),
           vars,
@@ -1198,6 +1200,38 @@ export function ChainTransactionProvider({ children }) {
           txHash,
           waitingOn: 'TRANSACTION'
         });
+
+        // In hybrid mode the action is already complete — show success notification
+        // directly since the activity-matching effect won't fire (pending tx is cleared immediately)
+        if (contracts?.[key]?.onConfirmed) {
+          contracts[key].onConfirmed(response?.event, vars);
+        }
+        if (!customConfigs[key]?.getConfirmedAlert) {
+          createAlert({
+            type: 'GenericAlert',
+            data: { content: `${key} completed successfully` },
+            level: 'success',
+            duration: 5000,
+          });
+        }
+
+        // In hybrid mode there are no socket events, so manually invalidate
+        // queries that would normally be refreshed via ActivitiesContext
+        queryClient.invalidateQueries(['actionItems']);
+        queryClient.invalidateQueries(['activities']);
+
+        // Invalidate the entity cache for entities referenced in the response
+        // so the UI reflects the updated state
+        const rv = response?.event?.returnValues;
+        if (rv) {
+          const entityRefs = [rv.building, rv.asteroid, rv.ship, rv.deposit, rv.callerCrew].filter(Boolean);
+          entityRefs.forEach((ref) => {
+            if (ref.id && ref.label) {
+              queryClient.invalidateQueries(['entity', ref.label, Number(ref.id)]);
+            }
+          });
+        }
+
         dispatchPendingTransactionComplete(txHash);
         return;
       } catch (error) {
@@ -1206,15 +1240,15 @@ export function ChainTransactionProvider({ children }) {
           return executeSystem(key, vars, { ...meta, _retried: true, _idempotencyKey: idempotencyKey });
         }
         const errorMessage = error.response?.data?.error || error.message;
-        const { onTransactionError } = contracts?.[key] || {};
-        if (onTransactionError) {
-          onTransactionError(errorMessage, vars);
-        } else {
-          createAlert({
-            type: 'GenericAlert',
-            data: { content: `Action failed: ${errorMessage}` },
-            level: 'warning',
-          });
+        // Always show error alert in hybrid mode (onTransactionError only logs to console)
+        createAlert({
+          type: 'GenericAlert',
+          data: { content: `Action failed: ${errorMessage}` },
+          level: 'warning',
+          duration: 8000,
+        });
+        if (contracts?.[key]?.onTransactionError) {
+          contracts[key].onTransactionError(errorMessage, vars);
         }
         return;
       }
