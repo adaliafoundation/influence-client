@@ -11,6 +11,7 @@ import { appConfig } from '~/appConfig';
 import LoginPrompt from '~/components/LoginPrompt';
 import Reconnecting from '~/components/Reconnecting';
 import api from '~/lib/api';
+import { isHybrid } from '~/lib/gameMode';
 import { areChainsEqual, fireTrackingEvent, getBlockTime, resolveChainId } from '~/lib/utils';
 import useStore from '~/hooks/useStore';
 
@@ -146,7 +147,7 @@ export function SessionProvider({ children }) {
         setConnectedWalletId(wallet.id);
 
         let paymaster;
-        if (appConfig.get('Starknet.paymaster')) {
+        if (!isHybrid() && appConfig.get('Starknet.paymaster')) {
           paymaster = new PaymasterRpc({
             nodeUrl: appConfig.get('Starknet.paymaster'),
             // TODO: add x-paymaster-api-key if we are going to sponsor gas
@@ -158,9 +159,11 @@ export function SessionProvider({ children }) {
           provider,
           wallet,
           undefined,
-          paymaster
+          isHybrid() ? undefined : paymaster
         );
-        setPaymasterTokens(await newAccount.paymaster.getSupportedTokens() || []);
+        if (!isHybrid()) {
+          setPaymasterTokens(await newAccount.paymaster.getSupportedTokens() || []);
+        }
         setWalletAccount(newAccount);
 
         // Default to provider chainId if not set (starknetkit doesn't set for braavos)

@@ -925,6 +925,20 @@ const api = {
   createStripePaymentIntent: async (sku) => {
     const response = await instance.post(`/${apiVersion}/stripe/${sku}`);
     return response.data;
+  },
+
+  // Hybrid mode: execute a game action on the local server
+  postAction: async (action, params, idempotencyKey) => {
+    const headers = {};
+    if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
+    const response = await instance.post(`/${apiVersion}/actions/${action}`, params, { headers });
+    return response.data;
+  },
+
+  // Hybrid mode: fetch world fork metadata
+  getWorldFork: async () => {
+    const response = await instance.get(`/${apiVersion}/health`);
+    return response.data;
   }
 };
 

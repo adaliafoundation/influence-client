@@ -10,6 +10,7 @@ import useSimulationState from '~/hooks/useSimulationState';
 import useStore from '~/hooks/useStore';
 import useWalletCrews from '~/hooks/useWalletCrews';
 import api from '~/lib/api';
+import { isHybrid } from '~/lib/gameMode';
 import { getCrewAbilityBonuses, locationsArrToObj, openAccessJSTime } from '~/lib/utils';
 import { entitiesCacheKey } from '~/lib/cacheKey';
 import SIMULATION_CONFIG from '~/simulation/simulationConfig';
@@ -229,6 +230,8 @@ export function CrewProvider({ children }) {
   useEffect(() => setActionTypeTriggered(false), [selectedCrew?.id]); // recheck random event status on crew change
   useEffect(() => {
     if (!actionTypeTriggered) {
+      // No random events in hybrid mode (no on-chain entropy source)
+      if (isHybrid()) return;
       // TODO: actionRound tmp fix
       if (selectedCrew?.Crew?.actionType && selectedCrew.Crew.actionRound) {// && (selectedCrew.Crew.actionRound + RandomEvent.MIN_ROUNDS) <= blockNumber) {
         provider.callContract(

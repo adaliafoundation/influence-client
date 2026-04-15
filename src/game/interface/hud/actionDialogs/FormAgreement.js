@@ -8,6 +8,7 @@ import { appConfig } from '~/appConfig';
 import { CheckIcon, CloseIcon, ExtendAgreementIcon, FormAgreementIcon, FormLotAgreementIcon, GiveNoticeIcon, LinkIcon, CancelAgreementIcon, LotControlIcon, PermissionIcon, RefreshIcon, SwayIcon, WarningOutlineIcon, WarningIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
+import { isHybrid } from '~/lib/gameMode';
 import { daysToSeconds, reactBool, locationsArrToObj, formatFixed, monthsToSeconds, secondsToMonths, nativeBool, secondsToDays, safeBigInt, formatTimer } from '~/lib/utils';
 import {
   ActionDialogFooter,
@@ -235,6 +236,9 @@ const FormAgreement = ({
   const updateContractEligibility = useCallback(async () => {
     if (!provider) return;
     if (!currentPolicy?.policyDetails?.contract) return;
+    // In hybrid mode, server validates policies during action execution.
+    // Optimistically allow all — server returns 400 if invalid.
+    if (isHybrid()) { setEligible(true); return; }
     try {
       setEligibilityLoading(true);
       const response = await provider.callContract({
