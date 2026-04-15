@@ -27,6 +27,7 @@
       "stripe": ""
     }
   },
+  "GameMode": "chain",
   "Cloudfront": {
     "imageUrl": "",
     "otherUrl": "",
