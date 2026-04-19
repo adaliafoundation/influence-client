@@ -1,17 +1,18 @@
 import { useQuery } from 'react-query';
 import { uint256 } from 'starknet';
 
+import api from '~/lib/api';
 import useSession from '~/hooks/useSession';
 import { isHybrid } from '~/lib/gameMode';
 import { TOKEN } from '~/lib/priceUtils';
 
-// In hybrid mode, return a large mock balance since there are no on-chain
-// tokens. Keyed by token label to respect each token's decimal places.
+// ETH / STRK / USDC aren't modelled server-side in hybrid — keep a fixed mock
+// so checkout flows that gate on a non-zero balance don't block. SWAY is the
+// one token with real bookkeeping (see server User.swayBalance).
 const HYBRID_MOCK_BALANCES = {
-  eth: BigInt('50000000000000000000'),     // 50 ETH (18 decimals)
-  strk: BigInt('50000000000000000000000'), // 50,000 STRK (18 decimals)
-  sway: BigInt('50000000000000000000000'), // 50,000 SWAY (18 decimals)
-  usdc: BigInt('50000000000'),             // 50,000 USDC (6 decimals)
+  eth: BigInt('50000000000000000000'),
+  strk: BigInt('50000000000000000000000'),
+  usdc: BigInt('50000000000'),
 };
 
 const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
@@ -23,7 +24,20 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
   return useQuery(
     [ 'walletBalance', tokenLabel, accountAddress ],
     async () => {
-      if (hybrid) return HYBRID_MOCK_BALANCES[tokenLabel] || BigInt('50000000000000000000000');
+      if (hybrid) {
+        // SWAY: real per-wallet balance from the server (User.swayBalance
+        // stored as a wei-string). Everything else is a mocked large number.
+        if (tokenLabel === 'sway') {
+          try {
+            const user = await api.getUser();
+            return BigInt(user?.swayBalance || '0');
+          } catch (e) {
+            console.error('Failed to read SWAY balance', e);
+            return 0n;
+          }
+        }
+        return HYBRID_MOCK_BALANCES[tokenLabel] || BigInt('50000000000000000000000');
+      }
       if (!accountAddress) return undefined; // shouldn't happen (but seemingly does)
       try {
         const balance = await provider.callContract({
@@ -39,7 +53,10 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
     },
     {
       enabled: hybrid ? !!accountAddress : (!!provider && !!accountAddress),
-      refetchInterval: hybrid ? false : 300e3,
+      // In hybrid, poll for SWAY every 30s so the HUD reflects purchases
+      // without needing a full page reload. Cheaper than waiting for a socket
+      // event given SWAY changes don't currently emit one.
+      refetchInterval: hybrid ? (tokenLabel === 'sway' ? 30e3 : false) : 300e3,
     }
   );
 };
