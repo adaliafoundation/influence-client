@@ -2511,7 +2511,7 @@ export const InventorySelectionDialog = ({
   const { data: crewedShip } = useShip((otherLocation.lotIndex === 0 && crew?._location?.shipId === otherLocation.shipId) ? otherLocation.shipId : null);
 
   const inventories = useMemo(() => {
-    const allInventoryEntities = [];
+    let allInventoryEntities = [];
 
     if (limitToPrimary) {
       allInventoryEntities.push(limitToPrimary);
@@ -2519,6 +2519,15 @@ export const InventorySelectionDialog = ({
       if (inventoryData) allInventoryEntities.push(...inventoryData);
       if (crewedShip) allInventoryEntities.push(crewedShip);
     }
+
+    // Deduplicate entities that may arrive from multiple cache invalidation paths
+    const seen = new Set();
+    allInventoryEntities = allInventoryEntities.filter((e) => {
+      const key = `${e.label}_${e.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     const display = [];
     allInventoryEntities.forEach((entity) => {

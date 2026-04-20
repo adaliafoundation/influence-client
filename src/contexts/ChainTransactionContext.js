@@ -1232,7 +1232,9 @@ export function ChainTransactionProvider({ children }) {
           });
         }
 
-        dispatchPendingTransactionComplete(txHash);
+        // Defer completion to next tick so React renders the STARTING state
+        // before clearing it — dialogs detect the state change to trigger close
+        setTimeout(() => dispatchPendingTransactionComplete(txHash), 0);
         return;
       } catch (error) {
         if (error.response?.status === 409 && !meta?._retried) {

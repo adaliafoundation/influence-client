@@ -443,12 +443,16 @@ export function SessionProvider({ children }) {
   }, [canCheckBlock, provider]);
   useEffect(() => { initializeBlockData(); }, [initializeBlockData]);
 
-  // In hybrid mode, use real wall-clock time if the provider can't supply blockTime
+  // In hybrid mode, use real wall-clock time since there is no blockchain provider
+  // to supply block timestamps. Update every 5 seconds so action timers stay current.
   useEffect(() => {
     if (!isHybrid()) return;
-    if (blockTime > 0) return;
     setBlockTime(Math.floor(Date.now() / 1000));
-  }, [blockTime]);
+    const interval = setInterval(() => {
+      setBlockTime(Math.floor(Date.now() / 1000));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reattempts = useRef();
   const capturePendingBlockTimestampUpdate = useCallback(async () => {
