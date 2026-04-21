@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import esb from 'elastic-builder';
 import { Entity } from '@influenceth/sdk';
 
@@ -38,14 +38,14 @@ const useWalletAsteroids = () => {
     return null;
   }, [accountAddress, accountCrewIds, crewsLoading]);
 
-  return useQuery(
-    entitiesCacheKey(Entity.IDS.ASTEROID, { owner: accountAddress, controllerId: accountCrewIds }),
-    async () => {
+  return useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.ASTEROID, { owner: accountAddress, controllerId: accountCrewIds }),
+    queryFn: async () => {
       const response = await api.searchAssets('asteroids', query);
       return response?.hits || [];
     },
-    { enabled: !!query }
-  );
+    enabled: !!query
+  });
 };
 
 export default useWalletAsteroids;

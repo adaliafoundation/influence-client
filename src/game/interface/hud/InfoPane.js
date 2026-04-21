@@ -95,6 +95,7 @@ const Subtitle = styled.div`
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
   font-size: 15px;
   margin: 4px 0 12px;
+  position: relative;
   & b {
     color: white;
   }
@@ -102,11 +103,11 @@ const Subtitle = styled.div`
 
 const SubtitleLoader = styled.span`
   ${p => p.animated && css`animation: ${opacityAnimation} 1000ms linear infinite;`}
-  display: inline-block;
-  font-size: 12px;
-  line-height: 21.5px;
-  margin-left: 10px;
-  vertical-align: middle;
+  display: block;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  bottom: -3px;
   width: 115px;
   & > span {
     border-radius: 10px;

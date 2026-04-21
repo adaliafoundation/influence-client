@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import useSession from '~/hooks/useSession';
 import api from '~/lib/api';
@@ -6,11 +6,11 @@ import api from '~/lib/api';
 const useReferrals = () => {
   const { token } = useSession();
 
-  return useQuery(
-    [ 'referrals', token ],
-    () => api.getReferrals(),
-    { enabled: !!token }
-  );
+  return useQuery({
+    queryKey: [ 'referrals', token ],
+    queryFn: () => api.getReferrals(),
+    enabled: !!token
+  });
 };
 
 export default useReferrals;

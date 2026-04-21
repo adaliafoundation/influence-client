@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Address } from '@influenceth/sdk';
 
 import useSession from '~/hooks/useSession';
@@ -10,11 +10,11 @@ const useWalletInbox = () => {
   const { accountAddress } = useSession();
   const { data: user, isLoading: userIsLoading, dataUpdatedAt: userDataUpdatedAt } = useUser();
 
-  const { data: messages, isLoading, dataUpdatedAt } = useQuery(
-    [ 'inbox', accountAddress ],
-    () => api.getInboxMessages(),
-    { enabled: !!accountAddress && !!user?.publicKey }
-  );
+  const { data: messages, isLoading, dataUpdatedAt } = useQuery({
+    queryKey: [ 'inbox', accountAddress ],
+    queryFn: () => api.getInboxMessages(),
+    enabled: !!accountAddress && !!user?.publicKey
+  });
 
   const { threads, unreadTally } = useMemo(() => {
     const threads = {};

@@ -1,17 +1,17 @@
 import axios from 'axios';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { appConfig } from '~/appConfig';
 
 const useIpfsContent = (hash) => {
-  return useQuery(
-    ['annotation', hash],
-    async () => {
+  return useQuery({
+    queryKey: ['annotation', hash],
+    queryFn: async () => {
       const response = await axios.get(`${appConfig.get('Api.ipfs')}/${hash}`);
       return response?.data?.content;
     },
-    { enabled: !!hash }
-  )
+    enabled: !!hash
+  })
 };
 
 export default useIpfsContent;

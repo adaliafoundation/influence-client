@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useThrottle } from '@react-hook/throttle';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import esb from 'elastic-builder';
 
 import api from '~/lib/api';
@@ -274,14 +274,12 @@ const useAssetSearch = (assetType, { from = 0, size = 2000 } = {}) => {
     return null;
   }, [esAssetType, from, size, sort, throttledFilters]);
 
-  return useQuery(
-    [ 'search', esAssetType, query ],
-    () => esAssetType ? api.searchAssets(esAssetType, query) : [],
-    {
-      enabled: !!query,
-      // keepPreviousData: true // TODO: do we want this?
-    }
-  );
+  return useQuery({
+    queryKey: [ 'search', esAssetType, query ],
+    queryFn: () => esAssetType ? api.searchAssets(esAssetType, query) : [],
+    enabled: !!query,
+    // keepPreviousData: true // TODO: do we want this?
+  });
 };
 
 export default useAssetSearch;

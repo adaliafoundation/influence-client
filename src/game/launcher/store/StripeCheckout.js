@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import styled from 'styled-components';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 
@@ -104,11 +104,11 @@ const StripeInner = ({ onClose, price, productId, productName, metadata = {} }) 
 };
 
 const StripeCheckout = (props) => {
-  const { data: intent, isLoading } = useQuery(
-    ['stripeIntent', props.productId],
-    () => api.createStripePaymentIntent(props.productId),
-    { enabled: !!props.productId }
-  );
+  const { data: intent, isLoading } = useQuery({
+    queryKey: ['stripeIntent', props.productId],
+    queryFn: () => api.createStripePaymentIntent(props.productId),
+    enabled: !!props.productId
+  });
 
   return createPortal(
     (

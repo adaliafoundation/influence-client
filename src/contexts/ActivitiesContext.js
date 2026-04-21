@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '~/compat/react-query';
 import { isEqual, uniq } from 'lodash';
 import { Address, Entity } from '@influenceth/sdk';
 

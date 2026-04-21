@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ReactNotifications, Store as notify } from 'react-notifications-component';
-import 'react-notifications-component/dist/theme.css';
+import '~/compat/react-notifications-component.css';
 import 'animate.css';
 
 import { LinkIcon } from '~/components/Icons';

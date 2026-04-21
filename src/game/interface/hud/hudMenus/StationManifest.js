@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import { Permission, Station } from '@influenceth/sdk';
-import { List } from 'react-virtualized';
+import { FixedSizeList } from 'react-window';
 
 import Button from '~/components/ButtonAlt';
 import Dropdown from '~/components/Dropdown';
@@ -99,8 +99,8 @@ const StationManifest = () => {
     history.push(`/crew/${selectedCrewId}`);
   }, [selectedCrewId]);
 
-  const renderCrewRow = useCallback(({ key, index, style }) => (
-    <div key={key} style={style}>
+  const renderCrewRow = useCallback(({ index, style }) => (
+    <div style={{ ...style, paddingRight: 10 }}>
       <CrewInputBlock
         cardWidth={64}
         crew={crews[index]}
@@ -110,7 +110,7 @@ const StationManifest = () => {
         subtle
         style={defaultBlockStyle} />
     </div>
-  ), [crews]);
+  ), [crews, selectedCrewId]);
 
   const listWrapper = useRef();
   const [listHeight, setListHeight] = useState(0);
@@ -187,13 +187,15 @@ const StationManifest = () => {
           </>
         )}
         {!shipId && (
-          <List
+          <FixedSizeList
             width={372}
             height={listHeight}
-            rowCount={crews?.length || 0}
-            rowHeight={152}
-            rowRenderer={renderCrewRow}
-          />
+            itemCount={crews?.length || 0}
+            itemSize={152}
+            itemKey={(index) => crews?.[index]?.id || index}
+            overscanCount={5}>
+            {renderCrewRow}
+          </FixedSizeList>
         )}
       </ListWrapper>
 

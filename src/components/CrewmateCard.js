@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LoadingAnimation from 'react-spinners/PuffLoader';
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import pick from 'lodash/pick';
 import { Crewmate } from '@influenceth/sdk';
 
@@ -134,11 +134,12 @@ const FooterStats = styled.div`
   }
 `;
 
-const loadingCss = css`
-  position: absolute;
-  left: calc(50% - 30px);
-  top: 50%;
-`;
+const loadingCss = {
+  left: 'calc(50% - 30px)',
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)'
+};
 
 const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
   const [ imageFailed, setImageFailed ] = useState(false);
@@ -173,7 +174,7 @@ const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
       hasOverlay={!!overlay}
       classLabel={props.crewmateClass ? Crewmate.getClass(props.crewmateClass)?.name : undefined}
       {...props}>
-      {imageLoaded ? null : <LoadingAnimation color={'white'} css={loadingCss} />}
+      {imageLoaded ? null : <LoadingAnimation color={'white'} cssOverride={loadingCss} />}
       <CardImage visible={imageLoaded} applyMask={!overlay && !props.hideMask}>
         <img
           ref={watchImageLoad}

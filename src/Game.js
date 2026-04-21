@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ThemeProvider, createGlobalStyle } from 'styled-components';
 import { BrowserRouter as Router, Switch, Route, useHistory, useLocation } from 'react-router-dom';
-import { useDetectGPU } from '@react-three/drei';
+import { getGPUTier } from 'detect-gpu';
 
 import { appConfig } from '~/appConfig';
 import FullpageInterstitial from '~/components/FullpageInterstitial';
@@ -127,7 +127,7 @@ const LauncherRedirect = () => {
 };
 
 const Game = () => {
-  const gpuInfo = useDetectGPU();
+  const [ gpuInfo, setGpuInfo ] = useState();
   const { isInstalling, updateNeeded, onUpdateVersion } = useServiceWorker();
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
@@ -140,6 +140,29 @@ const Game = () => {
   // Initialize tag manager
   useEffect(() => {
     initializeTagManager();
+  }, []);
+
+  useEffect(() => {
+    let unmounted = false;
+    const fallbackGpuInfo = { isMobile: false, tier: 1 };
+    const timeout = setTimeout(() => {
+      if (!unmounted) setGpuInfo((prev) => prev || fallbackGpuInfo);
+    }, 5000);
+
+    getGPUTier()
+      .then((result) => {
+        if (!unmounted) setGpuInfo(result || fallbackGpuInfo);
+      })
+      .catch((e) => {
+        console.warn('GPU detection failed, using fallback tier', e);
+        if (!unmounted) setGpuInfo(fallbackGpuInfo);
+      })
+      .finally(() => clearTimeout(timeout));
+
+    return () => {
+      unmounted = true;
+      clearTimeout(timeout);
+    };
   }, []);
 
   const autodetectNeedsInit = graphics?.autodetect === undefined;

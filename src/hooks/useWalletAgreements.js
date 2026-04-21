@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -14,11 +14,11 @@ const useWalletAgreements = () => {
     return (crews || []).map((c) => c.id);
   }, [crews, crewsLoading]);
 
-  return useQuery(
-    [ 'agreements', accountAddress ],
-    async () => api.getCrewAgreements(crewIds, accountAddress),
-    { enabled: !!(accountAddress && crewIds) }
-  );
+  return useQuery({
+    queryKey: [ 'agreements', accountAddress ],
+    queryFn: async () => api.getCrewAgreements(crewIds, accountAddress),
+    enabled: !!(accountAddress && crewIds)
+  });
 };
 
 export default useWalletAgreements;

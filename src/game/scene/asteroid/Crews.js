@@ -22,7 +22,7 @@ import {
 } from 'three';
 import { Address, Asteroid, Crewmate, Entity, Lot, Time } from '@influenceth/sdk';
 import { useHistory } from 'react-router-dom';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { appConfig } from '~/appConfig';
 import { BLOOM_LAYER } from '~/game/Postprocessor';
@@ -87,9 +87,9 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // TODO: would be nice to include a crew filter on this rather than post-processing to
   //  apply the activeCrewsDisplay filter... then we could also drop crewMovementActivity probably
   //  and just use this with the crews included
-  const { data: ongoing, isLoading } = useQuery(
-    [ 'activities', 'ongoing', asteroidId ],
-    async () => {
+  const { data: ongoing, isLoading } = useQuery({
+    queryKey: [ 'activities', 'ongoing', asteroidId ],
+    queryFn: async () => {
       const ongoingActivities = await api.getOngoingActivities(
         Entity.packEntity({ label: Entity.IDS.ASTEROID, id: asteroidId }),
         Object.keys(activities).filter((k) => !!activities[k].getVisitedLot)
@@ -100,10 +100,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       await hydrateActivities(ongoingActivities, queryClient)
       return ongoingActivities;
     },
-    {
-      enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
-    }
-  );
+    enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
+  });
 
   // define the travel params from the ongoing activities
   const ongoingTravel = useMemo(() => {

@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
 import styled from 'styled-components';
-import Clipboard from 'react-clipboard.js';
 
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
+import { copyTextToClipboard } from '~/lib/clipboard';
 
-const StyledClipboard = styled(Clipboard)`
+const StyledClipboard = styled.span`
+  cursor: pointer;
   text-decoration: none;
 `;
 
@@ -14,19 +15,18 @@ const CopyReferralLink = ({ children, fallbackContent }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const playSound = useStore(s => s.dispatchEffectStartRequested);
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback(async () => {
+    const copied = await copyTextToClipboard(`${document.location.origin}/play?r=${accountAddress}`);
     playSound('click');
     createAlert({
       type: 'ClipboardAlert',
-      data: { content: 'Recruitment link copied to clipboard.' },
+      data: { content: copied ? 'Recruitment link copied to clipboard.' : 'Unable to copy recruitment link.' },
     });
-  }, [createAlert, playSound]);
+  }, [accountAddress, createAlert, playSound]);
 
   if (!accountAddress) return fallbackContent || null;
   return (
     <StyledClipboard
-      component="span"
-      data-clipboard-text={`${document.location.origin}/play?r=${accountAddress}`}
       onClick={handleClick}>
       {children}
     </StyledClipboard>

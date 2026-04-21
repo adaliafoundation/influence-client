@@ -1,12 +1,12 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import api from '~/lib/api';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 
 const useSwapQuote = (sellToken, buyToken, amount, accountAddress = false) => {
-  return useQuery(
-    [ 'swapQuote', sellToken, buyToken, amount, accountAddress ],
-    async () => {
+  return useQuery({
+    queryKey: [ 'swapQuote', sellToken, buyToken, amount, accountAddress ],
+    queryFn: async () => {
       const quotes = await api.getSwapQuote({
         sellToken,
         buyToken,
@@ -15,11 +15,9 @@ const useSwapQuote = (sellToken, buyToken, amount, accountAddress = false) => {
       });
       return quotes?.[0] ? (parseInt(quotes[0].buyAmount) / parseInt(quotes[0].sellAmount)) : 0;
     },
-    {
-      enabled: !!(sellToken && buyToken),
-      refetchInterval: 60e3,
-    }
-  );
+    enabled: !!(sellToken && buyToken),
+    refetchInterval: 60e3,
+  });
 };
 
 export const useSwayPerUsdc = (accountAddress, amount) => {

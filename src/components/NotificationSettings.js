@@ -11,7 +11,7 @@ import Button from './ButtonAlt';
 import { nativeBool } from '~/lib/utils';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import useSession from '~/hooks/useSession';
 
 const Checkboxes = styled.div`

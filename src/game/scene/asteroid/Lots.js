@@ -14,7 +14,7 @@ import {
   Vector2,
   Vector3
 } from 'three';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Asteroid, Building, Entity, Lot } from '@influenceth/sdk';
 
 import { appConfig } from '~/appConfig';
@@ -327,7 +327,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
         // since will not be listening to asteroid room when zoomed away, remove ['asteroidPackedLotData', asteroidId]
         // and all [ 'entity', Entity.IDS.LOT, * ] that are on the asteroid but not occupied by me
         queryClient.removeQueries({ queryKey: [ 'asteroidPackedLotData', Number(asteroidId) ] });
-        queryClient.getQueriesData([ 'entity', Entity.IDS.LOT ]).forEach(([ queryKey, data ]) => {
+        queryClient.getQueriesData({ queryKey: [ 'entity', Entity.IDS.LOT ] }).forEach(([ queryKey, data ]) => {
           const lotAsteroidId = Lot.toPosition(lotId)?.asteroidId;
           if (asteroidId === lotAsteroidId) {
             if (data && data.occupier !== crew?.id) { // TODO: ecs refactor -- occupier?

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Entity, Permission, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
-import Clipboard from 'react-clipboard.js';
 import numeral from 'numeral';
 
 import { appConfig } from '~/appConfig';
@@ -38,6 +37,7 @@ import useBlockTime from '~/hooks/useBlockTime';
 import useLot from '~/hooks/useLot';
 import useAsteroid from '~/hooks/useAsteroid';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
+import { copyTextToClipboard } from '~/lib/clipboard';
 
 const FormSection = styled.div`
   margin-top: 12px;
@@ -257,13 +257,14 @@ const FormAgreement = ({
     updateContractEligibility()
   }, [updateContractEligibility]);
 
-  const handleCopyAddress = useCallback(() => {
+  const handleCopyAddress = useCallback(async () => {
+    const copied = await copyTextToClipboard(currentPolicy?.policyDetails?.contract);
     createAlert({
       type: 'ClipboardAlert',
-      data: { content: 'Contract address copied to clipboard.' },
+      data: { content: copied ? 'Contract address copied to clipboard.' : 'Unable to copy contract address.' },
       duration: 2000
     });
-  }, [createAlert]);
+  }, [createAlert, currentPolicy?.policyDetails?.contract]);
 
   const handlePeriodChange = useCallback((e) => {
     if (e.currentTarget.value === '') return setInitialPeriod('');
@@ -476,14 +477,9 @@ const FormAgreement = ({
                 <a href={`${appConfig.get('Url.starknetExplorer')}/contract/${currentPolicy?.policyDetails?.contract}`} target="_blank" rel="noreferrer">Starkscan</a>.
               </ContractDesc>
 
-              <Clipboard
-                component="span"
-                data-clipboard-text={`${currentPolicy?.policyDetails?.contract}`}
-                onClick={handleCopyAddress}>
-                <Button>
-                  <LinkIcon /> <span>Copy Contract Address</span>
-                </Button>
-              </Clipboard>
+              <Button onClick={handleCopyAddress}>
+                <LinkIcon /> <span>Copy Contract Address</span>
+              </Button>
             </FlexSectionBlock>
           )}
         </FlexSection>

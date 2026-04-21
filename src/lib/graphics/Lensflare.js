@@ -211,7 +211,7 @@ class Lensflare extends Mesh {
       if (validArea.containsPoint(screenPositionPixels)) {
         // save current RGB to temp texture
 
-        renderer.copyFramebufferToTexture(screenPositionPixels, tempMap)
+        renderer.copyFramebufferToTexture(tempMap, screenPositionPixels)
 
         // render pink quad
 
@@ -223,7 +223,7 @@ class Lensflare extends Mesh {
 
         // copy result to occlusionMap
 
-        renderer.copyFramebufferToTexture(screenPositionPixels, occlusionMap)
+        renderer.copyFramebufferToTexture(occlusionMap, screenPositionPixels)
 
         // restore graphics
 

@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useContext, useEffect, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import styled from 'styled-components';
 
 import { SwayIcon } from '~/components/Icons';

@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Order } from '@influenceth/sdk';
 
 import api from '~/lib/api';
@@ -6,9 +6,9 @@ import { locationsArrToObj } from '~/lib/utils';
 
 const useShoppingListOrders = (asteroidId, productIds, mode = 'buy') => {
   // TODO: ideally could somehow partion this by productId in cache keys
-  return useQuery(
-    [ 'shoppingOrderList', Number(asteroidId), productIds, mode ],
-    async () => {
+  return useQuery({
+    queryKey: [ 'shoppingOrderList', Number(asteroidId), productIds, mode ],
+    queryFn: async () => {
       const empties = productIds.reduce((a, p) => ({ ...a, [p]: {} }), {});
 
       const amountKey = mode === 'buy' ? 'supply' : 'demand';
@@ -29,8 +29,8 @@ const useShoppingListOrders = (asteroidId, productIds, mode = 'buy') => {
         return acc;
       }, empties);
     },
-    { enabled: !!asteroidId && !!productIds?.length }
-  );
+    enabled: !!asteroidId && !!productIds?.length
+  });
 }
 
 export default useShoppingListOrders;

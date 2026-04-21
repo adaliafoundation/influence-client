@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Entity, Permission, Ship } from '@influenceth/sdk';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -14,17 +14,17 @@ const useAccessibleAsteroidInventories = (asteroidId, isSourcing) => {
   const permissionCrewSiblingIds = crew?._siblingCrewIds || [];
   const permissionAccount = crew?.Crew?.delegatedTo;
   
-  const { data: buildings, isLoading: buildingsLoading, dataUpdatedAt: buildingsUpdatedAt } = useQuery(
-    entitiesCacheKey(Entity.IDS.BUILDING, { asteroidId: Number(asteroidId), hasComponent: 'Inventories', hasPermission: permission, permissionCrewId, permissionAccount }),
-    () => api.getAsteroidBuildingsWithAccessibleInventories(asteroidId, permissionCrewId, permissionCrewSiblingIds, permissionAccount, permission),
-    { enabled: !!(asteroidId && permission && permissionCrewId && permissionAccount) }
-  );
+  const { data: buildings, isLoading: buildingsLoading, dataUpdatedAt: buildingsUpdatedAt } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.BUILDING, { asteroidId: Number(asteroidId), hasComponent: 'Inventories', hasPermission: permission, permissionCrewId, permissionAccount }),
+    queryFn: () => api.getAsteroidBuildingsWithAccessibleInventories(asteroidId, permissionCrewId, permissionCrewSiblingIds, permissionAccount, permission),
+    enabled: !!(asteroidId && permission && permissionCrewId && permissionAccount)
+  });
 
-  const { data: ships, isLoading: shipsLoading, dataUpdatedAt: shipsUpdatedAt } = useQuery(
-    entitiesCacheKey(Entity.IDS.SHIP, { asteroidId: Number(asteroidId), hasComponent: 'Inventories', hasPermission: permission, permissionCrewId, permissionAccount, isOnSurface: true, status: Ship.STATUSES.AVAILABLE }),
-    () => api.getAsteroidShipsWithAccessibleInventories(asteroidId, permissionCrewId, permissionCrewSiblingIds, permissionAccount, permission),
-    { enabled: !!(asteroidId && permission && permissionCrewId && permissionAccount) }
-  );
+  const { data: ships, isLoading: shipsLoading, dataUpdatedAt: shipsUpdatedAt } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.SHIP, { asteroidId: Number(asteroidId), hasComponent: 'Inventories', hasPermission: permission, permissionCrewId, permissionAccount, isOnSurface: true, status: Ship.STATUSES.AVAILABLE }),
+    queryFn: () => api.getAsteroidShipsWithAccessibleInventories(asteroidId, permissionCrewId, permissionCrewSiblingIds, permissionAccount, permission),
+    enabled: !!(asteroidId && permission && permissionCrewId && permissionAccount)
+  });
 
   return useMemo(() => ({
     data: buildingsLoading || shipsLoading

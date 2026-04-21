@@ -1,5 +1,5 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import { useQueryClient } from '~/compat/react-query';
 import { isExpired } from 'react-jwt';
 import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
 import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';

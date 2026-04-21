@@ -1,5 +1,5 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { useQueryClient, QueryClientProvider } from 'react-query';
+import { Suspense, useContext, useEffect, useMemo, useState } from 'react';
+import { useQueryClient, QueryClientProvider } from '~/compat/react-query';
 import { Object3D, Vector3 } from 'three';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useContextBridge, Stats } from '@react-three/drei';
@@ -67,10 +67,18 @@ const WrappedScene = () => {
 
   return !controls ? null : (
     <>
-      <Star />
-      <Planets />
-      <Asteroids />
-      <Asteroid />
+      <Suspense fallback={null}>
+        <Star />
+      </Suspense>
+      <Suspense fallback={null}>
+        <Planets />
+      </Suspense>
+      <Suspense fallback={null}>
+        <Asteroids />
+      </Suspense>
+      <Suspense fallback={null}>
+        <Asteroid />
+      </Suspense>
     </>
   );
 }
@@ -144,7 +152,9 @@ const Scene = () => {
         style={canvasStyle}>
         <GpuContextLostReporter setContextLost={setContextLost} />
         <ContextBridge>
-          <SettingsManager />
+          <Suspense fallback={null}>
+            <SettingsManager />
+          </Suspense>
           <Postprocessor enabled={postprocessingEnabled} bloomParams={bloomParams} />
           <QueryClientProvider client={queryClient} contextSharing={true}>
             <TrackballModControls>

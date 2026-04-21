@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '~/compat/react-query';
 import { Building, Deposit, DryDock, Entity, Extractor, Inventory, Lot, Order, Permission, Processor, Product, Ship } from '@influenceth/sdk';
 
 import useSimulationState from '~/hooks/useSimulationState';

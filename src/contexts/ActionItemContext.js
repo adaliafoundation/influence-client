@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '~/compat/react-query';
 import { Building, Permission } from '@influenceth/sdk';
 import cloneDeep from 'lodash/cloneDeep';
 

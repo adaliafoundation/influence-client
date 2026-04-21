@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useThrottle } from '@react-hook/throttle';
 import esb from 'elastic-builder';
 import { Building } from '@influenceth/sdk';
@@ -81,12 +81,12 @@ const useAutocomplete = (assetType, meta) => {
     }
   }, [ assetType, meta?.asteroidId, searchTerm, sort ]);
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading } = useQuery({
     // TODO: convert this to 'entities' model of cache keys?
-    [ 'search', assetType, query ],
-    () => assetType && query ? api.searchAssets(assetType, query) : [],
-    { enabled: !!query }
-  );
+    queryKey: [ 'search', assetType, query ],
+    queryFn: () => assetType && query ? api.searchAssets(assetType, query) : [],
+    enabled: !!query
+  });
 
   return {
     ...configByType[assetType],

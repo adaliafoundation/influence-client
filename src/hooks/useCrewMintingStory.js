@@ -1,6 +1,6 @@
 // TODO: ecs refactor -- maybe deprecated?
 
-// import { useQuery } from 'react-query';
+// import { useQuery } from '~/compat/react-query';
 // import useSession from '~/hooks/useSession';
 
 // import api from '~/lib/api';

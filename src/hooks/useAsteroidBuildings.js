@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Building, Entity, Permission } from '@influenceth/sdk';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -9,11 +9,11 @@ import { entitiesCacheKey } from '~/lib/cacheKey';
 const useAsteroidBuildings = (asteroidId, reqComponent = 'Building', reqOneOfPermissions = null) => {
   const { crew, crewCan } = useCrewContext();
 
-  const { data: allData, dataUpdatedAt, isLoading, refetch } = useQuery(
-    entitiesCacheKey(Entity.IDS.BUILDING, { asteroidId: Number(asteroidId), hasComponent: reqComponent, status: Building.CONSTRUCTION_STATUSES.OPERATIONAL }),
-    () => api.getBuildingsWithComponent(asteroidId, reqComponent),
-    { enabled: !!asteroidId && !!reqComponent }
-  );
+  const { data: allData, dataUpdatedAt, isLoading, refetch } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.BUILDING, { asteroidId: Number(asteroidId), hasComponent: reqComponent, status: Building.CONSTRUCTION_STATUSES.OPERATIONAL }),
+    queryFn: () => api.getBuildingsWithComponent(asteroidId, reqComponent),
+    enabled: !!asteroidId && !!reqComponent
+  });
 
   const perms = useMemo(() =>
     Array.isArray(reqOneOfPermissions) ? reqOneOfPermissions : (reqOneOfPermissions ? [reqOneOfPermissions] : []),

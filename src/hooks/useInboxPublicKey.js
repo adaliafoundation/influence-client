@@ -1,13 +1,13 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import useSession from '~/hooks/useSession';
 import api from '~/lib/api';
 
 const useInboxPublicKey = (recipient) => {
   const { accountAddress } = useSession();
-  return useQuery(
-    ['dmPublicKey', recipient],
-    async () => {
+  return useQuery({
+    queryKey: ['dmPublicKey', recipient],
+    queryFn: async () => {
       try {
         return await api.getInboxPublicKey(recipient);
       } catch (e) {
@@ -17,8 +17,8 @@ const useInboxPublicKey = (recipient) => {
         throw e;
       }
     },
-    { enabled: !!(recipient && accountAddress) }
-  );
+    enabled: !!(recipient && accountAddress)
+  });
 };
 
 export default useInboxPublicKey;
