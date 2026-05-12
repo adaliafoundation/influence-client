@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from 'react-query';
 import { isExpired } from 'react-jwt';
 import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
@@ -11,7 +11,7 @@ import { appConfig } from '~/appConfig';
 import LoginPrompt from '~/components/LoginPrompt';
 import Reconnecting from '~/components/Reconnecting';
 import api from '~/lib/api';
-import { areChainsEqual, fireTrackingEvent, getBlockTime, resolveChainId } from '~/lib/utils';
+import { areChainsEqual, fireTrackingEvent, resolveChainId } from '~/lib/utils';
 import useStore from '~/hooks/useStore';
 
 // TODO:
@@ -76,7 +76,6 @@ export function SessionProvider({ children }) {
   const [paymasterTokens, setPaymasterTokens] = useState([]);
 
   const [blockNumber, setBlockNumber] = useState(0);
-  const [provisionalBlockNumber, setProvisionalBlockNumber] = useState(0);
   const [blockTime, setBlockTime] = useState(0);
   const [isBlockMissing, setIsBlockMissing] = useState(false);
   const [error, setError] = useState();
@@ -402,74 +401,26 @@ export function SessionProvider({ children }) {
 
   // Block management -------------------------------------------------------------------------------------------------
 
-  // Argent is slow to put together it's final "starknet" object, so we check explicitly for getBlock method
-  const canCheckBlock = useMemo(() => {
-    return status >= STATUSES.CONNECTED && !!provider?.getBlock;
-  }, [provider?.getBlock, status]);
+  const bootstrapAuthenticatedUser = useCallback(async () => {
+    if (!authenticated || !currentSession?.token) return;
 
-  // Initialize block number and block time
-  const lastBlockNumberTime = useRef(0);
-  const initializeBlockData = useCallback(async () => {
-    if (!canCheckBlock) return;
     try {
-      const block = await provider.getBlock('pending');
-      if (block?.timestamp) {
-        setBlockTime(block?.timestamp);
+      await queryClient.fetchQuery(
+        [ 'user', currentSession.token ],
+        async () => {
+          const { user, blockNumber: nextBlockNumber, blockTimestamp } = await api.getUser({ includeBlockData: true });
 
-        // does not (currently) return a block number with pending block...
-        if (block.block_number > 0) {
-          lastBlockNumberTime.current = block.block_number;
-          setProvisionalBlockNumber(block.block_number); // provisional b/c not necessarily synced with server
+          if (nextBlockNumber > 0) setBlockNumber(nextBlockNumber);
+          if (blockTimestamp > 0) setBlockTime(blockTimestamp);
 
-        // ... so we get the block number from the parent (which matches what ws reports)
-        } else if (block.parent_hash) {
-          const parent = await provider.getBlock(block.parent_hash);
-          if (parent?.block_number > 0) {
-            lastBlockNumberTime.current = parent.block_number;
-            setProvisionalBlockNumber(parent.block_number); // provisional b/c not necessarily synced with server
-          } else {
-            console.error('could not initialize block number!', block, parent);
-          }
+          return user;
         }
-      } else {
-        console.warn('block log refresh failed!', block);
-      }
+      );
     } catch (e) {
-      console.error('failed to init block data', e)
+      console.warn('failed to bootstrap authenticated user state', e);
     }
-  }, [canCheckBlock, provider]);
-  useEffect(() => { initializeBlockData(); }, [initializeBlockData]);
-
-  const reattempts = useRef();
-  const capturePendingBlockTimestampUpdate = useCallback(async () => {
-    if (!provider) return;
-
-    reattempts.current++;
-    console.log(`blocktime update attempt #${reattempts.current}`);
-    getBlockTime(provider).then((timestamp) => {
-      if (timestamp > blockTime) {
-        lastBlockNumberTime.current = blockNumber;
-        setBlockTime(timestamp);
-      // TODO: relate the 12 * 5000 to TOO_LONG_FOR_BLOCK
-      // i.e. (TOO_LONG_FOR_BLOCK-expectedBlockTime) / 5000 === 12, so should perhaps abstract into the constants
-      // (only concern would be if blocktime gets too short, then we may need to re-approach this strategy generally)
-      } else if (reattempts.current < 12) {
-        setTimeout(capturePendingBlockTimestampUpdate, 5000);
-      } else {
-        console.warn('gave up on pending blocktime update!');
-      }
-    });
-  }, [blockNumber, blockTime, provider]);
-
-  // get pending block time on every new block
-  // TODO: if no crew, then we won't receive websockets, and blockNumber will not get updated
-  //  (i.e. for logged out users) -- does that matter?
-  useEffect(() => {
-    if (blockNumber > lastBlockNumberTime.current) {
-      reattempts.current = 0;
-      capturePendingBlockTimestampUpdate();
-    }
-  }, [blockNumber, capturePendingBlockTimestampUpdate]);
+  }, [authenticated, currentSession?.token, queryClient]);
+  useEffect(() => { bootstrapAuthenticatedUser(); }, [bootstrapAuthenticatedUser]);
 
   // reset any cached, but time-dependent queries
   useEffect(() => {
@@ -523,14 +474,14 @@ export function SessionProvider({ children }) {
       walletId: authenticated ? currentSession?.walletId : null,
 
       // NOTE:
-      // - blockNumber is updated from websocket change or initial pull of activities from server
-      // - blockTime is updated from blockNumber change
-      // - blockNumber is last committed block, blockTime is the *pending* block time
+      // - blockNumber and blockTime are sourced from finalized block data
+      //   emitted by the server via websocket / activity headers
+      // - `/user` is fetched after auth to seed these values before live updates arrive
       setIsBlockMissing,
       isBlockMissing,
       setBlockNumber,
-      blockNumberIsProvisional: !blockNumber,
-      blockNumber: blockNumber || provisionalBlockNumber,
+      setBlockTime,
+      blockNumber,
       blockTime
     }}>
       {readyForChildren

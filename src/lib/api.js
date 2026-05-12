@@ -23,6 +23,11 @@ useStore.subscribe(
   ([newToken]) => instance.defaults.headers = { Authorization: `Bearer ${newToken}` }
 );
 
+const parseBlockHeader = (value) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 // const arrayComponents = {
 //   ContractAgreement: 'ContractAgreements',
 //   ContractPolicy: 'ContractPolicies',
@@ -78,9 +83,14 @@ const getEntities = async ({ ids, match, label, components }) => {
 };
 
 const api = {
-  getUser: async () => {
+  getUser: async ({ includeBlockData = false } = {}) => {
     const response = await instance.get(`/${apiVersion}/user`);
-    return response.data;
+    if (!includeBlockData) return response.data;
+    return {
+      user: response.data,
+      blockNumber: parseBlockHeader(response.headers['starknet-block-number']),
+      blockTimestamp: parseBlockHeader(response.headers['starknet-block-timestamp'])
+    };
   },
 
   updateUser: async (data) => {
@@ -354,7 +364,8 @@ const api = {
     return {
       activities: response.data,
       totalHits: query?.returnTotal ? parseInt(response.headers['total-hits']) : undefined,
-      blockNumber: parseInt(response.headers['starknet-block-number'])  // TODO: this is not currently used
+      blockNumber: parseBlockHeader(response.headers['starknet-block-number']),  // TODO: this is not currently used
+      blockTimestamp: parseBlockHeader(response.headers['starknet-block-timestamp'])
     };
   },
 
@@ -367,7 +378,8 @@ const api = {
     const response = await instance.get(`/${apiVersion}/activity?${buildQuery({ txHash: txHashes.join(',') })}`);
     return {
       activities: response.data,
-      blockNumber: parseInt(response.headers['starknet-block-number'])
+      blockNumber: parseBlockHeader(response.headers['starknet-block-number']),
+      blockTimestamp: parseBlockHeader(response.headers['starknet-block-timestamp'])
     }
   },
 
