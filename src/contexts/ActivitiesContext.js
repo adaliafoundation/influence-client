@@ -47,9 +47,9 @@ export function ActivitiesProvider({ children }) {
   const {
     accountAddress,
     blockNumber,
-    blockNumberIsProvisional,
     gasTokens,
     setBlockNumber,
+    setBlockTime,
     setIsBlockMissing,
     token,
   } = useSession();
@@ -366,17 +366,15 @@ export function ActivitiesProvider({ children }) {
     if (type === 'CURRENT_STARKNET_BLOCK_NUMBER') {
       // our pre-update block number should be at least as high as the newly reported
       // previously-processed-block from the server (otherwise, we missed one)
-      if (blockNumberIsProvisional) {
-        console.log(`Setting first non-provisional block number to ${body.blockNumber} (provisional was ${blockNumber})`);
-      }
-      else if (blockNumber > 0 && body.previous > 0 && body.previous > blockNumber) {
+      if (blockNumber > 0 && body.previous > 0 && body.previous > blockNumber) {
         console.log(`Missed a block! (new: ${body.blockNumber}, server prev: ${body.previous}, local prev: ${blockNumber})`);
 
         setIsBlockMissing(true);
       }
 
-      // update the local block
+      // update the local finalized block state
       if (body.blockNumber > 0) setBlockNumber(body.blockNumber);
+      if (body.blockTimestamp > 0) setBlockTime(body.blockTimestamp);
     } else {
 
       // queue the current activity for processing
@@ -387,7 +385,7 @@ export function ActivitiesProvider({ children }) {
       if (pendingTimeout.current) clearTimeout(pendingTimeout.current);
       pendingTimeout.current = setTimeout(processPendingWSBatch, 1000);
     }
-  }, [blockNumber, blockNumberIsProvisional, processPendingWSBatch]);
+  }, [blockNumber, processPendingWSBatch, setBlockTime]);
 
   const isFirstLoad = useRef(true); // (i.e. this is not a crew switch)
   useEffect(() => {
@@ -407,6 +405,7 @@ export function ActivitiesProvider({ children }) {
         await hydrateActivities(data.activities, queryClient);
         handleActivities(data.activities, isFirstLoad.current);
         if (data.blockNumber > 0) setBlockNumber(data.blockNumber); // TODO: is this still necessary?
+        if (data.blockTimestamp > 0) setBlockTime(data.blockTimestamp);
       });
     } else {
       handleActivities([], isFirstLoad.current);
