@@ -14,6 +14,15 @@ import theme from '~/theme';
 
 const lotLeaseOptionKeys = Object.keys(lotLeaseOptions);
 
+const LotAttribute = {
+  HAS_SAMPLES:   { value: "hasSamples"  , mask: 0b0000000000000001, shift: 0 },
+  HAS_CREW:      { value: "hasCrew"     , mask: 0b0000000000000010, shift: 1 },
+  LEASE_STATUS:  { value: "leaseStatus" , mask: 0b0000000000001100, shift: 2 },
+  BUILDING_TYPE: { value: "buildingType", mask: 0b0000001111110000, shift: 4 },
+}
+
+const LotSpecialType = { EMPTY: 0, CONTRUCTION_SITE: 62, LANDED_SHIP: 63}
+
 const useMappedAsteroidLots = (i) => {
   const queryClient = useQueryClient();
 
@@ -115,18 +124,17 @@ const useMappedAsteroidLots = (i) => {
     let resultTally = 0;
 
     if (lotData && myOccupationMap && myShipMap) {
-      // packed data has the following masks:
-      //  11110000 building category
-      //  00001100 lease status (0 unleasable, 1 leasable, 2 leased)
-      //  00000010 has crew present
-      //  00000001 has samples for sale present
       for (let i = 1; i < lotData.length; i++) {
 
         // unpack this lot data
-        unpacked.category = lotData[i] >> 4;
-        unpacked.leasability = lotLeaseOptionKeys[(12 & lotData[i]) >> 2];
-        unpacked.crewPresent = (2 & lotData[i]) >> 1;
-        unpacked.coresPresent = (1 & lotData[i]);
+        unpacked.type = (lotData[i] & LotAttribute.BUILDING_TYPE.mask) >>> LotAttribute.BUILDING_TYPE.shift;
+        unpacked.leasability = (lotData[i] & LotAttribute.LEASE_STATUS.mask) >>> LotAttribute.LEASE_STATUS.shift;
+        unpacked.crewPresent = (lotData[i] & LotAttribute.HAS_CREW.mask) >>> LotAttribute.HAS_CREW.shift;
+        unpacked.coresPresent = (lotData[i] & LotAttribute.HAS_SAMPLES.mask) >>> LotAttribute.HAS_SAMPLES.shift;
+
+        unpacked.leasability = lotLeaseOptionKeys[unpacked.leasability];
+        unpacked.category = Building.TYPES[unpacked.type]?.category ?? 0;
+
         unpacked.occupiedBy = unpacked.category === 0
           ? 'unoccupied'
           : (
@@ -143,9 +151,9 @@ const useMappedAsteroidLots = (i) => {
         }
 
         // determine if this lot should have an icon
-        if (unpacked.category > 0) {
-          lotUse[i] = unpacked.category;
-          lotUseTallies[unpacked.category] = (lotUseTallies[unpacked.category] || 0) + 1;
+        if (unpacked.type > 0) {
+          lotUse[i] = unpacked.type;
+          lotUseTallies[unpacked.type] = (lotUseTallies[unpacked.type] || 0) + 1;
           lotUseTallies.total = (lotUseTallies.total || 0) + 1;
         }
 
@@ -175,69 +183,69 @@ const useMappedAsteroidLots = (i) => {
   const processEvent = useCallback(async (eventType, body) => {
     console.log('processEvent', eventType, body);
 
-    let asteroidId, lotIndex, buildingCategory;
+    let asteroidId, lotIndex, buildingType;
 
     // TODO: the above does not block prepopping of other activities, so any
     // getAndCacheEntity may result in double-fetches on invalidation via this event
 
-    // construction site planned (0 -> 14)
+    // construction site planned
     if (eventType === 'ConstructionPlanned') {
       asteroidId = body.event.returnValues.asteroid.id;
       lotIndex = Lot.toIndex(body.event.returnValues.lot.id);
-      buildingCategory = 14;
+      buildingType = LotSpecialType.CONTRUCTION_SITE;
 
-    // construction site -> building (14 -> buildingCategory)
+    // construction site -> building
     } else if (eventType === 'ConstructionFinished') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
       asteroidId = _location.asteroidId;
       lotIndex = _location.lotIndex;
-      buildingCategory = Building.TYPES[building?.Building?.buildingType]?.category; // TODO: should we cast this?
+      buildingType = building?.Building?.buildingType ?? 0;
 
-    // building -> construction site (buildingCategory -> 14)
+    // building -> construction site
     } else if (eventType === 'ConstructionDeconstructed') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
       asteroidId = _location.asteroidId;
       lotIndex = _location.lotIndex;
-      buildingCategory = 14;
+      buildingType = LotSpecialType.CONTRUCTION_SITE;
 
-    // construction site abandoned (14 -> 0)
+    // construction site abandoned
     } else if (eventType === 'ConstructionAbandoned') {
       const building = await getAndCacheEntity(body.event.returnValues.building, queryClient);
       const _location = locationsArrToObj(building?.Location?.locations || []);
       asteroidId = _location.asteroidId;
       lotIndex = _location.lotIndex;
-      buildingCategory = 0;
+      buildingType = LotSpecialType.EMPTY;
 
-    // ship moved to empty lot (0 -> 15)
+    // ship moved to empty lot
     } else if (eventType === 'ShipDocked' || eventType === 'ShipAssemblyFinished') {
       const entityId = body.event.returnValues.dock || body.event.returnValues.destination;
       if (entityId?.label === Entity.IDS.LOT) {
         const position = Lot.toPosition(entityId);
         asteroidId = position.asteroidId;
         lotIndex = position.lotIndex;
-        buildingCategory = 15;
+        buildingType = LotSpecialType.LANDED_SHIP;
       }
 
-    // ship undocked from empty lot (15 -> 0)
+    // ship undocked from empty lot
     } else if (eventType === 'ShipUndocked') {
       if (body.event.returnValues.dock.label === Entity.IDS.LOT) {
         const position = Lot.toPosition(body.event.returnValues.dock);
         asteroidId = position.asteroidId;
         lotIndex = position.lotIndex;
-        buildingCategory = 0;
+        buildingType = LotSpecialType.EMPTY;
       }
     }
 
-    if (asteroidId && lotIndex && buildingCategory !== undefined) {
+    if (asteroidId && lotIndex && buildingType !== undefined) {
       // TODO: these events could/should technically go through the same invalidation process as primary events
       //  (it's just that these events won't match as much data b/c most may not be relevant to my crew)
       queryClient.setQueryData([ 'asteroidPackedLotData', Number(asteroidId) ], (currentLotsValue) => {
         const newLotsValue = currentLotsValue.slice();
         newLotsValue[lotIndex] =
-          (newLotsValue[lotIndex] & 0b00001111)  // clear existing building
-          | buildingCategory << 4                // set to new buildingCategory
+          (newLotsValue[lotIndex] & (~ LotAttribute.BUILDING_TYPE.mask))  // clear existing building
+          | (buildingType << LotAttribute.BUILDING_TYPE.shift)                // set to new buildingCategory
         return newLotsValue;
       });
     }
