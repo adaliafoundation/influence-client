@@ -32,7 +32,7 @@ const ShipTitleArea = ({ ship }) => {
     <TitleArea
       background={`Ship_${ship?.Ship?.shipType || Ship.IDS.SHUTTLE}`}
       title={formatters.shipName(ship)}
-      subtitle={Ship.TYPES[ship?.Ship?.shipType]?.name}
+      subtitle={`${Ship.TYPES[ship?.Ship?.shipType]?.name} #${ship?.id}`}
       upperLeft={(
         <>
           <LocationIcon />

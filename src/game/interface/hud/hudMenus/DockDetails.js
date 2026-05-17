@@ -128,7 +128,7 @@ const DockDetails = ({ onClose }) => {
                     style={{ width: 100, height: 85 }} />
                   <label style={{ padding: '0 8px', width: 'calc(100% - 100px)' }}>
                     <h3 style={{ fontSize: '17px' }}>{formatters.shipName(ship)}</h3>
-                    <div><b>{Ship.TYPES[ship.Ship.shipType]?.name}</b></div>
+                    <div><b>{`${Ship.TYPES[ship.Ship.shipType]?.name} #${ship.id}`}</b></div>
                     {blockTime >= ship.Ship.readyAt && <Ready>Launch Ready</Ready>}
                   </label>
                 </ThumbnailWithData>
