@@ -13,7 +13,7 @@ export const GAS_BUFFER_VALUE_USDC = 2 * TOKEN_SCALE[TOKEN.USDC];
 
 const useWalletPurchasableBalances = (overrideAccount) => {
   const { gasTokens } = useSession();
-  const { data: priceConstants } = usePriceConstants();
+  const { data: priceConstants, isLoading: isLoadingConstants } = usePriceConstants();
   const { data: ethBalance, isLoading: isLoading1, refetch: refetch1 } = useEthBalance(overrideAccount);
   const { data: usdcBalance, isLoading: isLoading2, refetch: refetch2 } = useUSDCBalance(overrideAccount);
   const { data: strkBalance, isLoading: isLoading3, refetch: refetch3 } = useStrkBalance(overrideAccount);
@@ -67,10 +67,11 @@ const useWalletPurchasableBalances = (overrideAccount) => {
     };
 
     // if autoswap, return allTokens... else, return just the specified purchase token
-    return autoswap ? allTokens : { [baseToken]: allTokens[baseToken] };
-  }, [autoswap, baseToken, ethBalance, ethGasReserveBalance, usdcBalance]);
+    if (!autoswap && !baseToken) return {};
+    return autoswap ? allTokens : { [baseToken]: allTokens[baseToken] || 0n };
+  }, [autoswap, baseToken, ethBalance, ethGasReserveBalance, usdcBalance, usdcGasReserveBalance]);
 
-  const isLoading = isLoading1 || isLoading2 || isLoading3 || isLoading4;
+  const isLoading = isLoading1 || isLoading2 || isLoading3 || isLoading4 || (!autoswap && isLoadingConstants);
   return useMemo(() => {
     if (isLoading) return { data: null, refetch: () => {}, isLoading: true };
 
