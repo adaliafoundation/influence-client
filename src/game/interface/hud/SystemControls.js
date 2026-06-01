@@ -5,8 +5,9 @@ import { FaCaretRight } from 'react-icons/fa';
 import {
   CopyIcon,
   CrewmateCreditIcon,
-  InboxIcon,
   MenuIcon,
+  SwayIcon,
+  UpdateIcon,
   WarningIcon
 } from '~/components/Icons';
 import useSession from '~/hooks/useSession';
@@ -15,7 +16,7 @@ import useStore from '~/hooks/useStore';
 import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
 import useAccountFormatted from '~/hooks/useAccountFormatted';
 import IconButton from '~/components/IconButton';
-import { TOKEN, TOKEN_FORMATTER } from '~/lib/priceUtils';
+import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import useWalletInbox from '~/hooks/useWalletInbox';
 
 const StyledSystemControls = styled.div`
@@ -45,6 +46,7 @@ const SwayBalance = styled.div`
   align-items: center;
   border-right: 1px solid rgba(255, 255, 255, 0.15);
   color: white;
+  cursor: ${p => p.theme.cursors.active};
   display: flex;
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
   font-size: 24px;
@@ -54,6 +56,53 @@ const SwayBalance = styled.div`
   & > svg {
     font-size: 24px;
     margin-right: 2px;
+  }
+`;
+
+const SwayBalanceIcon = styled.span`
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  margin-right: 2px;
+  position: relative;
+  width: 24px;
+
+  & > span {
+    align-items: center;
+    display: inline-flex;
+    height: 24px;
+    justify-content: center;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 24px;
+  }
+
+  & svg {
+    height: 24px;
+    width: 24px;
+  }
+
+  & .refresh-icon {
+    display: none;
+  }
+
+  & .refresh-icon svg {
+    height: 18px;
+    width: 18px;
+    margin: 2px;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  ${SwayBalance}:hover & .sway-icon {
+    display: none;
+  }
+
+  ${SwayBalance}:hover & .refresh-icon {
+    display: block;
   }
 `;
 
@@ -172,7 +221,7 @@ const SystemControls = () => {
   const { accountAddress, authenticated, logout } = useSession(false);
   const { adalianRecruits, arvadianRecruits } = useCrewContext();
 
-  const { data: swayBalance } = useSwayBalance();
+  const { data: swayBalance, refetch: refetchSwayBalance } = useSwayBalance();
 
   const launcherPage = useStore(s => s.launcherPage);
   const createAlert = useStore(s => s.dispatchAlertLogged);
@@ -206,6 +255,10 @@ const SystemControls = () => {
     }
   }, [accountAddress]);
 
+  const onRefreshSwayBalance = useCallback(() => {
+    refetchSwayBalance();
+  }, [refetchSwayBalance]);
+
   const { hasNoPublicKey, unreadTally } = useWalletInbox();
 
   return (
@@ -226,8 +279,16 @@ const SystemControls = () => {
       }
 
       {swayBalance !== undefined && (
-        <SwayBalance>
-          {TOKEN_FORMATTER[TOKEN.SWAY](swayBalance)}
+        <SwayBalance
+          data-tooltip-content="Refresh SWAY Balance"
+          data-tooltip-id="launcherTooltip"
+          data-tooltip-place="bottom"
+          onClick={onRefreshSwayBalance}>
+          <SwayBalanceIcon>
+            <span className="sway-icon"><SwayIcon /></span>
+            <span className="refresh-icon"><UpdateIcon /></span>
+          </SwayBalanceIcon>
+          {(parseInt(swayBalance) / TOKEN_SCALE[TOKEN.SWAY]).toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </SwayBalance>
       )}
 

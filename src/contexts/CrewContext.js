@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import { Crewmate, Entity, Permission, Ship, System } from '@influenceth/sdk';
+import { Crewmate, Entity, Permission, RandomEvent, Ship, System } from '@influenceth/sdk';
 
 import { appConfig } from '~/appConfig';
 import useConstants from '~/hooks/useConstants';
@@ -226,11 +226,22 @@ export function CrewProvider({ children }) {
   const { data: selectedCrewLocation } = useEntity(selectedCrew ? { ...selectedCrew.Location.location } : undefined);
 
   const [actionTypeTriggered, setActionTypeTriggered] = useState(false);
-  useEffect(() => setActionTypeTriggered(false), [selectedCrew?.id]); // recheck random event status on crew change
+  const checkedRandomEventKey = useRef();
+  useEffect(() => {
+    setActionTypeTriggered(false);
+    checkedRandomEventKey.current = null;
+  }, [selectedCrew?.id]); // recheck random event status on crew change
   useEffect(() => {
     if (!actionTypeTriggered) {
-      // TODO: actionRound tmp fix
-      if (selectedCrew?.Crew?.actionType && selectedCrew.Crew.actionRound) {// && (selectedCrew.Crew.actionRound + RandomEvent.MIN_ROUNDS) <= blockNumber) {
+      if (
+        selectedCrew?.Crew?.actionType
+        && selectedCrew.Crew.actionRound
+        && (selectedCrew.Crew.actionRound + RandomEvent.MIN_ROUNDS) <= blockNumber
+      ) {
+        const randomEventKey = `${selectedCrew.id}:${selectedCrew.Crew.actionType}:${selectedCrew.Crew.actionRound}`;
+        if (checkedRandomEventKey.current === randomEventKey) return;
+        checkedRandomEventKey.current = randomEventKey;
+
         provider.callContract(
           System.getRunSystemCall(
             'CheckForRandomEvent',
@@ -263,12 +274,13 @@ export function CrewProvider({ children }) {
           }
         })
         .catch((err) => {
+          checkedRandomEventKey.current = null;
           console.warn('CheckForRandomEvent', err);
           // (wasTriggered can stay false)
         });
       }
     }
-  }, [actionTypeTriggered, blockNumber, provider, selectedCrew?.Crew?.actionType, selectedCrew?.Crew?.actionRound]);
+  }, [actionTypeTriggered, blockNumber, provider, selectedCrew?.Crew?.actionType, selectedCrew?.Crew?.actionRound, selectedCrew?.id, selectedCrew?.label]);
 
   // add final data to selected crew
   const finalSelectedCrew = useMemo(() => {

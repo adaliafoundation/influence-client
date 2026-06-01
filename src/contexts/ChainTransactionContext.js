@@ -972,7 +972,7 @@ export function ChainTransactionProvider({ children }) {
             .catch((err) => setNewlyFailedTx({ err, key, vars, txHash }))
             .finally(() => {
               // NOTE: keep this in "finally" so also performed on success (even though not handling success)
-              transactionWaiters.current = transactionWaiters.current.filter((tx) => tx.txHash !== txHash);
+              transactionWaiters.current = transactionWaiters.current.filter((tx) => tx !== txHash);
             });
         }
       });
