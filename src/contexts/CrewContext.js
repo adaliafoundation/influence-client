@@ -230,7 +230,7 @@ export function CrewProvider({ children }) {
   useEffect(() => {
     setActionTypeTriggered(false);
     checkedRandomEventKey.current = null;
-  }, [selectedCrew?.id]); // recheck random event status on crew change
+  }, [selectedCrew?.id, selectedCrew?.Crew?.actionType, selectedCrew?.Crew?.actionRound]); // recheck random event status on crew/action change
   useEffect(() => {
     if (!actionTypeTriggered) {
       if (
@@ -323,6 +323,7 @@ export function CrewProvider({ children }) {
 
               // since refreshReadyAt can only happen on selectedCrewId, untrigger random event
               // (in case random event resolution is what brought us here)
+              checkedRandomEventKey.current = null;
               setActionTypeTriggered(false);
             }
             return c;
