@@ -26,7 +26,11 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
     },
     {
       enabled: !!provider && !!accountAddress,
-      refetchInterval: 300e3,
+      // Balance updates are already driven by transaction/activity invalidations.
+      // Avoid background polling because each balanceOf is a starknet_call.
+      refetchInterval: false,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: true,
     }
   );
 };
