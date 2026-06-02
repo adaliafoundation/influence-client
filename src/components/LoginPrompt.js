@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import styled, { css, keyframes } from 'styled-components';
+import styled from 'styled-components';
 import { ArgentXIcon, BraavosIcon } from './Icons';
 import useStore from '~/hooks/useStore';
 
@@ -162,7 +162,9 @@ const configs = {
 
 }
 
-const LoginPrompt = ({ onClick, target }) => {
+configs.argentWebWallet = configs.webWallet;
+
+const LoginPrompt = ({ onClick }) => {
   const lastConnectedWalletId = useStore(s => s.lastConnectedWalletId);
 
   const conf = useMemo(() => configs[lastConnectedWalletId] || configs.webWallet, [lastConnectedWalletId]);

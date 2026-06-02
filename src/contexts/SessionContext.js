@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { isExpired } from 'react-jwt';
 import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
@@ -14,16 +14,34 @@ import api from '~/lib/api';
 import { areChainsEqual, fireTrackingEvent, resolveChainId } from '~/lib/utils';
 import useStore from '~/hooks/useStore';
 
-// TODO:
-// - restore sessions
-// - LoginPrompt was broken by upgrade; restore (see todo)
-//   (clicking to login with last wallet was throwing an error)
+const silentReconnectAttempts = 3;
+const silentReconnectRetryDelay = 250;
 
 const getErrorMessage = (error) => {
   console.error(error);
   if (typeof error === 'string') return error;
   else if (typeof error === 'object' && error?.message) return error.message;
   return 'An unknown error occurred, please check the console for details.';
+};
+
+const isConnectorNotFoundError = (error) => {
+  const message = typeof error === 'string' ? error : error?.message;
+  return (
+    error?.name === 'ConnectorNotFoundError' ||
+    message?.includes('ConnectorNotFoundError') ||
+    message?.includes('Connector not found')
+  );
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const hasWalletConnection = ({ connectorData, wallet } = {}) => {
+  return !!(wallet && connectorData?.account);
+};
+
+const clearSilentReconnect = (dispatchSessionSuspended) => {
+  localStorage.removeItem('starknetLastConnectedWallet');
+  dispatchSessionSuspended();
 };
 
 const isAllowedChain = (chain) => {
@@ -66,7 +84,7 @@ export function SessionProvider({ children }) {
 
   const [connecting, setConnecting] = useState(false);
   const [status, setStatus] = useState(STATUSES.DISCONNECTED);
-  const [starknetSession, setStarknetSession] = useState();
+  const [starknetSession] = useState();
 
   const [connectedAccount, setConnectedAccount] = useState();
   const [connectedChainId, setConnectedChainId] = useState();
@@ -134,11 +152,21 @@ export function SessionProvider({ children }) {
 
       setError();
       setConnecting(true);
-      const { connectorData, wallet } = await starknetConnect(connectionOptions);
-      console.log('waiting 200ms...');
-      await new Promise(resolve => setTimeout(resolve, 200)); // deal with timeout delay from Argent
+      let connectorData;
+      let wallet;
+      for (let i = 0; i < (auto ? silentReconnectAttempts : 1); i++) {
+        try {
+          ({ connectorData, wallet } = await starknetConnect(connectionOptions));
+          if (!auto || hasWalletConnection({ connectorData, wallet }) || i === silentReconnectAttempts - 1) break;
+          await wait(silentReconnectRetryDelay);
+        } catch (e) {
+          if (!auto || !isConnectorNotFoundError(e) || i === silentReconnectAttempts - 1) throw e;
+          await wait(silentReconnectRetryDelay);
+        }
+      }
 
-      if (wallet && connectorData?.account) {
+      if (hasWalletConnection({ connectorData, wallet })) {
+        await wait(200); // deal with timeout delay from Argent
         const chainId = resolveChainId(connectorData.chainId);
         setConnectedAccount(Address.toStandard(connectorData.account));
         setConnectedChainId(chainId);
@@ -181,6 +209,9 @@ export function SessionProvider({ children }) {
 
         localStorage.setItem('starknetLastConnectedWallet', wallet.id);
         setStatus(STATUSES.CONNECTED);
+      } else if (auto) {
+        clearSilentReconnect(dispatchSessionSuspended);
+        setStatus(STATUSES.DISCONNECTED);
       } else {
         console.error('No connected wallet or missing address');
       }
@@ -188,6 +219,11 @@ export function SessionProvider({ children }) {
       if (e.message === 'Incorrect chain') {
         console.log('');
         setError(`Incorrect chain, please switch to ${resolveChainId(appConfig.get('Starknet.chainId'))}`);
+      }
+
+      else if (auto && isConnectorNotFoundError(e)) {
+        clearSilentReconnect(dispatchSessionSuspended);
+        setStatus(STATUSES.DISCONNECTED);
       }
 
       else if (e.message !== 'User rejected request') {
@@ -442,16 +478,14 @@ export function SessionProvider({ children }) {
     ].forEach((queryKey) => {
       queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
     });
-  }, [blockTime]);
+  }, [blockTime, queryClient]);
 
   const [promptLogin, setPromptLogin] = useState();
   const login = useCallback(async () => {
     if ([STATUSES.AUTHENTICATING, STATUSES.AUTHENTICATED].includes(status)) return;
 
-    // TODO: uncomment below and remove connect() to restore login prompt
-    // setPromptLogin(true);
-    connect();
-  }, [authenticated, connect]);
+    setPromptLogin(true);
+  }, [status]);
 
   const handleLoginPrompt = useCallback((choice) => {
     setPromptLogin(false);
