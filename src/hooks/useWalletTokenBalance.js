@@ -25,15 +25,13 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
         return 0n;
       }
     },
-    {
-      enabled: !!provider && !!accountAddress,
-      // Balance updates are already driven by transaction/activity invalidations.
-      // Avoid background polling because each balanceOf is a starknet_call.
-      refetchInterval: false,
-      refetchOnReconnect: true,
-      refetchOnWindowFocus: true,
-    }
-  );
+    enabled: !!provider && !!accountAddress,
+    // Balance updates are already driven by transaction/activity invalidations.
+    // Avoid background polling because each balanceOf is a starknet_call.
+    refetchInterval: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+  });
 };
 
 export const useEthBalance = (overrideAccount) => {

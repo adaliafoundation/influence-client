@@ -13,6 +13,7 @@ import SolutionLabels from './porkchop/SolutionLabels';
 import Reticule from './porkchop/Reticule';
 import { WarningOutlineIcon } from './Icons';
 import { reactBool } from '~/lib/utils';
+import { WorkerQueuePriority } from '~/lib/workerQueue';
 import useTravelSolutionIsValid, { maxFoodUtilizationAdays } from '~/hooks/useTravelSolutionIsValid';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
@@ -195,7 +196,10 @@ const Porkchop = ({
           maxDelay: delay,
           minTof,
           maxTof,
-        }
+        },
+        _concurrencyGroup: 'porkchop',
+        _maxConcurrent: 1,
+        _priority: WorkerQueuePriority.background
       }, ({ deltaVs }) => {
         if (runRef.current !== currentRun) return;
 

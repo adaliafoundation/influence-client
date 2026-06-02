@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useRef, useMemo, useState } from 'react';
-import { useQueryClient } from '~/compat/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { isExpired } from 'react-jwt';
 import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
 import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';
@@ -235,8 +235,15 @@ export function SessionProvider({ children }) {
     };
 
     const startListening = () => {
-      if (walletAccount.on) {
+      if (walletAccount.onAccountChange) {
+        walletAccount.onAccountChange(onAccountsChanged);
+      } else if (walletAccount.on) {
         walletAccount.on('accountsChanged', onAccountsChanged);
+      }
+
+      if (walletAccount.onNetworkChanged) {
+        walletAccount.onNetworkChanged(onNetworkChanged);
+      } else if (walletAccount.on) {
         walletAccount.on('networkChanged', onNetworkChanged);
       }
     }
@@ -247,6 +254,9 @@ export function SessionProvider({ children }) {
       if (walletAccount.off) {
         walletAccount.off('accountsChanged', onAccountsChanged);
         walletAccount.off('networkChanged', onNetworkChanged);
+      } else if (walletAccount.walletProvider?.off) {
+        walletAccount.walletProvider.off('accountsChanged', onAccountsChanged);
+        walletAccount.walletProvider.off('networkChanged', onNetworkChanged);
       }
     };
 
@@ -405,9 +415,9 @@ export function SessionProvider({ children }) {
     if (!authenticated || !currentSession?.token) return;
 
     try {
-      await queryClient.fetchQuery(
-        [ 'user', currentSession.token ],
-        async () => {
+      await queryClient.fetchQuery({
+        queryKey: [ 'user', currentSession.token ],
+        queryFn: async () => {
           const { user, blockNumber: nextBlockNumber, blockTimestamp } = await api.getUser({ includeBlockData: true });
 
           if (nextBlockNumber > 0) setBlockNumber(nextBlockNumber);
@@ -415,7 +425,7 @@ export function SessionProvider({ children }) {
 
           return user;
         }
-      );
+      });
     } catch (e) {
       console.warn('failed to bootstrap authenticated user state', e);
     }

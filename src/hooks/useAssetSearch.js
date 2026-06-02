@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useThrottle } from '@react-hook/throttle';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import esb from 'elastic-builder';
 
 import api from '~/lib/api';
@@ -278,7 +278,7 @@ const useAssetSearch = (assetType, { from = 0, size = 2000 } = {}) => {
     queryKey: [ 'search', esAssetType, query ],
     queryFn: () => esAssetType ? api.searchAssets(esAssetType, query) : [],
     enabled: !!query,
-    // keepPreviousData: true // TODO: do we want this?
+    placeholderData: keepPreviousData
   });
 };
 

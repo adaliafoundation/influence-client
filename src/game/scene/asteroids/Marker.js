@@ -15,6 +15,18 @@ const initialUniforms = {
   uMaxRadius: { type: 'f', value: markerMaxRadius }
 };
 
+const markerTextureUrls = [
+  `${process.env.PUBLIC_URL}/textures/asteroids/reticule.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/ship.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/solid_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/stroked_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/translucent_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/circleFaded.png`,
+  `${process.env.PUBLIC_URL}/textures/marker.png`
+];
+
+useTexture.preload(markerTextureUrls);
+
 const Marker = (props) => {
   const { asteroidPos, hasDestination, isDestination, isOrigin, isTravelMarker, travelSolution } = props;
   const [ points, setPoints ] = useState(asteroidPos);
@@ -29,15 +41,7 @@ const Marker = (props) => {
     translucentDiamondTexture,
     planeTexture,
     asteroidTexture
-  ] = useTexture([
-    `${process.env.PUBLIC_URL}/textures/asteroids/reticule.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/ship.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/solid_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/stroked_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/translucent_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/circleFaded.png`,
-    `${process.env.PUBLIC_URL}/textures/marker.png`
-  ]);
+  ] = useTexture(markerTextureUrls);
 
   useEffect(() => {
     reticuleTexture.center = new Vector2(0.5, 0.5);

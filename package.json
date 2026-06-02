@@ -8,8 +8,7 @@
     "node": "22.x"
   },
   "dependencies": {
-    "@argent/x-sessions": "^8.0.1",
-    "@avnu/avnu-sdk": "^3.1.1",
+    "@avnu/avnu-sdk": "^4.0.1",
     "@floating-ui/react": "^0.27.19",
     "@influenceth/astro": "^0.2.5",
     "@influenceth/sdk": "^2.3.8",
@@ -65,8 +64,8 @@
     "react-window": "^1.8.9",
     "screenfull": "^5.1.0",
     "socket.io-client": "^4.7.5",
-    "starknet": "^7.6.4",
-    "starknetkit": "^3.0.3",
+    "starknet": "^8.9.2",
+    "starknetkit": "^3.4.3",
     "styled-components": "^5.3.0",
     "three": "^0.183.2",
     "victory": "^36.6.8",

@@ -57,6 +57,11 @@ import useSession from '~/hooks/useSession';
 // ^^^
 
 const hopperRadius = 400;
+const arcSegments = 50;
+const arcPointCount = arcSegments + 1;
+const crewMarkerHeight = 1159;
+const crewMarkerMinScale = 0.35;
+const crewMarkerMaxScale = 1.6;
 const arcColor = new Color(theme.colors.glowGreen);
 const hopperColor = new Color(theme.colors.glowGreen);
 const spriteBorderColor = new Color(theme.colors.glowGreen);
@@ -108,7 +113,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     const crews = {};
 
     // make sure selected crew is included (in case not on page OR in 'selected' mode)
-    const ongoingActivities = ongoing || [];
+    const ongoingActivities = [...(ongoing || [])];
     if (crewMovementActivity?.data?.crew?.id && !ongoingActivities.find((a) => a.data.crew.id === crewMovementActivity.data.crew.id)) {
       const crewLocation = locationsArrToObj(crewMovementActivity.data.crew.Location?.locations || []) || {};
       if (crewLocation.asteroidId === asteroidId) {
@@ -116,7 +121,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       }
     }
 
-    ongoing?.forEach((activity) => {
+    ongoingActivities.forEach((activity) => {
       const crew = activity.data.crew;
       if (activeCrewsDisplay === 'selected' && accountAddress && crew.id !== crewMovementActivity?.data?.crew?.id) return;
       if (activeCrewsDisplay === 'delegated' && accountAddress && !Address.areEqual(crew.Crew.delegatedTo, accountAddress)) return;
@@ -208,7 +213,12 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   const highlightedCrewMarker = useRef();
   const activeCrewArc = useRef();
   const highlightedCrewArc = useRef();
-  const nullArcGeometry = useRef(() => new BufferGeometry().setFromPoints([new Vector3(0, 0, 0)]));
+  const nullArcPoints = useRef(Array.from({ length: arcPointCount }, () => new Vector3(0, 0, 0)));
+  const setArcPoints = useCallback((arc, points) => {
+    if (!arc) return;
+    arc.geometry.setFromPoints(points);
+    arc.geometry.computeBoundingSphere();
+  }, []);
   useEffect(() => {
     // init hopper geometry and material for instanced mesh
     hopperGeometry.current = new IcosahedronGeometry(hopperRadius, 0);
@@ -250,9 +260,9 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     attachTo.add(main.current);
 
     // add 2x trajectory arcs
-    const arcOrder = new BufferAttribute(new Float32Array(Array(51).fill().map((_, i) => i + 1)), 1);
+    const arcOrder = new BufferAttribute(new Float32Array(Array(arcPointCount).fill().map((_, i) => i + 1)), 1);
     [activeCrewArc.current, highlightedCrewArc.current] = [0, 1].map((i) => {
-      const geometry = new BufferGeometry().setFromPoints(nullArcGeometry.current);
+      const geometry = new BufferGeometry().setFromPoints(nullArcPoints.current);
       geometry.setAttribute('order', arcOrder);
       return new Line(
         geometry,
@@ -260,7 +270,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           uniforms: {
             uTime: arcTime.current,
             uAlpha: { value: 1.0 },
-            uCount: { value: 51 },
+            uCount: { value: arcPointCount },
             uCol: { type: 'c', value: i === 0 ? activeCrewColor : arcColor },
           },
           fragmentShader: frag,
@@ -410,12 +420,12 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // add geometry for the active crew arc
   useEffect(() => {
     if (activeCrewArc.current) {
-      activeCrewArc.current.geometry.setFromPoints(nullArcGeometry.current);
+      setArcPoints(activeCrewArc.current, nullArcPoints.current);
       if (ongoingTravel[crew?.id]?.curve) {
-        activeCrewArc.current.geometry.setFromPoints(ongoingTravel[crew.id].curve.getPoints(50));
+        setArcPoints(activeCrewArc.current, ongoingTravel[crew.id].curve.getPoints(arcSegments));
       }
     }
-  }, [crew?.id, ongoingTravel]);
+  }, [crew?.id, ongoingTravel, setArcPoints]);
 
   // handle highlighted crew indicator and arc
   const [hovered, setHovered] = useState();
@@ -424,7 +434,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   useEffect(() => {
     if (highlightedCrewArc.current && highlightedCrewMarker.current) {
       if (ongoingTravel[highlightedCrewId]?.curve) {
-        highlightedCrewArc.current.geometry.setFromPoints(ongoingTravel[highlightedCrewId].curve.getPoints(50));
+        setArcPoints(highlightedCrewArc.current, ongoingTravel[highlightedCrewId].curve.getPoints(arcSegments));
 
         if (highlightedCrewMarker.current?.children?.[0]?.material) {
           highlightedCrewMarker.current.children[0].material.opacity = 1;
@@ -439,7 +449,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     }
     return () => {
       if (highlightedCrewArc.current) {
-        highlightedCrewArc.current.geometry.setFromPoints(nullArcGeometry.current);
+        setArcPoints(highlightedCrewArc.current, nullArcPoints.current);
       }
       if (highlightedCrewMarker.current?.children?.[0]?.material) {
         highlightedCrewMarker.current.children[0].material.opacity = 0;
@@ -455,7 +465,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         highlightedCrewMarker.current.children[1].material.needsUpdate = true;
       }
     };
-  }, [highlightedCrewId, ongoingTravel]);
+  }, [highlightedCrewId, ongoingTravel, setArcPoints]);
 
   // handle card hover on highlighted crew
   const [cardHovered, setCardHovered] = useState();
@@ -494,9 +504,10 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     }
   }, [cardHovered, hovered, selected]);
 
-  const crewMarkerScale = useMemo(() => Math.max(1, Math.sqrt(cameraAltitude / 10000)), [cameraAltitude]);
+  const crewMarkerScale = useMemo(() => (
+    Math.max(crewMarkerMinScale, Math.min(Math.sqrt(cameraAltitude / 10000), crewMarkerMaxScale))
+  ), [cameraAltitude]);
   const hopperScale = useMemo(() => 0.3 * crewMarkerScale, [crewMarkerScale]);
-  const indicatorOffsetScale = useMemo(() => Math.max(1.5, Math.min(1.5 * Math.sqrt(cameraAltitude / 10000), 4)), [crewMarkerScale]);
   const shouldBeActiveCrewHopperIndex = useMemo(() =>
     Object.keys(ongoingTravel).filter((c) => !ongoingTravel[c].hideHopper).findIndex((c) => Number(c) === crew?.id),
     [crew, ongoingTravel]
@@ -531,14 +542,15 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     inverseMatrix.current.copy(attachTo.matrixWorld).invert();
 
     const screenUp = new Vector3(0, 1, 0).applyQuaternion(controls.object.quaternion).normalize();
-    const localUp = screenUp.applyMatrix4(inverseMatrix.current);
+    const localUp = screenUp.transformDirection(inverseMatrix.current);
 
     controls.object.getWorldDirection(cameraDirection.current);
-    const localOut = cameraDirection.current.applyMatrix4(inverseMatrix.current);
+    const localOut = cameraDirection.current.transformDirection(inverseMatrix.current);
 
     crewIndicatorOffset.current.addVectors(
-      localUp.setLength(2 * hopperRadius * crewMarkerScale), // "north" from hopper
-      localOut.setLength(-150 * indicatorOffsetScale) // towards camera (above surface)
+      // Keep the marker's bottom tip anchored on the moving crew / lot position.
+      localUp.setLength(0.5 * crewMarkerHeight * crewMarkerScale),
+      localOut.setLength(-Math.max(80, 150 * crewMarkerScale)) // towards camera (above surface)
     );
 
     // timing.current.total += performance.now() - s;

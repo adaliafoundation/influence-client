@@ -91,6 +91,68 @@ class TerrainChunk {
     this.applyOnBeforeCompile();
   }
 
+  closeTextureImage(texture) {
+    try {
+      if (typeof ImageBitmap !== 'undefined' && texture?.image instanceof ImageBitmap) {
+        texture.image.close();
+      }
+    } catch (e) {
+      // ignore ImageBitmap close failures; disposal still releases the WebGL texture
+    }
+  }
+
+  disposeTexture(texture) {
+    if (!texture) return;
+    this.closeTextureImage(texture);
+    texture.dispose();
+  }
+
+  disposeMaterialTexture(key) {
+    this.disposeTexture(this._material[key]);
+    this._material[key] = null;
+  }
+
+  getReusableCanvasTexture(key, bitmap, options = {}) {
+    const texture = this._material[key];
+
+    if (texture?.userData?.terrainChunkMap === key) {
+      this.closeTextureImage(texture);
+      texture.image = bitmap;
+      Object.keys(options).forEach((k) => texture[k] = options[k]);
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    const nextTexture = new CanvasTexture(bitmap);
+    nextTexture.userData.terrainChunkMap = key;
+    Object.keys(options).forEach((k) => nextTexture[k] = options[k]);
+    nextTexture.needsUpdate = true;
+    return nextTexture;
+  }
+
+  updateMaterialTexture(key, source, options = {}) {
+    const previous = this._material[key];
+    const hadTexture = !!previous;
+    let nextTexture = null;
+
+    if (source) {
+      if (source.isTexture) {
+        nextTexture = source;
+      } else {
+        nextTexture = this.getReusableCanvasTexture(key, source, options);
+      }
+    }
+
+    if (previous !== nextTexture) {
+      if (previous?.userData?.terrainChunkMap !== key || nextTexture?.userData?.terrainChunkMap !== key) {
+        this.disposeTexture(previous);
+      }
+      this._material[key] = nextTexture;
+    }
+
+    return hadTexture !== !!nextTexture;
+  }
+
   getOnBeforeCompile(material, radius, stretch, updateVNormal = true) {
     return function (shader) {
       shader.uniforms.uRadius = { type: 'v3', value: radius };
@@ -178,10 +240,10 @@ class TerrainChunk {
     if (this._plane.customDepthMaterial) this._plane.customDepthMaterial.dispose();
 
     // textures do not automatically get disposed by material.dispose
-    if (this._material.displacementMap) this._material.displacementMap.dispose();
-    if (this._material.emissiveMap) this._material.emissiveMap.dispose();
-    if (this._material.map) this._material.map.dispose();
-    if (this._material.normalMap) this._material.normalMap.dispose();
+    this.disposeMaterialTexture('displacementMap');
+    this.disposeMaterialTexture('emissiveMap');
+    this.disposeMaterialTexture('map');
+    this.disposeMaterialTexture('normalMap');
     this._material.dispose();
   }
 
@@ -219,35 +281,43 @@ class TerrainChunk {
   }
 
   updateMaps(data) {
-    // (dispose of all previous material maps)
-    if (this._material.displacementMap) this._material.displacementMap.dispose();
-    if (this._material.emissiveMap) this._material.emissiveMap.dispose();
-    if (this._material.map) this._material.map.dispose();
-    if (this._material.normalMap) this._material.normalMap.dispose();
+    // Map sources can be worker-built ImageBitmaps or fallback Texture instances.
+    let materialNeedsUpdate = false;
+    materialNeedsUpdate = this.updateMaterialTexture(
+      'displacementMap',
+      data.heightBitmap,
+      { magFilter: NearestFilter },
+    ) || materialNeedsUpdate;
+    materialNeedsUpdate = this.updateMaterialTexture(
+      'map',
+      data.colorBitmap,
+    ) || materialNeedsUpdate;
+    materialNeedsUpdate = this.updateMaterialTexture(
+      'normalMap',
+      data.normalBitmap,
+    ) || materialNeedsUpdate;
 
-    // (set new values)
-    // NOTE: the ternaries below are b/c there is different format for data generated
-    //  on offscreen canvas vs normal canvas (i.e. if offscreencanvas not supported)
-    const materialUpdates = {
-      displacementMap: data.heightBitmap.image ? data.heightBitmap : new CanvasTexture(data.heightBitmap, undefined, undefined, undefined, NearestFilter),
-      map: data.colorBitmap.image ? data.colorBitmap : new CanvasTexture(data.colorBitmap),
-      normalMap: data.normalBitmap.image ? data.normalBitmap : new CanvasTexture(data.normalBitmap),
-      color: 0xffffff,
-      emissive: 0x000000,
-      emissiveIntensity: 0,
-      emissiveMap: null,
-    };
+    this._material.color.setHex(0xffffff);
+    this._material.emissive.setHex(0x000000);
+    this._material.emissiveIntensity = 0;
+    materialNeedsUpdate = this.updateMaterialTexture('emissiveMap', null) || materialNeedsUpdate;
+
     if (this._params.emissiveParams && data.emissiveBitmap) {
-      materialUpdates.color = 0x222222; // darker modulation for color map so light doesn't wash out emissivity map
-      materialUpdates.emissive = this._params.emissiveParams.color;
-      materialUpdates.emissiveMap = data.emissiveBitmap.image ? data.emissiveBitmap : new CanvasTexture(data.emissiveBitmap);
-      materialUpdates.emissiveIntensity = 0.05 * (this._params.emissiveParams.intensityMult || 1);
+      this._material.color.setHex(0x222222); // darker modulation for color map so light doesn't wash out emissivity map
+      this._material.emissive.setHex(this._params.emissiveParams.color);
+      materialNeedsUpdate = this.updateMaterialTexture(
+        'emissiveMap',
+        data.emissiveBitmap,
+      ) || materialNeedsUpdate;
+      this._material.emissiveIntensity = 0.05 * (this._params.emissiveParams.intensityMult || 1);
     }
-    this._material.setValues({
-      ...materialUpdates,
-      ...(this._materialOverrides || {})
-    });
-    this._material.needsUpdate = true;
+
+    if (this._materialOverrides) {
+      this._material.setValues(this._materialOverrides);
+    }
+    if (materialNeedsUpdate) {
+      this._material.needsUpdate = true;
+    }
   }
 
   makeExportable() {

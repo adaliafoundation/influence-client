@@ -1,5 +1,5 @@
 import { Suspense, useContext, useEffect, useMemo, useState } from 'react';
-import { useQueryClient, QueryClientProvider } from '~/compat/react-query';
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Object3D, Vector3 } from 'three';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useContextBridge, Stats } from '@react-three/drei';
@@ -156,7 +156,7 @@ const Scene = () => {
             <SettingsManager />
           </Suspense>
           <Postprocessor enabled={postprocessingEnabled} bloomParams={bloomParams} />
-          <QueryClientProvider client={queryClient} contextSharing={true}>
+          <QueryClientProvider client={queryClient}>
             <TrackballModControls>
               <WrappedScene />
             </TrackballModControls>

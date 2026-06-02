@@ -2,6 +2,7 @@
 import TerrainChunk from './TerrainChunk';
 import { initChunkTextures, rebuildChunkMaps } from './TerrainChunkUtils';
 import constants from '~/lib/constants';
+import { WorkerQueuePriority } from '~/lib/workerQueue';
 
 const {
   ENABLE_TERRAIN_CHUNK_RESOURCE_POOL,
@@ -98,6 +99,19 @@ class TerrainChunkManager {
 
     // trigger geometry and map updates (will queue for display when complete)
     const scope = this;
+    const buildState = {
+      chunk,
+      geometryReady: false,
+      maps: null,
+      mapsReady: false,
+      workerError: null
+    };
+    const queueIfReady = () => {
+      if (buildState.geometryReady && buildState.mapsReady) {
+        scope._queued.push(buildState);
+      }
+    };
+
     this.workerPool.processInBackground(
       {
         topic: 'rebuildTerrainGeometry',
@@ -116,11 +130,44 @@ class TerrainChunkManager {
           side: chunk._params.side,
           stretch: chunk._stretch.toArray(),
         },
-        _cacheable: 'asteroid'
+        _cacheable: 'asteroid',
+        _concurrencyGroup: 'terrainChunk',
+        _maxConcurrent: 2,
+        _priority: WorkerQueuePriority.terrainGeometry
       },
       ({ positions, normals }) => {
         chunk.updateGeometry(positions, normals);
-        scope._queued.push(chunk);
+        buildState.geometryReady = true;
+        queueIfReady();
+      }
+    );
+
+    this.workerPool.processInBackground(
+      {
+        topic: 'rebuildTerrainMaps',
+        asteroid: {
+          key: this.asteroidId,
+          config: this.prunedConfig,
+        },
+        chunk: {
+          edgeStrides: chunk._params.stitchingStrides,
+          emissiveParams: chunk._params.emissiveParams,
+          groupMatrix: chunk._params.group.matrix.toArray(),
+          offset: chunk._params.offset.toArray(),
+          resolution: chunk._resolution,
+          side: chunk._params.side,
+          width: chunk._params.width
+        },
+        _cacheable: 'asteroid',
+        _concurrencyGroup: 'terrainChunk',
+        _maxConcurrent: 2,
+        _priority: WorkerQueuePriority.terrainMaps
+      },
+      ({ error, maps }) => {
+        buildState.maps = maps;
+        buildState.workerError = error;
+        buildState.mapsReady = true;
+        queueIfReady();
       }
     );
 
@@ -144,25 +191,30 @@ class TerrainChunkManager {
   }
 
   updateMaps(until) {
-    let chunk;
+    let buildState;
 
     // NOTE: deliberately always do at least one
-    while (chunk = this._queued.pop()) { // eslint-disable-line
-      chunk.updateMaps(
-        rebuildChunkMaps(
+    while (buildState = this._queued.pop()) { // eslint-disable-line
+      let maps = buildState.maps;
+      if (!maps) {
+        if (buildState.workerError) {
+          console.warn('Terrain map worker unavailable; rebuilt chunk maps on main thread.', buildState.workerError);
+        }
+        maps = rebuildChunkMaps(
           {
             config: this.config,
-            edgeStrides: chunk._params.stitchingStrides,
-            emissiveParams: chunk._params.emissiveParams,
-            groupMatrix: chunk._params.group.matrix.clone(),
-            offset: chunk._params.offset.clone(),
-            resolution: chunk._resolution,
-            side: chunk._params.side,
-            width: chunk._params.width
+            edgeStrides: buildState.chunk._params.stitchingStrides,
+            emissiveParams: buildState.chunk._params.emissiveParams,
+            groupMatrix: buildState.chunk._params.group.matrix.clone(),
+            offset: buildState.chunk._params.offset.clone(),
+            resolution: buildState.chunk._resolution,
+            side: buildState.chunk._params.side,
+            width: buildState.chunk._params.width
           },
-        )
-      );
-      this._new.push(chunk);
+        );
+      }
+      buildState.chunk.updateMaps(maps);
+      this._new.push(buildState.chunk);
 
       // limit processing time (i.e. for FPS)
       if (until && Date.now() > until) {

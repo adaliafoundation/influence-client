@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { AxesHelper, Color, Vector3 } from 'three';
+import { AxesHelper, Color, Float32BufferAttribute, Vector3 } from 'three';
 import { useThrottleCallback } from '@react-hook/throttle';
 import { useThree } from '@react-three/fiber';
 import { Html, useTexture } from '@react-three/drei';
@@ -18,12 +18,14 @@ import useTravelSolutionIsValid from '~/hooks/useTravelSolutionIsValid';
 import useWatchlist from '~/hooks/useWatchlist';
 import useWebWorker from '~/hooks/useWebWorker';
 import constants from '~/lib/constants';
+import { WorkerQueuePriority } from '~/lib/workerQueue';
 import Orbit from './asteroids/Orbit';
 import Marker from './asteroids/Marker';
 import TravelSolution from './asteroids/TravelSolution';
 import highlighters from './asteroids/highlighters';
 import vert from './asteroids/asteroids.vert';
 import frag from './asteroids/asteroids.frag';
+import { ZOOM_IN_ANIMATION_TIME, ZOOM_OUT_ANIMATION_TIME } from './Asteroid';
 import { formatBeltDistance } from '../interface/hud/actionDialogs/components';
 import formatters from '~/lib/formatters';
 import theme from '~/theme';
@@ -65,6 +67,23 @@ const DistanceTooltip = styled.div`
   white-space: nowrap;
 `;
 
+const updateGeometryAttribute = (geometry, name, array, itemSize) => {
+  const attribute = geometry.getAttribute(name);
+  if (attribute?.array?.length === array.length) {
+    if (attribute.array !== array) attribute.array.set(array);
+    attribute.needsUpdate = true;
+  } else {
+    geometry.setAttribute(name, new Float32BufferAttribute(array, itemSize));
+  }
+};
+
+const buildAsteroidIndexById = (asteroids) => {
+  return asteroids.reduce((indexById, asteroid, index) => {
+    indexById[asteroid.id] = index;
+    return indexById;
+  }, {});
+};
+
 const Asteroids = () => {
   const { controls } = useThree();
   const originId = useStore(s => s.asteroids.origin);
@@ -102,7 +121,8 @@ const Asteroids = () => {
 
   const [ mappedAsteroids, setMappedAsteroids ] = useState([]);
   const [ asteroidsWorkerPayload, setAsteroidsWorkerPayload ] = useState();
-  const [ positions, setPositions ] = useState(new Float32Array());
+  const [ positionsReady, setPositionsReady ] = useState(false);
+  const [ positionsVersion, setPositionsVersion ] = useState(0);
   const [ colors, setColors ] = useState(new Float32Array());
   const [ hoveredPos, setHoveredPos ] = useState();
   const [ originPos, setOriginPos ] = useState();
@@ -110,10 +130,18 @@ const Asteroids = () => {
 
   const isUpdating = useRef(false);
   const asteroidsGeom = useRef();
+  const positions = useRef(new Float32Array());
+  const pointOpacities = useRef(new Float32Array());
+  const originPointOpacity = useRef(1);
+  const latestPositionsRequest = useRef();
 
   const asteroids = useMemo(() => {
     return asteroidSearch?.hits?.length > 0 ? asteroidSearch.hits : [];
   }, [asteroidSearch?.hits]);
+
+  const asteroidIndexById = useMemo(() => {
+    return buildAsteroidIndexById(mappedAsteroids);
+  }, [mappedAsteroids]);
 
   const assetedAsteroids = useMemo(() => {
     const asseted = {};
@@ -143,10 +171,9 @@ const Asteroids = () => {
     return asseted;
   }, [asteroids, controlledAsteroids, crew, controlledShips]);
 
-  // Update state when asteroids from server, origin, or destination change
-  const isZoomedIn = zoomStatus === 'in';
-
   useEffect(() => {
+    if (!asteroidSearch?.hits) return;
+
     const newMappedAsteroids = asteroids ? cloneDeep(asteroids) : [];
 
     // in default search, append watchlist and owned as needed
@@ -172,18 +199,13 @@ const Asteroids = () => {
       newMappedAsteroids.push(Object.assign({}, destination));
     }
 
-    // if zoomed in, don't render the point for the origin (since rendering 3d version)
-    const newValue = origin && isZoomedIn
-      ? newMappedAsteroids.filter((a) => a.id !== origin.id)
-      : newMappedAsteroids;
-
-    setMappedAsteroids(newValue);
     setAsteroidsWorkerPayload({
-      key: newValue.map((a) => a.id).join(','),
-      orbitals: newValue.map((a) => a.Orbit),
+      key: newMappedAsteroids.map((a) => a.id).join(','),
+      mappedAsteroids: newMappedAsteroids,
+      orbitals: newMappedAsteroids.map((a) => a.Orbit),
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ asteroids, origin, destination, assetedAsteroids, watchlist, isZoomedIn ]);
+  }, [ asteroidSearch?.hits, asteroids, origin, destination, assetedAsteroids, watchlist ]);
 
   // Responds to hover changes in the store which could be fired from the HUD
   useEffect(() => {
@@ -192,77 +214,175 @@ const Asteroids = () => {
       return;
     }
 
-    if (mappedAsteroids.length * 3 === positions.length) {
-      const index = mappedAsteroids.findIndex(a => a.id === hovered);
+    const currentPositions = positions.current;
+    if (mappedAsteroids.length * 3 === currentPositions.length) {
+      const index = asteroidIndexById[hovered];
 
-      if (index > -1) {
-        const pos = positions.slice(index * 3, index * 3 + 3);
+      if (index !== undefined) {
+        const pos = currentPositions.slice(index * 3, index * 3 + 3);
         setHoveredPos(pos);
       } else {
         setHoveredPos(null);
       }
     }
-  }, [ hovered, originId, destinationId, positions, mappedAsteroids ]);
+  }, [ hovered, originId, destinationId, positionsVersion, mappedAsteroids, asteroidIndexById ]);
+
+  const getAsteroidColors = useCallback((asteroidsToColor) => {
+    const newColors = asteroidsToColor.map(a => {
+      if (highlightConfig) return highlighters[highlightConfig.field](a, highlightConfig);
+      return [ 1, 1, 1 ];
+    });
+
+    return new Float32Array([].concat.apply([], newColors));
+  }, [highlightConfig]);
+
+  const getPointOpacities = useCallback((asteroidsToRender, originOpacity = originPointOpacity.current, indexById = asteroidIndexById) => {
+    const nextPointOpacities = new Float32Array(asteroidsToRender.length);
+    nextPointOpacities.fill(1);
+
+    if (originId) {
+      const originIndex = indexById[originId];
+      if (originIndex !== undefined) nextPointOpacities[originIndex] = originOpacity;
+    }
+
+    return nextPointOpacities;
+  }, [asteroidIndexById, originId]);
+
+  const updatePointOpacityAttribute = useCallback(() => {
+    if (!asteroidsGeom.current) return;
+    updateGeometryAttribute(asteroidsGeom.current, 'pointOpacity', pointOpacities.current, 1);
+  }, []);
+
+  const setOriginPointOpacity = useCallback((opacity) => {
+    originPointOpacity.current = opacity;
+    pointOpacities.current = getPointOpacities(mappedAsteroids, opacity);
+    updatePointOpacityAttribute();
+  }, [getPointOpacities, mappedAsteroids, updatePointOpacityAttribute]);
+
+  const updatePositions = useCallback((updatedPositions, updatedMappedAsteroids) => {
+    if (!updatedPositions) return;
+
+    if (updatedMappedAsteroids) {
+      const updatedIndexById = buildAsteroidIndexById(updatedMappedAsteroids);
+      setMappedAsteroids(updatedMappedAsteroids);
+      setColors(getAsteroidColors(updatedMappedAsteroids));
+      pointOpacities.current = getPointOpacities(updatedMappedAsteroids, originPointOpacity.current, updatedIndexById);
+    }
+
+    if (positions.current.length === updatedPositions.length) {
+      positions.current.set(updatedPositions);
+    } else {
+      positions.current = updatedPositions;
+    }
+
+    if (asteroidsGeom.current) {
+      updateGeometryAttribute(asteroidsGeom.current, 'position', positions.current, 3);
+      updatePointOpacityAttribute();
+      asteroidsGeom.current.computeBoundingSphere();
+    }
+
+    setPositionsReady(positions.current.length > 0);
+    setPositionsVersion(v => v + 1);
+  }, [getAsteroidColors, getPointOpacities, updatePointOpacityAttribute]);
+
+  useEffect(() => {
+    const targetOpacity = (
+      zoomStatus === 'in' ||
+      zoomStatus === 'zooming-in'
+    ) ? 0 : 1;
+
+    const duration = (
+      zoomStatus === 'zooming-in'
+        ? ZOOM_IN_ANIMATION_TIME
+        : zoomStatus === 'zooming-out'
+          ? ZOOM_OUT_ANIMATION_TIME
+          : 0
+    ) / 1e3;
+
+    if (duration === 0) {
+      setOriginPointOpacity(targetOpacity);
+      return;
+    }
+
+    const tween = gsap.to(originPointOpacity, {
+      current: targetOpacity,
+      duration,
+      ease: zoomStatus === 'zooming-in' ? 'power4.out' : 'power4.in',
+      onUpdate: () => setOriginPointOpacity(originPointOpacity.current),
+    });
+
+    return () => tween.kill();
+  }, [setOriginPointOpacity, zoomStatus]);
 
   // Update asteroid positions whenever the time changes in-game or mapped asteroids are updated
   // TODO: would probably have much smoother motion (at very fast-forwarded speeds) by
   //  managing trigger for this in a useFrame loop (rather than listening for coarseTime update),
   //  and setting geometry attributes directly, rather than through state... could potentially do
   //  fewer updates / only update on coarseTime when zoomed in
-  useEffect(() => {
-    if (coarseTime && asteroidsWorkerPayload && !isUpdating.current) {
-      isUpdating.current = true;
-      processInBackground(
-        {
-          topic: 'updateAsteroidPositions',
-          asteroids: asteroidsWorkerPayload,
-          elapsed: coarseTime,
-          _cacheable: 'asteroids'
+  const processLatestPositions = useCallback(() => {
+    const request = latestPositionsRequest.current;
+    if (!request?.payload || !request.elapsed || isUpdating.current) return;
+
+    isUpdating.current = true;
+    processInBackground(
+      {
+        topic: 'updateAsteroidPositions',
+        asteroids: {
+          key: request.payload.key,
+          orbitals: request.payload.orbitals
         },
-        (data) => {
-          setPositions(data.positions);
-          isUpdating.current = false;
+        elapsed: request.elapsed,
+        _cacheable: 'asteroids',
+        _priority: WorkerQueuePriority.renderCritical
+      },
+      (data) => {
+        const latestRequest = latestPositionsRequest.current;
+        const requestIsLatest = latestRequest
+          && latestRequest.payload === request.payload
+          && latestRequest.elapsed === request.elapsed;
+
+        if (requestIsLatest) {
+          updatePositions(data.positions, request.payload.mappedAsteroids);
         }
-      )
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coarseTime, asteroidsWorkerPayload])
+
+        isUpdating.current = false;
+        if (!requestIsLatest) processLatestPositions();
+      }
+    )
+  }, [processInBackground, updatePositions]);
 
   useEffect(() => {
+    latestPositionsRequest.current = {
+      elapsed: coarseTime,
+      payload: asteroidsWorkerPayload
+    };
+    processLatestPositions();
+  }, [coarseTime, asteroidsWorkerPayload, processLatestPositions])
+
+  useEffect(() => {
+    const currentPositions = positions.current;
     // Check that we have data, positions are processed, and they're in sync
-    if (mappedAsteroids.length * 3 === positions.length) {
+    if (mappedAsteroids.length * 3 === currentPositions.length) {
       if (originId) {
-        const originKey = mappedAsteroids.findIndex(a => a.id === originId);
-        setOriginPos(positions.slice(originKey * 3, originKey * 3 + 3));
+        const originKey = asteroidIndexById[originId];
+        setOriginPos(originKey > -1 ? currentPositions.slice(originKey * 3, originKey * 3 + 3) : null);
       } else {
         setOriginPos(null);
       }
 
       if (destinationId) {
-        const destKey = mappedAsteroids.findIndex(a => a.id === destinationId);
-        setDestinationPos(positions.slice(destKey * 3, destKey * 3 + 3));
+        const destKey = asteroidIndexById[destinationId];
+        setDestinationPos(destKey > -1 ? currentPositions.slice(destKey * 3, destKey * 3 + 3) : null);
       } else {
         setDestinationPos(null);
       }
     }
-  }, [ mappedAsteroids, positions, originId, destinationId ]);
+  }, [ mappedAsteroids, positionsVersion, originId, destinationId, asteroidIndexById ]);
 
   // Update colors
   useEffect(() => {
-    const newColors = mappedAsteroids.map(a => {
-      if (highlightConfig) return highlighters[highlightConfig.field](a, highlightConfig);
-      return [ 1, 1, 1 ];
-    });
-
-    setColors(new Float32Array([].concat.apply([], newColors)));
-  }, [ mappedAsteroids, highlightConfig ]);
-
-  // re-computeBoundingSphere on geometry change
-  useEffect(() => {
-    if (asteroidsGeom.current) {
-      asteroidsGeom.current.computeBoundingSphere();
-    }
-  }, [positions]);
+    setColors(getAsteroidColors(mappedAsteroids));
+  }, [ mappedAsteroids, getAsteroidColors ]);
 
   useEffect(() => {
     if (!cameraNeedsReorientation || zoomStatus !== 'out' || !controls?.object?.position) return;
@@ -309,36 +429,45 @@ const Asteroids = () => {
     e.stopPropagation();
     const index = e.intersections.sort((a, b) => a.distanceToRay - b.distanceToRay)[0].index;
 
-    if (asteroids[index]) {
-      if (asteroids[index].id === originId) selectOrigin();
+    if (mappedAsteroids[index]) {
+      if (mappedAsteroids[index].id === originId) selectOrigin();
       if (!routePlannerActive) return; // Only allow picking a destination if the route planner is open
-      selectDestination(asteroids[index].id);
+      selectDestination(mappedAsteroids[index].id);
     }
-  }, [asteroids, originId, routePlannerActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mappedAsteroids, originId, routePlannerActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setMousePos = useThrottleCallback((mousePos) => {
     if (mousePos && mousePos.intersections?.length > 0) {
       const index = mousePos.intersections.sort((a, b) => a.distanceToRay - b.distanceToRay)[0].index;
-      if (asteroids[index]) {
-        return hoverAsteroid(asteroids[index].id);
+      if (mappedAsteroids[index]) {
+        return hoverAsteroid(mappedAsteroids[index].id);
       }
     }
     unhoverAsteroid();
-  }, 30);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, 30); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { assetPositions, assetPositionsById, watchlistPositions } = useMemo(() => {
     const assetPositions = [];
     const assetPositionsById = {};
     const watchlistPositions = [];
+    const currentPositions = positions.current;
+    if (mappedAsteroids.length * 3 !== currentPositions.length) {
+      return {
+        assetPositions: new Float32Array(),
+        assetPositionsById,
+        watchlistPositions: new Float32Array(),
+      };
+    }
+
     mappedAsteroids.forEach((a, i) => {
       if (a.id === origin?.id || a.id === destination?.id) {  // always include origin and destination so billboard labeled
-        assetPositionsById[a.id] = [positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]];
+        assetPositionsById[a.id] = [currentPositions[i * 3 + 0], currentPositions[i * 3 + 1], currentPositions[i * 3 + 2]];
       } else if (a.isAsseted) {
-        assetPositionsById[a.id] = [positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]];
+        assetPositionsById[a.id] = [currentPositions[i * 3 + 0], currentPositions[i * 3 + 1], currentPositions[i * 3 + 2]];
         assetPositions.push(assetPositionsById[a.id][0], assetPositionsById[a.id][1], assetPositionsById[a.id][2]);
       }
       else if (a.isWatched) {
-        watchlistPositions.push(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
+        watchlistPositions.push(currentPositions[i * 3 + 0], currentPositions[i * 3 + 1], currentPositions[i * 3 + 2]);
       }
     });
 
@@ -347,7 +476,7 @@ const Asteroids = () => {
       assetPositionsById,
       watchlistPositions: new Float32Array(watchlistPositions),
     }
-  }, [origin, positions, watchlist]); // don't update when mappedAsteroids updated (wait for positions update)
+  }, [mappedAsteroids, origin?.id, destination?.id, watchlist, positionsVersion]); // don't update when mappedAsteroids updated (wait for positions update)
 
   const [originToDestination, originToDestinationDistance, originToDestinationHalfway] = useMemo(() => {
     if (originPos && destinationPos) {
@@ -401,6 +530,11 @@ const Asteroids = () => {
     return Object.values(b);
   }, [origin, originPos, destination, destinationPos, assetedAsteroids, assetPositionsById, hovered, openHudMenu]);
 
+  const pointBuffersReady = positionsReady
+    && positions.current?.length > 0
+    && colors?.length === positions.current.length
+    && pointOpacities.current?.length * 3 === positions.current.length;
+
   return (
     <group>
       {openHudMenu !== 'BELT_PLAN_FLIGHT' && (
@@ -439,15 +573,16 @@ const Asteroids = () => {
             </>
           )}
           {/* all asteroids */}
-          {positions?.length > 0 && colors?.length > 0 && (
+          {pointBuffersReady && (
             <points
               onClick={zoomStatus === 'out' && onClick}
               onContextMenu={zoomStatus === 'out' && onContextClick}
               onPointerOver={zoomStatus === 'out' && setMousePos}
               onPointerOut={zoomStatus === 'out' && setMousePos}>
               <bufferGeometry ref={asteroidsGeom}>
-                <bufferAttribute attach="attributes-position" args={[ positions, 3 ]} />
+                <bufferAttribute attach="attributes-position" args={[ positions.current, 3 ]} />
                 <bufferAttribute attach="attributes-highlightColor" args={[ colors, 3 ]} />
+                <bufferAttribute attach="attributes-pointOpacity" args={[ pointOpacities.current, 1 ]} />
               </bufferGeometry>
               <shaderMaterial args={[{
                 depthWrite: false,
@@ -465,6 +600,7 @@ const Asteroids = () => {
       )}
 
       {zoomStatus === 'out' && (
+        <Suspense fallback={null}>
         <>
           {/* hover reticule */}
           {hoveredPos && <Marker asteroidPos={hoveredPos} />}
@@ -534,6 +670,7 @@ const Asteroids = () => {
           {/* flight line (only in simulation mode) */}
           <TravelSolution key={travelSolution?.key} />
         </>
+        </Suspense>
       )}
       {false && <primitive object={new AxesHelper(2 * constants.AU)} />}
     </group>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '~/compat/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building, Permission } from '@influenceth/sdk';
 import cloneDeep from 'lodash/cloneDeep';
 
@@ -51,9 +51,9 @@ export function ActionItemProvider({ children }) {
   const queryClient = useQueryClient();
 
   const crewId = crew?.id;
-  const { data: actionItems, isLoading: actionItemsLoading, dataUpdatedAt: itemsUpdatedAt } = useQuery(
-    [ 'actionItems', crewId ],
-    async () => {
+  const { data: actionItems, isLoading: actionItemsLoading, dataUpdatedAt: itemsUpdatedAt } = useQuery({
+    queryKey: [ 'actionItems', crewId ],
+    queryFn: async () => {
       const activities = await api.getCrewActionItems(crewId);
 
       // add startTime to all for consistency
@@ -69,8 +69,8 @@ export function ActionItemProvider({ children }) {
       await hydrateActivities(activities, queryClient);
       return activities;
     },
-    { enabled: !!crewId && crewId !== SIMULATION_CONFIG.crewId }
-  );
+    enabled: !!crewId && crewId !== SIMULATION_CONFIG.crewId
+  });
 
   const { data: crewBuildings, isLoading: plannedBuildingsLoading, dataUpdatedAt: plansUpdatedAt } = useCrewBuildings();
   const plannedBuildings = useMemo(() => {
