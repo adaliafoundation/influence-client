@@ -5,6 +5,7 @@ import { Tooltip } from 'react-tooltip';
 
 import { appConfig } from '~/appConfig';
 import Badge from '~/components/Badge';
+import LoginPrompt from '~/components/LoginPrompt';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import {
@@ -213,7 +214,12 @@ const LeftIcon = styled.div`
   }
 `;
 
-const RightIcon = styled.div``;
+const RightIcon = styled.div`
+  align-items: center;
+  display: flex;
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: rotate(${p => p.expanded ? '90deg' : '0deg'});
+`;
 const HoverContent = styled.label`
   display: none;
 `;
@@ -223,15 +229,16 @@ const NoHoverContent = styled.label`
 
 const AccountButton = styled.div`
   align-items: center;
-  background: black;
-  border: 1px solid black;
+  background: ${p => p.expanded ? `rgba(${p.theme.colors.mainRGB}, 0.42)` : 'black'};
+  border: 1px solid ${p => p.expanded ? `rgba(${p.theme.colors.brightMainRGB}, 0.9)` : 'black'};
   border-radius: 24px;
-  color: #AAA;
-  cursor: ${p => p.theme.cursors.active};
+  color: ${p => p.expanded ? 'white' : '#AAA'};
+  cursor: ${p => p.busy ? p.theme.cursors.default : p.theme.cursors.active};
   display: flex;
   height: 48px;
   padding: 3px 12px 3px 4px;
   width: 300px;
+  z-index: 1;
   & label {
     flex: 1;
     font-weight: bold;
@@ -240,30 +247,43 @@ const AccountButton = styled.div`
   }
   transition: background 250ms ease, border-color 250ms ease, color 250ms ease;
 
-  ${p => p.isNew
-    ? `
-      position: fixed;
-      right: 12px;
-      top: 12px;
-    `
-    : ``
-  }
+  ${p => !p.busy && `
+    &:hover {
+      background: rgba(${p.theme.colors.mainRGB}, 0.4);
+      border-color: rgba(${p.theme.colors.mainRGB}, 0.8);
+      color: white;
+      ${p.hasHoverContent ? `
+        & label {
+          display: none;
+        }
+        & ${HoverContent} {
+          display: block;
+        }
+        & ${NoHoverContent} {
+          display: none;
+        }
+      ` : ''}
+    }
+  `}
+`;
 
-  &:hover {
-    background: rgba(${p => p.theme.colors.mainRGB}, 0.4);
-    border-color: rgba(${p => p.theme.colors.mainRGB}, 0.8);
-    color: white;
-    ${p => p.hasHoverContent && `
-      & label {
-        display: none;
-      }
-      & ${HoverContent} {
-        display: block;
-      }
-      & ${NoHoverContent} {
-        display: none;
-      }
-    `}
+const AccountLoginCluster = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: ${p => p.expanded ? 12 : 0}px;
+  max-width: calc(100vw - 32px);
+  pointer-events: auto;
+  position: ${p => p.isNew ? 'fixed' : 'relative'};
+  right: ${p => p.isNew ? '12px' : 'auto'};
+  top: ${p => p.isNew ? '12px' : 'auto'};
+  transform: translateY(${p => p.expanded && !p.isNew ? '-18px' : '0'});
+  transition: gap 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  width: min(420px, calc(100vw - 32px));
+
+  & > ${AccountButton} {
+    flex: 0 0 auto;
   }
 `;
 
@@ -280,17 +300,17 @@ const PlayButton = styled.div`
   border: 1px solid rgba(${p => p.rgb || p.theme.colors.mainRGB}, 1);
   border-radius: 50px;
   color: white;
-  cursor: ${p => p.theme.cursors.active};
+  cursor: ${p => p.theme.cursors[p.disabled ? 'default' : 'active']};
   display: flex;
   font-size: 26px;
   justify-content: center;
   margin: 20px 0 ${p => p.isNew ? 40 : 20}px;
-  opacity: 1;
+  opacity: ${p => p.disabled ? 0.55 : 1};
   outline: 0 solid rgba(${p => p.rgb || p.theme.colors.mainRGB}, 0.4);
   padding: 0.5em;
   position: relative;
   text-transform: uppercase;
-  transition: border-color 250ms ease;
+  transition: border-color 250ms ease, opacity 250ms ease;
   width: 300px;
   z-index: 1;
   &:before {
@@ -303,12 +323,14 @@ const PlayButton = styled.div`
     z-index: -1;
   }
 
-  &:hover {
-    border-color: rgba(${p => p.rgb || p.theme.colors.mainRGB}, 1);
-    &:before {
-      background: rgba(${p => p.rgb || p.theme.colors.mainRGB}, 0.5);
+  ${p => !p.disabled && `
+    &:hover {
+      border-color: rgba(${p.rgb || p.theme.colors.mainRGB}, 1);
+      &:before {
+        background: rgba(${p.rgb || p.theme.colors.mainRGB}, 0.5);
+      }
     }
-  }
+  `}
 `;
 
 const MainContent = styled.div`
@@ -377,7 +399,7 @@ const NavItemBadge = styled(Badge)`
 `;
 
 const Launcher = (props) => {
-  const { accountAddress, authenticating, authenticated, login, walletId } = useSession(false);
+  const { accountAddress, authenticating, authenticated, login, loginPrompt, walletId } = useSession(false);
   const { data: priceConstants, isLoading: priceConstantsLoading } = usePriceConstants();
   const { hasNoPublicKey, unreadTally } = useWalletInbox();
 
@@ -453,16 +475,26 @@ const Launcher = (props) => {
   }, [accountAddress, , hasSeenIntroVideo]);
 
   const onEnterSimulation = useCallback(() => {
+    if (loginPrompt?.busy) return;
     if (!authenticated && !simulationEnabled) { // is authenticated check necessary?
       dispatchSimulationEnabled(true);
     }
     onClickPlay();
-  }, [authenticated, onClickPlay, simulationEnabled]);
+  }, [authenticated, loginPrompt?.busy, onClickPlay, simulationEnabled]);
 
   const onExitSimulation = useCallback(() => {
     dispatchSimulationEnabled(false);
     dispatchSimulationStep();  // TODO: remove this? (i.e. to not reset on exit)
   }, []);
+
+  const onClickLogin = useCallback(() => {
+    if (loginPrompt?.busy) return;
+    if (loginPrompt?.open) {
+      loginPrompt.close();
+    } else {
+      login();
+    }
+  }, [login, loginPrompt]);
 
   const openHelpChannel = useCallback(() => {
     window.open(appConfig.get('Url.help'), '_blank', 'noopener');
@@ -565,19 +597,26 @@ const Launcher = (props) => {
 
         {launcherPage === 'play' && (
           <>
-            {authenticating && (
-              <AccountButton isNew={isNew} onClick={login}>
-                <LeftIcon connecting><Loader color="currentColor" size="0.9em" /></LeftIcon>
-                <label>Logging In</label>
-                <RightIcon><ChevronDoubleRightIcon /></RightIcon>
-              </AccountButton>
-            )}
-            {!authenticated && !authenticating && (
-              <AccountButton isNew={isNew} onClick={login}>
-                <LeftIcon connected={authenticated}><UserIcon /></LeftIcon>
-                <label>{isNew ? 'Existing Account' : 'Log-In'}</label>
-                <RightIcon><ChevronDoubleRightIcon /></RightIcon>
-              </AccountButton>
+            {!authenticated && (
+              <AccountLoginCluster expanded={loginPrompt?.open} isNew={isNew}>
+                <AccountButton
+                  busy={loginPrompt?.busy}
+                  expanded={loginPrompt?.open}
+                  isNew={isNew}
+                  onClick={onClickLogin}>
+                  <LeftIcon connecting={loginPrompt?.busy} connected={authenticated}>
+                    {loginPrompt?.busy ? <Loader color="currentColor" size="0.9em" /> : <UserIcon />}
+                  </LeftIcon>
+                  <label>{loginPrompt?.busy ? 'Logging In' : (isNew ? 'Existing Account' : 'Log-In')}</label>
+                  <RightIcon expanded={loginPrompt?.open}><ChevronDoubleRightIcon /></RightIcon>
+                </AccountButton>
+                <LoginPrompt
+                  busy={loginPrompt?.busy}
+                  expanded={loginPrompt?.open}
+                  onClick={loginPrompt?.onSelect}
+                  onClose={loginPrompt?.close}
+                  options={loginPrompt?.options} />
+              </AccountLoginCluster>
             )}
 
             {authenticated
@@ -592,11 +631,11 @@ const Launcher = (props) => {
               : (
                 <>
                   <PlayButton
-                    animate
-                    disabled={authenticating}
-                    isNew={isNew}
-                    onClick={onEnterSimulation}
-                    rgb={theme.colors.successRGB}>
+                  animate
+                  disabled={authenticating || loginPrompt?.busy}
+                  isNew={isNew}
+                  onClick={onEnterSimulation}
+                  rgb={theme.colors.successRGB}>
                     {simulationEnabled ? 'Continue' : 'Enter Training'}
                   </PlayButton>
                   {simulationEnabled && (

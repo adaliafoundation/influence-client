@@ -2,13 +2,13 @@ import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { isExpired } from 'react-jwt';
 import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
-import { connect as starknetConnect, disconnect as starknetDisconnect } from 'starknetkit';
+import { disconnect as starknetDisconnect } from 'starknetkit';
 import { ArgentMobileConnector, isInArgentMobileAppBrowser } from 'starknetkit/argentMobile';
+import { ControllerConnector } from 'starknetkit/controller';
 import { InjectedConnector } from 'starknetkit/injected';
 import { WebWalletConnector } from 'starknetkit/webwallet';
 import { Address } from '@influenceth/sdk';
 import { appConfig } from '~/appConfig';
-import LoginPrompt from '~/components/LoginPrompt';
 import Reconnecting from '~/components/Reconnecting';
 import api from '~/lib/api';
 import { areChainsEqual, fireTrackingEvent, resolveChainId } from '~/lib/utils';
@@ -16,6 +16,24 @@ import useStore from '~/hooks/useStore';
 
 const silentReconnectAttempts = 3;
 const silentReconnectRetryDelay = 250;
+const defaultEnabledConnectors = {
+  webWallet: true,
+  argentX: true,
+  braavos: true,
+  controller: true,
+  argentMobile: true
+};
+
+const connectorAliases = {
+  argentWebWallet: 'webWallet',
+  webWallet: 'webWallet',
+  argentX: 'argentX',
+  braavos: 'braavos',
+  cartridge: 'controller',
+  controller: 'controller',
+  'controller-keychain': 'controller',
+  argentMobile: 'argentMobile'
+};
 
 const getErrorMessage = (error) => {
   console.error(error);
@@ -42,6 +60,19 @@ const hasWalletConnection = ({ connectorData, wallet } = {}) => {
 const clearSilentReconnect = (dispatchSessionSuspended) => {
   localStorage.removeItem('starknetLastConnectedWallet');
   dispatchSessionSuspended();
+};
+
+const normalizeConnectorId = (id) => connectorAliases[id] || id;
+
+const normalizeEnabledConnectors = (enabledConnectors = defaultEnabledConnectors) => {
+  return Object.entries(enabledConnectors).reduce((normalized, [id, enabled]) => {
+    normalized[normalizeConnectorId(id)] = enabled;
+    return normalized;
+  }, {});
+};
+
+const getSelectedConnectorId = (enabledConnectors = defaultEnabledConnectors) => {
+  return Object.keys(enabledConnectors).find((id) => enabledConnectors[id]);
 };
 
 const isAllowedChain = (chain) => {
@@ -109,46 +140,66 @@ export function SessionProvider({ children }) {
     return new RpcProvider({ nodeUrl });
   }, []);
 
+  const getConnectors = useCallback((enabledConnectors = defaultEnabledConnectors) => {
+    enabledConnectors = normalizeEnabledConnectors(enabledConnectors);
+
+    // init argentMobileConnector since a little different
+    const argentMobileConnector = ArgentMobileConnector.init({
+      options: {
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        dappName: 'Influence',
+        chainId: resolveChainId(appConfig.get('Starknet.chainId')),
+        provider
+      }
+    });
+
+    if (isInArgentMobileAppBrowser()) {
+      return { argentMobile: argentMobileConnector };
+    }
+
+    const connectors = {};
+    if (enabledConnectors.webWallet && !!appConfig.get('Api.argentWebWallet')) {
+      connectors.webWallet = new WebWalletConnector({ url: appConfig.get('Api.argentWebWallet'), provider });
+    }
+
+    if (enabledConnectors.argentX) connectors.argentX = new InjectedConnector({ options: { id: 'argentX', provider }});
+    if (enabledConnectors.braavos) connectors.braavos = new InjectedConnector({ options: { id: 'braavos', provider }});
+    if (enabledConnectors.controller) connectors.controller = new ControllerConnector();
+    if (enabledConnectors.argentMobile) connectors.argentMobile = argentMobileConnector;
+
+    return connectors;
+  }, [provider]);
+
+  const connectConnector = useCallback(async (connector) => {
+    const connectorData = await connector.connect({ onlyQRCode: true });
+    return {
+      connectorData,
+      wallet: connector.wallet
+    };
+  }, []);
+
   // Login entry point, starts by connecting to wallet provider
-  const connect = useCallback(async (auto = false, enabledConnectors = { webWallet: true, argentX: true, braavos: true, argentMobile: true }) => {
-    if (currentSession?.walletId) {
+  const connect = useCallback(async (auto = false, enabledConnectors = defaultEnabledConnectors) => {
+    enabledConnectors = normalizeEnabledConnectors(enabledConnectors);
+
+    if (auto && currentSession?.walletId) {
       localStorage.setItem('starknetLastConnectedWallet', currentSession.walletId);
-      auto = true;
     }
 
     try {
-      // init argentMobileConnector since a little different
-      const argentMobileConnector = ArgentMobileConnector.init({
-        options: {
-          url: typeof window !== 'undefined' ? window.location.href : '',
-          dappName: 'Influence',
-          chainId: resolveChainId(appConfig.get('Starknet.chainId')),
-          provider
-        }
-      });
+      const connectors = getConnectors(enabledConnectors);
+      const selectedConnectorId = auto
+        ? normalizeConnectorId(currentSession?.walletId || localStorage.getItem('starknetLastConnectedWallet'))
+        : normalizeConnectorId(getSelectedConnectorId(enabledConnectors));
+      const selectedConnector = connectors[selectedConnectorId];
 
-      // pick which and config connectors to include
-      const connectors = [];
-      if (isInArgentMobileAppBrowser()) {
-        connectors.push(argentMobileConnector);
-      } else {
-        if (enabledConnectors.webWallet && !!appConfig.get('Api.argentWebWallet')) {
-          connectors.push(new WebWalletConnector({ url: appConfig.get('Api.argentWebWallet'), provider }));
+      if (!selectedConnector) {
+        if (!auto) {
+          setPromptLogin(true);
+          return;
         }
-
-        if (enabledConnectors.argentX) connectors.push(new InjectedConnector({ options: { id: 'argentX', provider }}));
-        if (enabledConnectors.braavos) connectors.push(new InjectedConnector({ options: { id: 'braavos', provider }}));
-        if (enabledConnectors.argentMobile) connectors.push(argentMobileConnector);
+        throw new Error('Connector not found');
       }
-
-      const connectionOptions = {
-        dappName: 'Influence',
-        modalMode: auto ? 'neverAsk' : 'alwaysAsk',
-        modalTheme: 'dark',
-        projectId: 'influence',
-        connectors,
-        provider
-      };
 
       setError();
       setConnecting(true);
@@ -156,7 +207,7 @@ export function SessionProvider({ children }) {
       let wallet;
       for (let i = 0; i < (auto ? silentReconnectAttempts : 1); i++) {
         try {
-          ({ connectorData, wallet } = await starknetConnect(connectionOptions));
+          ({ connectorData, wallet } = await connectConnector(selectedConnector));
           if (!auto || hasWalletConnection({ connectorData, wallet }) || i === silentReconnectAttempts - 1) break;
           await wait(silentReconnectRetryDelay);
         } catch (e) {
@@ -168,9 +219,10 @@ export function SessionProvider({ children }) {
       if (hasWalletConnection({ connectorData, wallet })) {
         await wait(200); // deal with timeout delay from Argent
         const chainId = resolveChainId(connectorData.chainId);
+        const walletId = wallet.id || selectedConnector.id;
         setConnectedAccount(Address.toStandard(connectorData.account));
         setConnectedChainId(chainId);
-        setConnectedWalletId(wallet.id);
+        setConnectedWalletId(walletId);
 
         let paymaster;
         if (appConfig.get('Starknet.paymaster')) {
@@ -201,13 +253,13 @@ export function SessionProvider({ children }) {
             throw new Error('Incorrect chain');
           }
 
-          localStorage.setItem('starknetLastConnectedWallet', wallet.id);
+          localStorage.setItem('starknetLastConnectedWallet', walletId);
           await connect(true);
           setConnecting(false);
           return;
         }
 
-        localStorage.setItem('starknetLastConnectedWallet', wallet.id);
+        localStorage.setItem('starknetLastConnectedWallet', walletId);
         setStatus(STATUSES.CONNECTED);
       } else if (auto) {
         clearSilentReconnect(dispatchSessionSuspended);
@@ -232,7 +284,7 @@ export function SessionProvider({ children }) {
     }
 
     setConnecting(false);
-  }, [currentSession, sessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connectConnector, currentSession, dispatchSessionSuspended, getConnectors, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Disconnect from the wallet provider and suspend session (don't fully logout)
   const disconnect = useCallback(() => {
@@ -417,6 +469,7 @@ export function SessionProvider({ children }) {
         setReadyForChildren(true);
       });
     } else if (status === STATUSES.AUTHENTICATED) {
+      setPromptLogin(false);
       fireTrackingEvent('login', { externalId: currentSession?.accountAddress });
     }
   }, [currentSession, status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -481,25 +534,49 @@ export function SessionProvider({ children }) {
   }, [blockTime, queryClient]);
 
   const [promptLogin, setPromptLogin] = useState();
-  const login = useCallback(async () => {
+  const login = useCallback(async (enabledConnectors) => {
     if ([STATUSES.AUTHENTICATING, STATUSES.AUTHENTICATED].includes(status)) return;
 
+    if (enabledConnectors) {
+      connect(false, enabledConnectors);
+      return;
+    }
+
     setPromptLogin(true);
-  }, [status]);
+  }, [connect, status]);
 
   const handleLoginPrompt = useCallback((choice) => {
-    setPromptLogin(false);
-    if (choice === false) {
-      connect(); // show all wallets
-    } else if (choice) {
+    if (choice) {
       connect(undefined, { [choice]: true });
     }
   }, [connect]);
+
+  const closeLoginPrompt = useCallback(() => {
+    if (!connecting && ![STATUSES.CONNECTED, STATUSES.AUTHENTICATING].includes(status)) {
+      setPromptLogin(false);
+    }
+  }, [connecting, status]);
+
+  const loginOptions = useMemo(() => {
+    const options = [];
+    if (appConfig.get('Api.argentWebWallet')) options.push('webWallet');
+    options.push('argentX', 'braavos', 'controller', 'argentMobile');
+    return options;
+  }, []);
+
+  const loginPromptBusy = connecting || [STATUSES.CONNECTED, STATUSES.AUTHENTICATING].includes(status);
 
   // TODO: memoize value
   return (
     <SessionContext.Provider value={{
       login,
+      loginPrompt: {
+        busy: loginPromptBusy,
+        close: closeLoginPrompt,
+        onSelect: handleLoginPrompt,
+        open: !!promptLogin,
+        options: loginOptions
+      },
       logout,
       accountAddress: authenticated ? currentSession?.accountAddress : null,
       allowedMethods,
@@ -536,7 +613,6 @@ export function SessionProvider({ children }) {
             : null
         )
       }
-      {promptLogin && <LoginPrompt onClick={handleLoginPrompt} />}
     </SessionContext.Provider>
   );
 };
