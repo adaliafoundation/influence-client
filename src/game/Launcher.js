@@ -277,7 +277,6 @@ const AccountLoginCluster = styled.div`
   position: ${p => p.isNew ? 'fixed' : 'relative'};
   right: ${p => p.isNew ? '12px' : 'auto'};
   top: ${p => p.isNew ? '12px' : 'auto'};
-  transform: translateY(${p => p.expanded && !p.isNew ? '-18px' : '0'});
   transition: gap 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
     transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
   width: min(420px, calc(100vw - 32px));
@@ -545,7 +544,7 @@ const Launcher = (props) => {
               <NavItem
                 onClick={() => dispatchLauncherPage('inbox')}
                 selected={launcherPage === 'inbox'}>
-                <InboxIcon /> Inbox 
+                <InboxIcon /> Inbox
                 {hasNoPublicKey && <NavItemLabel><WarningIcon /></NavItemLabel>}
                 {!hasNoPublicKey && unreadTally > 0 && <NavItemBadge value={unreadTally} />}
               </NavItem>

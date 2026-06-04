@@ -16,6 +16,9 @@ import useStore from '~/hooks/useStore';
 
 const silentReconnectAttempts = 3;
 const silentReconnectRetryDelay = 250;
+const manualConnectTimeout = 30000;
+const connectCancelFocusDelay = 750;
+const connectCancelCheckInterval = 250;
 const defaultEnabledConnectors = {
   webWallet: true,
   argentX: true,
@@ -52,6 +55,82 @@ const isConnectorNotFoundError = (error) => {
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const createLoginCancelledError = () => new Error('Login cancelled');
+
+const isLoginCancelledError = (error) => {
+  const message = typeof error === 'string' ? error : error?.message;
+  return (
+    message === 'Login cancelled' ||
+    message === 'User rejected request' ||
+    message === 'User rejected' ||
+    message === 'User abort' ||
+    message === 'User not connected' ||
+    error?.name === 'UserRejectedRequestError' ||
+    error?.name === 'UserNotConnectedError'
+  );
+};
+
+const createManualConnectCancellation = (connectorId) => {
+  let cleanup = () => {};
+  const promise = new Promise((_, reject) => {
+    const startTime = Date.now();
+    const focusCancels = ['argentX', 'braavos'].includes(connectorId);
+    let lostFocus = false;
+    let sawControllerOpen = false;
+    let focusTimer;
+
+    const rejectCancelled = () => reject(createLoginCancelledError());
+    const onBlur = () => {
+      lostFocus = true;
+    };
+    const onFocus = () => {
+      if (focusCancels && lostFocus && Date.now() - startTime > 500) {
+        focusTimer = setTimeout(rejectCancelled, connectCancelFocusDelay);
+      }
+    };
+
+    if (focusCancels && typeof window !== 'undefined') {
+      window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
+    }
+
+    const controllerClosedInterval = setInterval(() => {
+      if (connectorId !== 'controller' || typeof document === 'undefined') return;
+      const controller = document.getElementById('controller');
+      const isOpen = controller && controller.style.display !== 'none';
+
+      if (isOpen) {
+        sawControllerOpen = true;
+      } else if (sawControllerOpen) {
+        rejectCancelled();
+      }
+    }, connectCancelCheckInterval);
+
+    const timeout = setTimeout(rejectCancelled, manualConnectTimeout);
+
+    cleanup = () => {
+      clearTimeout(timeout);
+      clearTimeout(focusTimer);
+      clearInterval(controllerClosedInterval);
+      if (focusCancels && typeof window !== 'undefined') {
+        window.removeEventListener('blur', onBlur);
+        window.removeEventListener('focus', onFocus);
+      }
+    };
+  });
+
+  return { cleanup, promise };
+};
+
+const withManualWalletCancellation = async (walletPromise, connectorId) => {
+  const cancellation = createManualConnectCancellation(connectorId);
+  try {
+    return await Promise.race([walletPromise, cancellation.promise]);
+  } finally {
+    cancellation.cleanup();
+  }
+};
 
 const hasWalletConnection = ({ connectorData, wallet } = {}) => {
   return !!(wallet && connectorData?.account);
@@ -170,8 +249,12 @@ export function SessionProvider({ children }) {
     return connectors;
   }, [provider]);
 
-  const connectConnector = useCallback(async (connector) => {
-    const connectorData = await connector.connect({ onlyQRCode: true });
+  const connectConnector = useCallback(async (connector, { auto = false, connectorId } = {}) => {
+    const connectPromise = connector.connect({ onlyQRCode: true });
+    const connectorData = auto
+      ? await connectPromise
+      : await withManualWalletCancellation(connectPromise, connectorId);
+
     return {
       connectorData,
       wallet: connector.wallet
@@ -207,7 +290,7 @@ export function SessionProvider({ children }) {
       let wallet;
       for (let i = 0; i < (auto ? silentReconnectAttempts : 1); i++) {
         try {
-          ({ connectorData, wallet } = await connectConnector(selectedConnector));
+          ({ connectorData, wallet } = await connectConnector(selectedConnector, { auto, connectorId: selectedConnectorId }));
           if (!auto || hasWalletConnection({ connectorData, wallet }) || i === silentReconnectAttempts - 1) break;
           await wait(silentReconnectRetryDelay);
         } catch (e) {
@@ -275,6 +358,10 @@ export function SessionProvider({ children }) {
 
       else if (auto && isConnectorNotFoundError(e)) {
         clearSilentReconnect(dispatchSessionSuspended);
+        setStatus(STATUSES.DISCONNECTED);
+      }
+
+      else if (isLoginCancelledError(e)) {
         setStatus(STATUSES.DISCONNECTED);
       }
 
@@ -377,16 +464,17 @@ export function SessionProvider({ children }) {
     try {
       if (newSession.isDeployed) {
         let signature;
+        const walletId = normalizeConnectorId(connectedWalletId || walletAccount?.walletProvider?.id);
 
         try {
-          signature = await walletAccount.signMessage(loginMessage);
+          signature = await withManualWalletCancellation(walletAccount.signMessage(loginMessage), walletId);
         } catch (e) {
-          signature = await walletAccount.walletProvider?.account.signMessage(loginMessage);
+          if (isLoginCancelledError(e)) throw e;
+          signature = await withManualWalletCancellation(walletAccount.walletProvider?.account.signMessage(loginMessage), walletId);
         }
 
         if (signature?.code === 'CANCELED') throw new Error('User abort');
         const newToken = await api.verifyLogin(connectedAccount, { signature: signature.join(','), referredBy });
-        const walletId = walletAccount?.walletProvider?.id;
         Object.assign(newSession, { walletId, accountAddress: connectedAccount, token: newToken });
       } else {
         // If the wallet is not yet deployed, create an insecure session
@@ -400,7 +488,7 @@ export function SessionProvider({ children }) {
     } catch (e) {
       if (!isUpgradeInsecure) {
         logout();
-        if (['User abort', 'User rejected'].includes(e.message)) return;
+        if (isLoginCancelledError(e)) return;
         console.error(e);
         createAlert({
           type: 'GenericAlert',

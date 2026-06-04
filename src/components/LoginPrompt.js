@@ -1,12 +1,7 @@
-import styled, { keyframes } from 'styled-components';
+import styled from 'styled-components';
 
 import { ArgentXIcon, BraavosIcon } from '~/components/Icons';
 import { hexToRGB } from '~/theme';
-
-const waitSweep = keyframes`
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-`;
 
 const Panel = styled.div`
   box-sizing: border-box;
@@ -17,7 +12,6 @@ const Panel = styled.div`
   overflow: hidden;
   opacity: ${p => p.expanded ? 1 : 0};
   position: relative;
-  transform: translateY(${p => p.expanded ? '0' : '-12px'});
   transition: max-height 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-width 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 220ms ease,
