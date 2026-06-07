@@ -1,0 +1,46 @@
+name: Promote prerelease to production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name
+        id: image
+        run: |
+          IMAGE=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Promote prerelease to latest + production
+        run: |
+          IMAGE=${{ steps.image.outputs.image_name }}
+
+          echo "Promoting $IMAGE:prerelease"
+
+          # Inspect the digest of prerelease
+          DIGEST=$(docker buildx imagetools inspect $IMAGE:prerelease --format '{{.Manifest.Digest}}')
+
+          echo "Found digest: $DIGEST"
+
+          # Retag same digest as latest and production
+          docker buildx imagetools create \
+            -t $IMAGE:latest \
+            -t $IMAGE:production \
+            $IMAGE@${DIGEST}

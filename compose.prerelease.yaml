@@ -1,0 +1,16 @@
+services:
+  influence-client:
+    image: ghcr.io/adaliafoundation/influence-client:prerelease
+    container_name: influence-client
+    restart: unless-stopped
+    #ports:
+      #- 3000:3000    # main client port    # no binding needed, only docker access
+    networks:
+      - web
+    env_file:
+      - ./.env
+    # no command or entrypoint, use image entrypoint
+
+networks:
+  web:
+    external: true    # we create it with Caddy reverse-proxy container

@@ -56,8 +56,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy built app; we could probably copy a lot less in search for optimisation - to be researched
-COPY --from=builder /app ./
+# Copy built app
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/server.built.js ./
 
 # Copy runtime injection starting scripts
 COPY --chmod=755 runtime-injection.sh /usr/local/bin/runtime-injection.sh

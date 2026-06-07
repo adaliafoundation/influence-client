@@ -4,12 +4,14 @@ yarn-error.log
 
 .git
 .gitignore
+.github/
 
 .env
 .env.*
 
 Dockerfile
 .dockerignore
+compose*.yaml
 
 dist
 coverage

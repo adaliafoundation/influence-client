@@ -1,0 +1,21 @@
+services:
+  influence-client:
+    build:    # build the app
+      context: .
+      target: development
+    container_name: influence-client
+    restart: unless-stopped
+    #ports:
+      #- 3000:3000    # main client port    # no binding needed, only docker access
+    networks:
+      - web
+    env_file:
+      - ./.env
+    volumes:
+      - .:/app    # mount the project inside container for live edits
+      - /app/node_modules    # do not overwrite built node dependencies
+    # no command or entrypoint, use image entrypoint
+
+networks:
+  web:
+    external: true    # we create it with Caddy reverse-proxy container
