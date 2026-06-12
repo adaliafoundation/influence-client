@@ -172,7 +172,7 @@ const Interface = () => {
             <Route exact path="/listview/:assetType?">
               <ListView />
             </Route>
-            <Route path="/model/:assetType/:assetName?">
+            <Route path="/model/ship/:assetName?">
               <LinkedViewer />
             </Route>
             <Route path="/marketplace/:asteroidId([0-9]+)/:lotIndex(all|[0-9]+)?/:discriminator?">

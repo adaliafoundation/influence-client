@@ -30,29 +30,6 @@ const modelviewerDefaults = {
 
 const visualConfigs = {
   modelViewer: {
-    building: {
-      ...modelviewerDefaults,
-      emissiveAsBloom: true,
-      emissiveMapAsLightMap: true,
-      envmapStrength: 0.2,
-      keylightIntensity: 0,
-      lightmapStrength: 5,
-      rimlightIntensity: 0.5,
-
-      initialZoom: 0.1,
-      maxCameraDistance: 0.2,  // NOTE: use this or simple zoom constraints, not both
-      floorNodeName: 'Asteroid_Terrain', // (enforces collision detection with this node (only in y-axis direction))
-    },
-    resource: {
-      ...modelviewerDefaults,
-      background: null,
-      backgroundStrength: 0,
-      keylightIntensity: 1,
-      rimlightIntensity: 2,
-
-      initialZoom: 1.5,
-      simpleZoomConstraints: [0.85, 5], // TODO: if using simple zoom constraints, should probably not allow panning... maybe all should use maxCameraDistance?
-    },
     ship: {
       ...modelviewerDefaults,
       emissiveAsBloom: true,

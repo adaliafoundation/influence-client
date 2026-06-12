@@ -26,8 +26,8 @@ import useProcessManager from '~/hooks/actionManagers/useProcessManager';
 import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
 import { ResourceImage } from '~/components/ResourceThumbnail';
 import { useShipLink } from '~/components/ShipLink';
-import { getShipIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
+import { getShipSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import { formatFixed, formatTimer, getTerminatedAgreementStatus, locationsArrToObj } from '~/lib/utils';
 import { majorBorderColor } from './components';
 import useSyncedTime from '~/hooks/useSyncedTime';
@@ -459,6 +459,8 @@ export const BuildingBlock = ({ building, onSelectCrew, selectedCrew, setRef }) 
 };
 
 export const ShipBlock = ({ ship, onSelectCrew, selectedCrew, setRef }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const onClickShip = useShipLink({ shipId: ship.id, zoomToShip: true });
   const location = useMemo(() => locationsArrToObj(ship.Location?.locations || []));
 
@@ -486,7 +488,7 @@ export const ShipBlock = ({ ship, onSelectCrew, selectedCrew, setRef }) => {
     <SelectableRow ref={setRef} onClick={onClick}>
       <Thumbnail>
         {isMine && <MyAssetWrapper><MyAssetIcon /></MyAssetWrapper>}
-        <ResourceImage src={getShipIcon(ship.Ship.shipType, 'w150')} contain />
+        <ResourceImage style={getShipSpriteStyle(ship.Ship.shipType) || undefined} contain />
         <ClipCorner dimension={10} color={majorBorderColor} />
       </Thumbnail>
       <Info>

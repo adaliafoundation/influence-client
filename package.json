@@ -11,7 +11,7 @@
     "@avnu/avnu-sdk": "^4.0.1",
     "@floating-ui/react": "^0.27.19",
     "@influenceth/astro": "^0.2.5",
-    "@influenceth/sdk": "^2.3.8",
+    "@influenceth/sdk": "^2.4.0",
     "@popperjs/core": "^2.11.6",
     "@ramp-network/ramp-instant-sdk": "^4.0.5",
     "@react-hook/throttle": "^2.2.0",

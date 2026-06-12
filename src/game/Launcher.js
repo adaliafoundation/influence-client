@@ -8,6 +8,7 @@ import Badge from '~/components/Badge';
 import LoginPrompt from '~/components/LoginPrompt';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
+import { getLicensedAssetUrl } from '~/lib/assetUtils';
 import {
   ChevronDoubleRightIcon,
   UserIcon,
@@ -466,10 +467,7 @@ const Launcher = (props) => {
     dispatchLauncherPage();
     if (!hasSeenIntroVideo && !DISABLE_LAUNCH_TRAILER) {
       dispatchSeenIntroVideo(true);
-      dispatchCutscene(
-        `${appConfig.get('Cloudfront.otherUrl')}/videos/intro.m3u8`,
-        true
-      );
+      dispatchCutscene(getLicensedAssetUrl('videos/intro.m3u8'), true);
     }
   }, [accountAddress, , hasSeenIntroVideo]);
 

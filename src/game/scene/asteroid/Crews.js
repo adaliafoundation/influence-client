@@ -24,12 +24,12 @@ import { Address, Asteroid, Crewmate, Entity, Lot, Time } from '@influenceth/sdk
 import { useHistory } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { appConfig } from '~/appConfig';
 import { BLOOM_LAYER } from '~/game/Postprocessor';
 import useBlockTime from '~/hooks/useBlockTime';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import activities, { hydrateActivities } from '~/lib/activities';
 import api from '~/lib/api';
+import { getCrewmateSpriteImageUrl } from '~/lib/spriteUtils';
 import { getCrewAbilityBonuses, locationsArrToObj } from '~/lib/utils';
 import theme from '~/theme';
 
@@ -68,13 +68,57 @@ const spriteBorderColor = new Color(theme.colors.glowGreen);
 const activeCrewColor = new Color(0xffffff);
 const hoverColor = new Color(theme.colors.success);
 
+const clearCrewMarkerTexture = (crewMarker) => {
+  const material = crewMarker?.children?.[1]?.material;
+  if (!material) return;
+
+  if (material.map) {
+    material.map.dispose();
+  }
+
+  material.map = null;
+  material.opacity = 0;
+  material.needsUpdate = true;
+};
+
+const applyCrewMarkerTexture = async (crewMarker, crewmate, textureLoader, shouldApply) => {
+  const material = crewMarker?.children?.[1]?.material;
+  if (!material) return;
+
+  clearCrewMarkerTexture(crewMarker);
+
+  const imageUrl = await getCrewmateSpriteImageUrl(crewmate);
+  if (!shouldApply()) return;
+
+  if (!imageUrl) {
+    material.opacity = 0;
+    material.needsUpdate = true;
+    return;
+  }
+
+  const texture = textureLoader.load(imageUrl, (loadedTexture) => {
+    if (!shouldApply()) {
+      loadedTexture.dispose();
+      return;
+    }
+    material.needsUpdate = true;
+  });
+
+  if (material.map) {
+    material.map.dispose();
+  }
+  material.map = texture;
+  material.opacity = 1;
+  material.needsUpdate = true;
+};
+
 const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotPosition, radius }) => {
   const blockTime = useBlockTime();
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
   const history = useHistory();
   const { controls, gl, scene } = useThree();
-  const { crew, crewMovementActivity } = useCrewContext();
+  const { captain, crew, crewMovementActivity } = useCrewContext();
   const { accountAddress } = useSession();
 
   const activeCrewsDisplay = useStore((s) => s.gameplay.activeCrewsDisplay);
@@ -153,6 +197,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           const isOneWay = activity.event.name === 'CrewStationed';
           if (isOneWay) {
             crews[crew.id] = {
+              crew,
               origin: visitedLotIndex,
               destination: station.lotIndex,
               departure: startTime,
@@ -163,6 +208,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           // first leg of round trip + time on site
           else if (nowSec < finishTime - travelTime) {
             crews[crew.id] = {
+              crew,
               origin: station.lotIndex,
               destination: visitedLotIndex,
               departure: startTime,
@@ -174,6 +220,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           // second leg of round trip
           else {
             crews[crew.id] = {
+              crew,
               origin: visitedLotIndex,
               destination: station.lotIndex,
               departure: finishTime - travelTime,
@@ -388,25 +435,20 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
   // handle textures for active crew indicator
   useEffect(() => {
-    if (activeCrewMarker.current?.children?.[1]?.material) {
-      if (crew?.id) {
-        activeCrewMarker.current.children[1].material.map = textureLoader.current.load(`${appConfig.get('Api.influenceImage')}/v2/crews/${crew.id}/captain/image.png?bustOnly=true`);
-        activeCrewMarker.current.children[1].material.opacity = 1;
-        activeCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+    let isCurrent = true;
+    if (activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
+      applyCrewMarkerTexture(
+        activeCrewMarker.current,
+        captain,
+        textureLoader.current,
+        () => isCurrent
+      ).catch(() => clearCrewMarkerTexture(activeCrewMarker.current));
     }
     return () => {
-      if (activeCrewMarker.current?.children?.[1]?.material) {
-        if (activeCrewMarker.current.children[1].material.map) {
-          activeCrewMarker.current.children[1].material.map.dispose();
-        }
-
-        activeCrewMarker.current.children[1].material.map = null;
-        activeCrewMarker.current.children[1].material.opacity = 0;
-        activeCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+      isCurrent = false;
+      clearCrewMarkerTexture(activeCrewMarker.current);
     }
-  }, [crew?.id]);
+  }, [captain]);
 
   useEffect(() => {
     [0, 1].forEach((i) => {
@@ -432,6 +474,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   const [selected, setSelected] = useState();
   const highlightedCrewId = hovered || selected;
   useEffect(() => {
+    let isCurrent = true;
     if (highlightedCrewArc.current && highlightedCrewMarker.current) {
       if (ongoingTravel[highlightedCrewId]?.curve) {
         setArcPoints(highlightedCrewArc.current, ongoingTravel[highlightedCrewId].curve.getPoints(arcSegments));
@@ -440,14 +483,19 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           highlightedCrewMarker.current.children[0].material.opacity = 1;
           highlightedCrewMarker.current.children[0].material.needsUpdate = true;
         }
-        if (highlightedCrewMarker.current?.children?.[1]?.material) {
-          highlightedCrewMarker.current.children[1].material.map = textureLoader.current.load(`${appConfig.get('Api.influenceImage')}/v2/crews/${highlightedCrewId}/captain/image.png?bustOnly=true`);
-          highlightedCrewMarker.current.children[1].material.opacity = 1;
-          highlightedCrewMarker.current.children[1].material.needsUpdate = true;
+        const highlightedCaptain = ongoingTravel[highlightedCrewId]?.crew?._crewmates?.[0];
+        if (highlightedCrewMarker.current?.children?.[1]?.material && highlightedCaptain?.Crewmate) {
+          applyCrewMarkerTexture(
+            highlightedCrewMarker.current,
+            highlightedCaptain,
+            textureLoader.current,
+            () => isCurrent
+          ).catch(() => clearCrewMarkerTexture(highlightedCrewMarker.current));
         }
       }
     }
     return () => {
+      isCurrent = false;
       if (highlightedCrewArc.current) {
         setArcPoints(highlightedCrewArc.current, nullArcPoints.current);
       }
@@ -455,15 +503,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         highlightedCrewMarker.current.children[0].material.opacity = 0;
         highlightedCrewMarker.current.children[0].material.needsUpdate = true;
       }
-      if (highlightedCrewMarker.current?.children?.[1]?.material) {
-        if (highlightedCrewMarker.current.children[1].material.map) {
-          highlightedCrewMarker.current.children[1].material.map.dispose();
-        }
-
-        highlightedCrewMarker.current.children[1].material.map = null;
-        highlightedCrewMarker.current.children[1].material.opacity = 0;
-        highlightedCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+      clearCrewMarkerTexture(highlightedCrewMarker.current);
     };
   }, [highlightedCrewId, ongoingTravel, setArcPoints]);
 

@@ -304,7 +304,7 @@ class TerrainChunk {
 
     if (this._params.emissiveParams && data.emissiveBitmap) {
       this._material.color.setHex(0x222222); // darker modulation for color map so light doesn't wash out emissivity map
-      this._material.emissive.setHex(this._params.emissiveParams.color);
+      this._material.emissive.set(this._params.emissiveParams.color);
       materialNeedsUpdate = this.updateMaterialTexture(
         'emissiveMap',
         data.emissiveBitmap,

@@ -16,8 +16,6 @@
     "argentWebWallet": "",
     "avnu": "",
     "influence": "",
-    "influenceImage": "",
-    "ipfs": "",
     "ramp": "",
     "ClientId": {
       "google": "",
@@ -27,10 +25,8 @@
       "stripe": ""
     }
   },
-  "Cloudfront": {
-    "imageUrl": "",
-    "otherUrl": "",
-    "bucket": ""
+  "ClientMedia": {
+    "cid": "QmdD7MriPcqzJSC3vyUjq2Sifj5s2pEWLnfv4UxMJSRTjt"
   },
   "Ethereum": {
     "Address": {

@@ -84,8 +84,9 @@ import useShip from '~/hooks/useShip';
 import { reactBool, formatFixed, formatTimer, nativeBool, locationsArrToObj, keyify, formatPrice, getCrewAbilityBonuses, ordersToFills } from '~/lib/utils';
 import actionStage from '~/lib/actionStages';
 import constants from '~/lib/constants';
-import { getBuildingIcon, getLotShipIcon, getShipIcon } from '~/lib/assetUtils';
+import { getLotShipIcon, getShipIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
+import { getBuildingSpriteStyle, getLotShipSpriteStyle, getShipSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import theme, { hexToRGB } from '~/theme';
 import { theming } from '../ActionDialog';
 import ThumbnailWithData from '~/components/AssetThumbnailWithData';
@@ -3475,13 +3476,18 @@ export const AsteroidImage = ({ asteroid, size }) => {
 }
 
 export const ShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, iconOverlayColor, inventories, inventoryBonuses, showInventoryStatusForType, simulated, size = 'w150', backgroundSize = 'cover', style = {} }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const shipAsset = Ship.TYPES[Math.abs(shipType)]; // abs for simulated ships
   if (!shipAsset) return null;
 
   const capacity = getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
+  const spriteStyle = size === 'w150' ? getShipSpriteStyle(shipAsset.i, simulated) : null;
   return (
     <ShipThumbnailWrapper style={style}>
-      <ResourceImage src={getShipIcon(shipAsset.i, size, simulated)} style={{ backgroundSize }} />
+      <ResourceImage
+        src={spriteStyle ? undefined : getShipIcon(shipAsset.i, size, simulated)}
+        style={{ backgroundSize, ...spriteStyle }} />
       {showInventoryStatusForType !== undefined && (
         <>
           <InventoryUtilization
@@ -3502,13 +3508,18 @@ export const ShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, ic
 };
 
 export const LotShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, iconOverlayColor, inventories, inventoryBonuses, showInventoryStatusForType, size = 'w150', backgroundSize = 'cover', style = {} }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const shipAsset = Ship.TYPES[Math.abs(shipType)]; // abs for simulated ships
   if (!shipAsset) return null;
 
   const capacity = getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
+  const spriteStyle = size === 'w150' ? getLotShipSpriteStyle(shipAsset.i) : null;
   return (
     <ShipThumbnailWrapper style={style}>
-      <ResourceImage src={getLotShipIcon(shipAsset.i, size)} style={{ backgroundSize }} />
+      <ResourceImage
+        src={spriteStyle ? undefined : getLotShipIcon(shipAsset.i, size)}
+        style={{ backgroundSize, ...spriteStyle }} />
       {showInventoryStatusForType !== undefined && (
         <>
           <InventoryUtilization
@@ -3544,14 +3555,18 @@ export const BuildingImage = ({
   style,
   unfinished
 }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.buildings);
+
   const buildingAsset = Building.TYPES[buildingType];
   if (!buildingAsset) return null;
 
   const capacity = inventory ? getCapacityStats(inventory, inventoryBonuses) : getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
   const closerLimit = (capacity.volume.used + capacity.volume.reserved) / capacity.volume.max > (capacity.mass.used + capacity.mass.reserved) / capacity.mass.max ? 'volume' : 'mass';
+  const spriteStyle = getBuildingSpriteStyle(buildingAsset.i, unfinished);
   return (
     <BuildingThumbnailWrapper outlineColor={iconBorderColor} style={style}>
-      <ResourceImage src={getBuildingIcon(buildingAsset.i, 'w150', unfinished)} />
+      <ResourceImage
+        style={spriteStyle || undefined} />
       {inventory !== false && (capacity?.mass?.max || capacity?.mass?.volume) && (
         <>
           <InventoryLabel overloaded={error}>

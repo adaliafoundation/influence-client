@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LoadingAnimation from 'react-spinners/PuffLoader';
 import styled from 'styled-components';
-import pick from 'lodash/pick';
 import { Crewmate } from '@influenceth/sdk';
 
-import { appConfig } from '~/appConfig';
 import silhouette from '~/assets/images/silhouette.png';
 import CrewmateCardOverlay, { cardTransitionSpeed, cardTransitionFunction } from '~/components/CrewmateCardOverlay';
 import CrewClassIcon from '~/components/CrewClassIcon';
 import CrewCollectionEmblem from '~/components/CrewCollectionEmblem';
 import DataReadout from '~/components/DataReadout';
 import formatters from '~/lib/formatters';
-import { safeBigInt } from '~/lib/utils';
+import { canUseCrewmateSprite, getCrewmateCompositorImageUrl, getCrewmateSpriteImageUrl, getCrewmateSpriteKey } from '~/lib/spriteUtils';
+import useCrew from '~/hooks/useCrew';
+import useCrewmates from '~/hooks/useCrewmates';
 
 const CardLayer = styled.div`
   position: absolute;
@@ -176,11 +176,13 @@ const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
       {...props}>
       {imageLoaded ? null : <LoadingAnimation color={'white'} cssOverride={loadingCss} />}
       <CardImage visible={imageLoaded} applyMask={!overlay && !props.hideMask}>
-        <img
-          ref={watchImageLoad}
-          alt={props.crewmateName}
-          src={imageFailed ? silhouette : readyToLoadUrl}
-          onError={() => setImageFailed(true)} />
+        {readyToLoadUrl && (
+          <img
+            ref={watchImageLoad}
+            alt={props.crewmateName}
+            src={imageFailed ? silhouette : readyToLoadUrl}
+            onError={() => setImageFailed(true)} />
+        )}
       </CardImage>
       <CardHeader>
         <CrewName {...props}>
@@ -227,26 +229,75 @@ const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
   );
 };
 
-const CrewmateCard = ({ crewmate = {}, useExplicitAppearance, ...props }) => {
+const parseDimension = (value) => {
+  if (!value) return null;
+  if (typeof value === 'number') return value;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const shouldUseCrewmateSprite = ({ crewmate, height, width }) => {
+  if (!canUseCrewmateSprite(crewmate)) return false;
+
+  const numericWidth = parseDimension(width);
+  const numericHeight = parseDimension(height);
+  return (numericWidth && numericWidth <= 250) || (numericHeight && numericHeight <= 333);
+};
+
+const CrewmateCard = ({ crewmate = {}, ...props }) => {
   const useName = props.hideIfNoName
     ? (crewmate.Name?.name || '')
     : formatters.crewmateName(crewmate);
-
-  let imageUrl = useMemo(() => {
-    let url = silhouette;
-    let options = '';
-    if (props.height) options += `&height=${props.height}`;
-    if (props.width) options += `&width=${props.width}`;
-
-    if (!useExplicitAppearance && crewmate?.id) {
-      url = `${appConfig.get('Api.influenceImage')}/v2/crewmates/${crewmate.id}/image.png?bustOnly=true${options}`;
-    } else if (safeBigInt(crewmate.Crewmate?.appearance || 0) > 0n) {
-      url = `${appConfig.get('Api.influenceImage')}/v1/crew/provided/image.svg?bustOnly=true&options=${JSON.stringify(
-        pick(crewmate.Crewmate, ['coll', 'class', 'title', 'appearance'])
-      )}`;
+  const visualCrewmate = useMemo(() => ({
+    Crewmate: {
+      appearance: crewmate.Crewmate?.appearance,
+      class: crewmate.Crewmate?.class,
+      coll: crewmate.Crewmate?.coll,
+      title: crewmate.Crewmate?.title
     }
-    return url;
-  }, [crewmate, useExplicitAppearance]);
+  }), [
+    crewmate.Crewmate?.appearance,
+    crewmate.Crewmate?.class,
+    crewmate.Crewmate?.coll,
+    crewmate.Crewmate?.title
+  ]);
+
+  const spriteKey = useMemo(() => (
+    shouldUseCrewmateSprite({ crewmate: visualCrewmate, height: props.height, width: props.width })
+      ? getCrewmateSpriteKey(visualCrewmate)
+      : null
+  ), [visualCrewmate, props.height, props.width]);
+  const compositorKey = useMemo(() => (
+    !spriteKey && canUseCrewmateSprite(visualCrewmate)
+      ? getCrewmateSpriteKey(visualCrewmate)
+      : null
+  ), [visualCrewmate, spriteKey]);
+  const [imageUrl, setImageUrl] = useState();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!spriteKey && !compositorKey) {
+      setImageUrl(silhouette);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const getImageUrl = spriteKey ? getCrewmateSpriteImageUrl : getCrewmateCompositorImageUrl;
+    getImageUrl(visualCrewmate)
+      .then((url) => {
+        if (isMounted) setImageUrl(url || silhouette);
+      })
+      .catch((e) => {
+        console.warn('Failed to compose local crewmate sprite', e);
+        if (isMounted) setImageUrl(silhouette);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [compositorKey, spriteKey, visualCrewmate]);
 
   return (
     <AbstractCard
@@ -261,15 +312,21 @@ const CrewmateCard = ({ crewmate = {}, useExplicitAppearance, ...props }) => {
 };
 
 export const CrewCaptainCard = ({ crewId, ...props }) => {
-  let options = '';
-  if (props.height) options += `&height=${props.height}`;
-  if (props.width) options += `&width=${props.width}`;
+  const { data: crew, isError: crewError } = useCrew(crewId);
+  const captainId = crew?.Crew?.roster?.[0];
+  const { data: captainCrewmates, isError: captainError } = useCrewmates(captainId ? [captainId] : undefined);
+  const captain = captainCrewmates?.[0];
 
-  let imageUrl = useMemo(() => crewId
-    ? `${appConfig.get('Api.influenceImage')}/v2/crews/${crewId}/captain/image.png?bustOnly=true${options}`
-    : silhouette,
-    [crewId]
-  );
+  if (captain?.Crewmate) {
+    return (
+      <CrewmateCard
+        crewmate={captain}
+        {...props}
+      />
+    );
+  }
+
+  const imageUrl = (crewError || captainError || (crew && !captainId)) ? silhouette : undefined;
 
   return (
     <AbstractCard

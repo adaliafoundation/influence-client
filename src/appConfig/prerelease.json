@@ -8,14 +8,7 @@
     "argentWebWallet": "https://sepolia-web.ready.co",
     "avnu": "https://sepolia.api.avnu.fi",
     "influence": "https://api-prerelease.influenceth.io",
-    "influenceImage": "https://images-prerelease.influenceth.io",
-    "ipfs": "https://influence.infura-ipfs.io/ipfs",
     "ramp": "https://app.demo.ramp.network"
-  },
-  "Cloudfront": {
-    "imageUrl": "https://d2xo5vocah3zyk.cloudfront.net",
-    "otherUrl": "https://d1c1daundk1ax0.cloudfront.net/influence/prerelease",
-    "bucket": "unstoppablegames"
   },
   "Ethereum": {
     "Address": {

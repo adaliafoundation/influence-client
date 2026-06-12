@@ -191,7 +191,7 @@ const ActionItemRow = styled.div`
   ${Progress} {
     position: absolute;
     bottom: 0;
-    left: ${ICON_WIDTH}px;
+    left: 0;
     height: 4px;
     right: 0;
     & > * {
@@ -371,7 +371,7 @@ const ActionItem = ({ data, getActivityConfig }) => {
       </Details>
       {type === 'pending' && (
         <Progress>
-          <BarLoader color="currentColor" />
+          <BarLoader color="currentColor" width="100%" />
         </Progress>
       )}
     </ActionItemRow>

@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { NoToneMapping } from 'three';
-import { Building, Product, Ship } from '@influenceth/sdk';
+import { Ship } from '@influenceth/sdk';
 
 import { appConfig } from '~/appConfig';
 import Button from '~/components/ButtonAlt';
@@ -12,7 +12,7 @@ import NumberInput from '~/components/NumberInput';
 import DevToolContext from '~/contexts/DevToolContext';
 import theme from '~/theme';
 import { HudMenuCollapsibleSection, Scrollable } from './components/components';
-import { getBuildingModel, getProductModel, getShipModel } from '~/lib/assetUtils';
+import { getShipModel } from '~/lib/assetUtils';
 import { nativeBool } from '~/lib/utils';
 import TextInput from '~/components/TextInput';
 import visualConfigs, { toneMaps } from '~/lib/visuals';
@@ -102,8 +102,6 @@ const DevTools = () => {
   const [modelOverride, setModelOverride] = useState();
 
   const assets = useMemo(() => {
-    if (assetType === 'building') return Object.keys(Building.TYPES).map((i) => ({ ...Building.TYPES[i], modelUrl: getBuildingModel(i) }));
-    if (assetType === 'resource') return Object.keys(Product.TYPES).map((i) => ({ ...Product.TYPES[i], modelUrl: getProductModel(i) }));
     if (assetType === 'ship') return Object.keys(Ship.TYPES).map((i) => ({ ...Ship.TYPES[i], modelUrl: getShipModel(i) }));
   }, [assetType]);
   
@@ -212,20 +210,6 @@ const DevTools = () => {
     <Scrollable>
       <HudMenuCollapsibleSection titleText="Viewer">
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Button
-            size="small"
-            onClick={() => setters.setAssetType('building')}
-            background={assetType === 'building' ? theme.colors.main : undefined }
-            style={{ minWidth: 90, color: assetType === 'building' ? 'black' : undefined }}>
-            Buildings
-          </Button>
-          <Button
-            size="small"
-            onClick={() => setters.setAssetType('resource')}
-            background={assetType === 'resource' ? theme.colors.main : undefined }
-            style={{ minWidth: 90, color: assetType === 'resource' ? 'black' : undefined }}>
-            Resources
-          </Button>
           <Button
             size="small"
             onClick={() => setters.setAssetType('ship')}

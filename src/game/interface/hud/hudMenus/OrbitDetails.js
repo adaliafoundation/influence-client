@@ -16,8 +16,8 @@ import useAsteroidShips from '~/hooks/useAsteroidShips';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
-import { getShipIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
+import { getShipSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import { ShipImage } from '../actionDialogs/components';
 import { Tray, majorBorderColor } from './components/components';
 
@@ -128,12 +128,14 @@ const Ready = styled.div`
 `;
 
 const ShipRow = ({ ship }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const onClickShip = useShipLink({ shipId: ship.id, zoomToShip: true })
   return (
     <SelectableRow onClick={onClickShip}>
       <Thumbnail>
         <MyAssetWrapper><MyAssetIcon /></MyAssetWrapper>
-        <ResourceImage src={getShipIcon(ship.Ship.shipType, 'w150')} contain />
+        <ResourceImage style={getShipSpriteStyle(ship.Ship.shipType) || undefined} contain />
         <ClipCorner dimension={10} color={majorBorderColor} />
       </Thumbnail>
       <Info>
