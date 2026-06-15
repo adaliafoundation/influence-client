@@ -1,4 +1,4 @@
-import { Suspense, useContext, useEffect, useMemo, useState } from 'react';
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Object3D, Vector3 } from 'three';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -45,6 +45,51 @@ const StyledContainer = styled.div`
   top: 0;
   width: 100%;
 `;
+
+const FrameRateLimiter = ({ enabled, frameRateCap }) => {
+  const advance = useThree(s => s.advance);
+  const clock = useThree(s => s.clock);
+  const advanceRef = useRef(advance);
+  const animationFrameRef = useRef();
+  const elapsedTimeRef = useRef();
+  const lastFrameTimeRef = useRef();
+
+  useEffect(() => {
+    advanceRef.current = advance;
+  }, [advance]);
+
+  useEffect(() => {
+    if (!enabled || !frameRateCap) return undefined;
+
+    elapsedTimeRef.current = clock.elapsedTime;
+    const minFrameInterval = 1000 / frameRateCap;
+    const renderFrame = (timestamp) => {
+      if (
+        lastFrameTimeRef.current === undefined ||
+        timestamp - lastFrameTimeRef.current >= minFrameInterval - 0.5
+      ) {
+        const frameDelta = lastFrameTimeRef.current === undefined
+          ? 0
+          : Math.min((timestamp - lastFrameTimeRef.current) / 1000, 0.1);
+        lastFrameTimeRef.current = timestamp;
+        elapsedTimeRef.current += frameDelta;
+        advanceRef.current(elapsedTimeRef.current, true);
+      }
+
+      animationFrameRef.current = requestAnimationFrame(renderFrame);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(renderFrame);
+
+    return () => {
+      cancelAnimationFrame(animationFrameRef.current);
+      elapsedTimeRef.current = undefined;
+      lastFrameTimeRef.current = undefined;
+    };
+  }, [clock, enabled, frameRateCap]);
+
+  return null;
+};
 
 const WrappedScene = () => {
   const { clock, controls } = useThree();
@@ -105,6 +150,9 @@ const Scene = () => {
   const zoomedFrom = useStore(s => s.asteroids.zoomedFrom);
   const setZoomedFrom = useStore(s => s.dispatchAsteroidZoomedFrom);
   const pixelRatio = useStore(s => s.graphics.pixelRatio || 1);
+  const bloomResolutionScale = useStore(s => s.graphics.bloomResolutionScale);
+  const enablePostprocessing = useStore(s => s.graphics.enablePostprocessing);
+  const frameRateCap = useStore(s => s.graphics.frameRateCap ?? 60);
   const statsOn = useStore(s => s.graphics.stats);
 
   const [contextLost, setContextLost] = useState(false);
@@ -127,9 +175,10 @@ const Scene = () => {
     const defaults = visualConfigs.scene;
     const o = assetType === 'scene' ? overrides : {};
     return [
-      o.enablePostprocessing !== undefined ? o.enablePostprocessing : true,
+      o.enablePostprocessing ?? enablePostprocessing ?? defaults.enablePostprocessing,
       {
         radius: o?.bloomRadius || defaults.bloomRadius,
+        resolutionScale: o?.bloomResolutionScale ?? bloomResolutionScale ?? defaults.bloomResolutionScale,
         smoothing: o?.bloomSmoothing || defaults.bloomSmoothing,
         strength: o?.bloomStrength || defaults.bloomStrength,
         threshold: o?.bloomThreshold || defaults.bloomThreshold,
@@ -137,9 +186,13 @@ const Scene = () => {
         toneMappingExposure: o?.toneMappingExposure || defaults.toneMappingExposure,
       }
     ];
-  }, [overrides]);
+  }, [bloomResolutionScale, enablePostprocessing, overrides]);
 
-  const frameloop = useMemo(() => canvasStack?.length === 0 ? 'always' : 'never', [canvasStack]);
+  const sceneActive = canvasStack?.length === 0;
+  const cappedFrameRate = frameRateCap > 0 ? frameRateCap : null;
+  const frameloop = useMemo(() => (
+    sceneActive && !cappedFrameRate ? 'always' : 'never'
+  ), [cappedFrameRate, sceneActive]);
 
   return (
     <StyledContainer>
@@ -150,6 +203,7 @@ const Scene = () => {
         linear={postprocessingEnabled/* postprocessing will handle gamma autocorrection */}
         frameloop={frameloop}
         style={canvasStyle}>
+        <FrameRateLimiter enabled={sceneActive && !!cappedFrameRate} frameRateCap={cappedFrameRate} />
         <GpuContextLostReporter setContextLost={setContextLost} />
         <ContextBridge>
           <Suspense fallback={null}>

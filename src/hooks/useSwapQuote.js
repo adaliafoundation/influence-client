@@ -16,6 +16,7 @@ const useSwapQuote = (sellToken, buyToken, amount, accountAddress = false) => {
       return quotes?.[0] ? (parseInt(quotes[0].buyAmount) / parseInt(quotes[0].sellAmount)) : 0;
     },
     enabled: !!(sellToken && buyToken),
+    meta: { globalLoader: false },
     refetchInterval: 60e3,
   });
 };

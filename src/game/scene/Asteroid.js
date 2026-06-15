@@ -802,6 +802,7 @@ const AsteroidComponent = () => {
       if (lotTally < selectedLot.lotIndex) { dispatchLotSelected(); return; }
 
       automatingCamera.current = true;
+      gsap.killTweensOf(controls.object.position);
 
       const currentCameraHeight = controls.object.position.length();
       const targetAltitude = (cameraAltitude && cameraAltitude < 5000) ? cameraAltitude : 5000;
@@ -1047,7 +1048,7 @@ const AsteroidComponent = () => {
     // ^^^
 
     // if builder is working on an update, manage within frame rate
-    if (geometry.current.builder.isUpdating()) {
+    if (!automatingCamera.current && geometry.current.builder.isUpdating()) {
       // keep building maps until maps are ready (some per frame)
       if (geometry.current.builder.isWaitingOnMaps()) {
         // TODO: (redo) vvv BENCHMARK (~1ms / max frameTimeLeftms)

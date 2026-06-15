@@ -26,13 +26,11 @@ import StripeListener from '~/game/StripeListener';
 import useSession from '~/hooks/useSession';
 import useServiceWorker from '~/hooks/useServiceWorker';
 import useStore from '~/hooks/useStore';
-import constants from '~/lib/constants';
+import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import ScreensizeWarning from '~/ScreensizeWarning';
 import theme from '~/theme';
 
 import { initializeTagManager } from './gtm';
-
-const { GRAPHICS_DEFAULTS } = constants;
 
 const StyledMain = styled.main`
   bottom: 0;
@@ -174,8 +172,9 @@ const Game = () => {
 
       // init autodetect (since it was recently added to store)
       if (autodetectNeedsInit) {
+        const detectedDefaults = getGraphicsDefaults(gpuInfo);
         setAutodetect(
-          graphics?.textureQuality === GRAPHICS_DEFAULTS[gpuInfo.tier].textureQuality,
+          graphics?.textureQuality === detectedDefaults.textureQuality,
           gpuInfo
         );
       }

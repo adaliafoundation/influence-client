@@ -378,6 +378,17 @@ const DevTools = () => {
                     onChange={(v) => setters.setBloomRadius(parseFloat(v))} />
                 </Miniform>
 
+                <Miniform>
+                  <label>Bloom Resolution Scale</label>
+                  <NumberInput
+                    disabled={nativeBool(isLoading)}
+                    initialValue={settings.bloomResolutionScale}
+                    min="0.25"
+                    max="1"
+                    step="0.05"
+                    onChange={(v) => setters.setBloomResolutionScale(parseFloat(v) || 1)} />
+                </Miniform>
+
                 {/* NOTE: for @react-three/postprocessing bloom
                   <Miniform>
                     <label>Bloom Smoothing (0 - 1)</label>

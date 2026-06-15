@@ -8,7 +8,9 @@ const loadingCss = {
 };
 
 const QueryLoader = () => {
-  const isFetching = useIsFetching();
+  const isFetching = useIsFetching({
+    predicate: (query) => query.meta?.globalLoader !== false,
+  });
   return isFetching
     ? (
       <div style={{ left: 0, pointerEvents: 'none', position: 'fixed', right: 0, top: 0, zIndex: 10000 }}>

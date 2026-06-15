@@ -42,6 +42,7 @@ const visualConfigs = {
   scene: {
     backgroundStrength: 0.4,
     bloomRadius: 0.6,
+    bloomResolutionScale: 0.5,
     bloomStrength: 0.5,
     enablePostprocessing: true,
     toneMapping: CineonToneMapping,

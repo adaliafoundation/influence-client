@@ -42,10 +42,24 @@ const FRAGMENT_SHADER = `
 const darkMaterial = new MeshBasicMaterial({ color: 'black' });
 
 const defaultBloomParams = {
+  resolutionScale: 1,
   threshold: 0,
   strength: 0.8,
   radius: 0.5,
 }
+
+const clampBloomResolutionScale = (resolutionScale) => Math.min(1, Math.max(0.25, resolutionScale || 1));
+
+const getRenderSize = (size, pixelRatio, resolutionScale = 1) => new Vector2(
+  Math.max(1, Math.round(size.width * pixelRatio * resolutionScale)),
+  Math.max(1, Math.round(size.height * pixelRatio * resolutionScale))
+);
+
+const createRenderTarget = (size) => new WebGLRenderTarget(size.x, size.y, {
+  format: RGBAFormat,
+  colorSpace: SRGBColorSpace,
+  type: FloatType
+});
 
 const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   const { gl: renderer, camera, scene, size } = useThree();
@@ -55,6 +69,8 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   const bloomPass = useRef();
   const bloomComposer = useRef();
   const finalComposer = useRef();
+  const bloomTarget = useRef();
+  const finalTarget = useRef();
   const backgrounds = useRef({});
   const colors = useRef({});
   const materials = useRef({});
@@ -117,23 +133,31 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   }, [renderer, bloomParams?.toneMappingExposure]);
 
   useEffect(() => {
-    renderer.setPixelRatio(pixelRatio);
-    const renderScene = new RenderPass(scene, camera);
+    if (!bloomPass.current) return;
 
-    bloomPass.current = new UnrealBloomPass(new Vector2(size.width * pixelRatio, size.height * pixelRatio));
     Object.keys(defaultBloomParams).forEach((k) => {
+      if (k === 'resolutionScale') return;
+      bloomPass.current[k] = Object.keys(bloomParams).includes(k) ? bloomParams[k] : defaultBloomParams[k];
+    });
+  }, [bloomParams?.radius, bloomParams?.strength, bloomParams?.threshold]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    renderer.setPixelRatio(pixelRatio);
+    const bloomSize = getRenderSize(size, pixelRatio, clampBloomResolutionScale(bloomParams?.resolutionScale));
+    const finalSize = getRenderSize(size, pixelRatio);
+
+    bloomPass.current = new UnrealBloomPass(bloomSize);
+    Object.keys(defaultBloomParams).forEach((k) => {
+      if (k === 'resolutionScale') return;
       bloomPass.current[k] = Object.keys(bloomParams).includes(k) ? bloomParams[k] : defaultBloomParams[k];
     });
 
-    const target = new WebGLRenderTarget(size.width * pixelRatio, size.height * pixelRatio, {
-      format: RGBAFormat,
-      colorSpace: SRGBColorSpace,
-      type: FloatType
-    });
+    bloomTarget.current = createRenderTarget(bloomSize);
+    finalTarget.current = createRenderTarget(finalSize);
 
-    bloomComposer.current = new EffectComposer(renderer, target);
+    bloomComposer.current = new EffectComposer(renderer, bloomTarget.current);
     bloomComposer.current.renderToScreen = false;
-    bloomComposer.current.addPass(renderScene);
+    bloomComposer.current.addPass(new RenderPass(scene, camera));
     bloomComposer.current.addPass(bloomPass.current);
 
     const selectiveBloomPass = new ShaderPass(
@@ -153,8 +177,8 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
     
     const outputPass = new OutputPass();
 
-    finalComposer.current = new EffectComposer(renderer, target);
-    finalComposer.current.addPass(renderScene);
+    finalComposer.current = new EffectComposer(renderer, finalTarget.current);
+    finalComposer.current.addPass(new RenderPass(scene, camera));
     finalComposer.current.addPass(selectiveBloomPass);
     finalComposer.current.addPass(outputPass);
 
@@ -163,12 +187,15 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
       bloomComposer.current?.dispose?.();
       finalComposer.current?.dispose?.();
       selectiveBloomPass?.material?.dispose?.();
-      target?.dispose?.();
+      bloomTarget.current?.dispose?.();
+      finalTarget.current?.dispose?.();
+      bloomTarget.current = null;
+      finalTarget.current = null;
       backgrounds.current = {};
       colors.current = {};
       materials.current = {};
     };
-  }, [bloomParams, size.width, size.height, pixelRatio]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [camera, renderer, scene, size.width, size.height, pixelRatio, bloomParams?.resolutionScale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFrame(({ camera, gl, scene }) => {
     try {

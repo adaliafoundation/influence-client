@@ -61,6 +61,8 @@ const MAX_LEASE_INSTANCES = getMaxInstancesForAltitude(LEASE_VISIBILITY_ALTITUDE
 
 const MOUSE_THROTTLE_DISTANCE = 50 ** 2;
 const MOUSE_THROTTLE_TIME = 1000 / 30; // ms
+const SELECTION_RETICULE_PULSE_AMPLITUDE = 0.1;
+const SELECTION_RETICULE_PULSE_SPEED = 7.5;
 
 const lotUseTextures = {
   [Building.IDS.WAREHOUSE]: `${process.env.PUBLIC_URL}/textures/buildings/Warehouse.png`,
@@ -749,7 +751,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
     }
   }, [attachTo?.quaternion, selectedLotIndex]);
 
-  const selectionAnimationTime = useRef(0);
+  const selectionAnimationStartTime = useRef(0);
   useEffect(() => {
     if (!attachTo) return;
 
@@ -770,7 +772,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
       orientation.applyQuaternion(attachTo.quaternion);
       selectionMesh.current.lookAt(orientation);
 
-      selectionAnimationTime.current = 0;
+      selectionAnimationStartTime.current = performance.now() / 1000;
       selectionMesh.current.material.opacity = 1;
       mouseHoverMesh.current.material.opacity = 0;
     } else {
@@ -809,15 +811,14 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
 
   const mouseThrottleTime = useMemo(() => MOUSE_THROTTLE_TIME / (TIME_ACCELERATION / 24), [TIME_ACCELERATION]);
 
-  useFrame((state, delta) => {
-    selectionAnimationTime.current = (selectionAnimationTime.current || 0) + delta;
-
+  useFrame((state) => {
     // if no lots, nothing to do
     if (!lotTally) return;
 
     // pulse the size of the selection reticule
     if (selectionMesh.current && positions.current && selectedLotIndex) {
-      selectionMesh.current.scale.x = 1 + 0.1 * Math.sin(7.5 * selectionAnimationTime.current);
+      const selectionAnimationTime = performance.now() / 1000 - selectionAnimationStartTime.current;
+      selectionMesh.current.scale.x = 1 + SELECTION_RETICULE_PULSE_AMPLITUDE * Math.sin(SELECTION_RETICULE_PULSE_SPEED * selectionAnimationTime);
       selectionMesh.current.scale.y = selectionMesh.current.scale.x;
     }
 
