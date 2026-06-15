@@ -79,7 +79,7 @@ const lotUseTextures = {
   63: `${process.env.PUBLIC_URL}/textures/buildings/Ship.png`
 };
 
-const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, cameraNormalized, config, getLockToSurface, getRotation }) => {
+const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, cameraAutomationVersion, cameraNormalized, config, getCameraIsAnimating, getLockToSurface, getRotation }) => {
   const { token } = useSession();
   const { crew } = useCrewContext();
   const { data: TIME_ACCELERATION } = useConstants('TIME_ACCELERATION');
@@ -114,6 +114,9 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   const lotScaledMatrixScale = useRef();
   const lotMatrixObject = useRef(new Object3D());
   const lotScaleVector = useRef(new Vector3(1, 1, 1));
+  const renderedLotIndicesByUse = useRef({});
+  const renderedLeaseLotIndices = useRef([]);
+  const renderedMouseableLotIndices = useRef([]);
 
   const mouseableMesh = useRef();
   const lotMeshes = useRef({});
@@ -524,7 +527,8 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
     };
   }, [attachTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const lotScale = useMemo(() => Math.max(1, Math.sqrt(cameraAltitude / 10000)), [cameraAltitude]);
+  const getLotScale = useCallback((altitude) => Math.max(1, Math.sqrt(Math.max(0, altitude || 0) / 10000)), []);
+  const lotScale = useMemo(() => getLotScale(cameraAltitude), [cameraAltitude, getLotScale]);
   const lotsReady = useMemo(() => {
     return !isLoading &&
       !!lotResultMap &&
@@ -541,49 +545,76 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
     resultsByRegion
   ]);
 
+  const syncLotScale = useCallback((nextLotScale) => {
+    if (lotScaledMatrixScale.current === nextLotScale) return false;
+    lotScaledMatrices.current = [];
+    lotScaledMatrixScale.current = nextLotScale;
+    lotScaleVector.current.set(nextLotScale, nextLotScale, nextLotScale);
+    return true;
+  }, []);
+
+  const getLotBaseMatrix = useCallback((lotZeroIndex) => {
+    if (!lotBaseMatrices.current[lotZeroIndex]) {
+      const dummy = lotMatrixObject.current;
+      dummy.position.set(
+        positions.current[lotZeroIndex * 3 + 0],
+        positions.current[lotZeroIndex * 3 + 1],
+        positions.current[lotZeroIndex * 3 + 2]
+      );
+
+      dummy.lookAt(
+        orientations.current[lotZeroIndex * 3 + 0],
+        orientations.current[lotZeroIndex * 3 + 1],
+        orientations.current[lotZeroIndex * 3 + 2]
+      );
+
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      lotBaseMatrices.current[lotZeroIndex] = new Matrix4().copy(dummy.matrix);
+    }
+    return lotBaseMatrices.current[lotZeroIndex];
+  }, []);
+
+  const getLotMatrix = useCallback((lotIndex) => {
+    const lotZeroIndex = lotIndex - 1;
+    if (!lotScaledMatrices.current[lotZeroIndex]) {
+      lotScaledMatrices.current[lotZeroIndex] = new Matrix4()
+        .copy(getLotBaseMatrix(lotZeroIndex))
+        .scale(lotScaleVector.current);
+    }
+    return lotScaledMatrices.current[lotZeroIndex];
+  }, [getLotBaseMatrix]);
+
+  const rescaleRenderedLotMatrices = useCallback((nextLotScale) => {
+    if (!lotsReady || !syncLotScale(nextLotScale)) return;
+
+    const updateInstancedMesh = (mesh, lotIndices) => {
+      if (!mesh || !lotIndices?.length) return;
+
+      lotIndices.forEach((lotIndex, index) => {
+        mesh.setMatrixAt(index, getLotMatrix(lotIndex));
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+
+    for (const use in lotMeshes.current) {
+      updateInstancedMesh(lotMeshes.current[use], renderedLotIndicesByUse.current[use]);
+    }
+    updateInstancedMesh(lotLeasesMesh.current, renderedLeaseLotIndices.current);
+    updateInstancedMesh(mouseableMesh.current, renderedMouseableLotIndices.current);
+  }, [getLotMatrix, lotsReady, syncLotScale]);
+
   useEffect(() => {
     if (!lotsReady) return;
+    if (getCameraIsAnimating()) return;
 
     try {
-      if (lotScaledMatrixScale.current !== lotScale) {
-        lotScaledMatrices.current = [];
-        lotScaledMatrixScale.current = lotScale;
-        lotScaleVector.current.set(lotScale, lotScale, lotScale);
-      }
-
-      const getLotBaseMatrix = (lotZeroIndex) => {
-        if (!lotBaseMatrices.current[lotZeroIndex]) {
-          const dummy = lotMatrixObject.current;
-          dummy.position.set(
-            positions.current[lotZeroIndex * 3 + 0],
-            positions.current[lotZeroIndex * 3 + 1],
-            positions.current[lotZeroIndex * 3 + 2]
-          );
-
-          dummy.lookAt(
-            orientations.current[lotZeroIndex * 3 + 0],
-            orientations.current[lotZeroIndex * 3 + 1],
-            orientations.current[lotZeroIndex * 3 + 2]
-          );
-
-          dummy.scale.set(1, 1, 1);
-          dummy.updateMatrix();
-          lotBaseMatrices.current[lotZeroIndex] = new Matrix4().copy(dummy.matrix);
-        }
-        return lotBaseMatrices.current[lotZeroIndex];
-      };
-
-      const getLotMatrix = (lotIndex) => {
-        const lotZeroIndex = lotIndex - 1;
-        if (!lotScaledMatrices.current[lotZeroIndex]) {
-          lotScaledMatrices.current[lotZeroIndex] = new Matrix4()
-            .copy(getLotBaseMatrix(lotZeroIndex))
-            .scale(lotScaleVector.current);
-        }
-        return lotScaledMatrices.current[lotZeroIndex];
-      };
+      syncLotScale(lotScale);
 
       let lotUsesRendered = {};
+      let nextRenderedLotIndicesByUse = {};
+      let nextRenderedLeaseLotIndices = [];
+      let nextRenderedMouseableLotIndices = [];
       let updateLotUseMatrix = {};
       let updateResultColor = {};
       let updateLeasesMatrix = false;
@@ -631,12 +662,16 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
             // everything else is only in visible-lot area
             if (lotUse !== 0 && ((totalRendered < visibleLotTally) || hasResult)) {
               lotMeshes.current[lotUse].setMatrixAt(lotUseRendered, lotMatrix);
+              if (!nextRenderedLotIndicesByUse[lotUse]) nextRenderedLotIndicesByUse[lotUse] = [];
+              nextRenderedLotIndicesByUse[lotUse][lotUseRendered] = lotIndex;
               lotUsesRendered[lotUse] = (lotUsesRendered[lotUse] || 0) + 1;
               updateLotUseMatrix[lotUse] = true;
             }
             
             if (lotUse === 0 && ((totalRendered < visibleLotTally && cameraAltitude <= PIP_VISIBILITY_ALTITUDE) || hasResult)) {
               lotMeshes.current[0].setMatrixAt(lotUseRendered, lotMatrix);
+              if (!nextRenderedLotIndicesByUse[0]) nextRenderedLotIndicesByUse[0] = [];
+              nextRenderedLotIndicesByUse[0][lotUseRendered] = lotIndex;
               lotUsesRendered[0] = (lotUsesRendered[0] || 0) + 1;
               updateLotUseMatrix[0] = true;
             }
@@ -645,6 +680,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
             // TODO: should these always face the camera? or have a slight bias towards camera at least?
             if (mouseableMesh.current && totalRendered < visibleMouseableTally) {
               mouseableMesh.current.setMatrixAt(totalRendered, lotMatrix);
+              nextRenderedMouseableLotIndices[totalRendered] = lotIndex;
               updateMouseableMatrix = true;
             }
 
@@ -664,6 +700,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
             // > only need to update fill if it has a lease and is in visible fill area
             if (hasLease) {
               lotLeasesMesh.current.setMatrixAt(leasesRendered, lotMatrix);
+              nextRenderedLeaseLotIndices[leasesRendered] = lotIndex;
               updateLeasesMatrix = true;
             }
           }
@@ -696,6 +733,10 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
       }
       if (lotLeasesMesh.current) lotLeasesMesh.current.count = visibleLeasedTally;
 
+      renderedLotIndicesByUse.current = nextRenderedLotIndicesByUse;
+      renderedLeaseLotIndices.current = nextRenderedLeaseLotIndices;
+      renderedMouseableLotIndices.current = nextRenderedMouseableLotIndices;
+
       for (const use in lotMeshes.current) {
         lotMeshes.current[use].count = lotUsesRendered[use] || 0;
         lotMeshes.current[use].instanceMatrix.needsUpdate = !!updateLotUseMatrix[use];
@@ -712,6 +753,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     chunkyAltitude,
+    cameraAutomationVersion,
     cameraNormalized?.string,
     lastLotUpdate,
     lotsReady,
@@ -814,6 +856,10 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   useFrame((state) => {
     // if no lots, nothing to do
     if (!lotTally) return;
+
+    if (getCameraIsAnimating()) {
+      rescaleRenderedLotMatrices(getLotScale(state.camera.position.length() - config.radius));
+    }
 
     // pulse the size of the selection reticule
     if (selectionMesh.current && positions.current && selectedLotIndex) {

@@ -187,6 +187,7 @@ const AsteroidComponent = () => {
   const webWorkerPool = useWebWorker();
 
   const [cameraAltitude, setCameraAltitude] = useState();
+  const [cameraAutomationVersion, setCameraAutomationVersion] = useState(0);
   const [cameraNormalized, setCameraNormalized] = useState();
   const [config, setConfig] = useState();
   const [terrainInitialized, setTerrainInitialized] = useState();
@@ -623,6 +624,11 @@ const AsteroidComponent = () => {
     if (!config?.radius) return;
     applyingZoomLimits.current = true;
     setTimeout(() => {
+      if (automatingCamera.current) {
+        applyingZoomLimits.current = false;
+        return;
+      }
+
       const closestChunk = getClosestChunk(cameraPosition);
       if (!closestChunk) {
         applyingZoomLimits.current = false;
@@ -785,7 +791,9 @@ const AsteroidComponent = () => {
           ease: 'power1.out' // power>1.out seems to have bounce artifact for short trips
         },
         onComplete: () => {
+          setCameraAltitude(newPosition.length() - config.radius);
           automatingCamera.current = false;
+          setCameraAutomationVersion((v) => v + 1);
           dispatchGoToHighAltitude(false);
         }
       })
@@ -796,12 +804,15 @@ const AsteroidComponent = () => {
   const [debugTrajectory, setDebugTrajectory] = useState([]);
 
   const automatingCamera = useRef();
+  const selectedLotTween = useRef();
   useEffect(() => {
     if (selectedLot?.lotIndex > 0 && zoomedIntoAsteroidId === selectedLot?.asteroidId && config?.radiusNominal && zoomStatus === 'in') {
       const lotTally = Asteroid.getSurfaceArea(selectedLot?.asteroidId);
       if (lotTally < selectedLot.lotIndex) { dispatchLotSelected(); return; }
 
       automatingCamera.current = true;
+      applyingZoomLimits.current = false;
+      selectedLotTween.current?.kill();
       gsap.killTweensOf(controls.object.position);
 
       const currentCameraHeight = controls.object.position.length();
@@ -859,7 +870,12 @@ const AsteroidComponent = () => {
       // console.log('arcLength', arcLength, animationTime);
 
       const onZoomComplete = () => {
+        if (closestChunk) {
+          setCameraAltitude(controls.object.position.length() - closestChunk.sphereCenterHeight);
+        }
+        selectedLotTween.current = null;
         automatingCamera.current = false;
+        setCameraAutomationVersion((v) => v + 1);
         setDramaticZoom(false);
       };
 
@@ -939,10 +955,10 @@ const AsteroidComponent = () => {
         lerpPoints.forEach((p) => timeline.to(controls.object.position, { ...p, ease: 'linear' }));
 
         // run the timeline as a single animation
-        gsap.to(timeline, animationTime / 1e3, { progress: 1, ease: 'power4.out' })
+        selectedLotTween.current = gsap.to(timeline, animationTime / 1e3, { progress: 1, ease: 'power4.out' });
 
       } else {
-        gsap.timeline({
+        selectedLotTween.current = gsap.timeline({
           defaults: {
             duration: animationTime / 1e3,
             ease: 'power1.out' // power>1.out seems to have bounce artifact for short trips
@@ -1029,7 +1045,7 @@ const AsteroidComponent = () => {
         // lock to surface if within "lock" radius OR lot is selected
         // TODO: consider automatically deselecting lot if zoom out enough
         lockToSurface.current = (controls.object.position.length() < 1.1 * config.radius) || selectedLot;
-        if (lockToSurface.current) {
+        if (lockToSurface.current && !automatingCamera.current) {
           controls.object.up.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.position.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.updateProjectionMatrix();
@@ -1098,7 +1114,9 @@ const AsteroidComponent = () => {
     // control dynamic zoom limit (zoom out if too low... else, just update boundary)
     if (frameTimeLeft(frameStart, chunkSwapThisCycle.current) <= 0) return;
     if (controls && Object.values(geometry.current?.chunks).length) {
-      if (applyingZoomLimits.current) {
+      if (automatingCamera.current) {
+        applyingZoomLimits.current = false;
+      } else if (applyingZoomLimits.current) {
         if (applyingZoomLimits.current !== true) {
           const amount = Math.max(5, applyingZoomLimits.current / 10);
           applyingZoomLimits.current = Math.max(0, applyingZoomLimits.current - amount);
@@ -1146,7 +1164,7 @@ const AsteroidComponent = () => {
 
     // if not processing an update already, and camera is not currently moving, process next change for cube
     if (frameTimeLeft(frameStart, chunkSwapThisCycle.current) <= 0) return;
-    if (!geometry.current.builder.isUpdating() && !settingCameraPosition.current) {
+    if (!automatingCamera.current && !geometry.current.builder.isUpdating() && !settingCameraPosition.current) {
       // vvv BENCHMARK <0.1ms
       geometry.current.processNextQueuedChange();
       // ^^^
@@ -1187,8 +1205,10 @@ const AsteroidComponent = () => {
           asteroidId={asteroidId.current}
           axis={rotationAxis.current}
           cameraAltitude={cameraAltitude}
+          cameraAutomationVersion={cameraAutomationVersion}
           cameraNormalized={cameraNormalized}
           config={config}
+          getCameraIsAnimating={() => automatingCamera.current}
           getRotation={() => rotation.current}
           getLockToSurface={() => lockToSurface.current} />
       )}

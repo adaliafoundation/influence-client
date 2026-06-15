@@ -11,6 +11,32 @@ import {
   getSamplingResolution
 } from './TerrainChunkUtils';
 
+const STITCHING_DIRECTIONS = ['N', 'S', 'E', 'W'];
+
+const sortQueuedChanges = (changes) => changes.sort((a, b) => a._distance - b._distance);
+
+const mergeQueuedChanges = (changes) => {
+  const addByRenderSig = {};
+  const removeByKey = new Set();
+  let distance = Infinity;
+
+  changes.forEach((change) => {
+    distance = Math.min(distance, change._distance ?? Infinity);
+    (change.add || []).forEach((node) => {
+      addByRenderSig[node.renderSig] = node;
+    });
+    (change.removeByKey || []).forEach((key) => {
+      removeByKey.add(key);
+    });
+  });
+
+  return {
+    _distance: distance === Infinity ? 0 : distance,
+    add: Object.values(addByRenderSig).sort((a, b) => a.distanceToCamera - b.distanceToCamera),
+    removeByKey: Array.from(removeByKey)
+  };
+};
+
 // TODO: remove
 // let taskTotal = 0;
 // let taskTally = 0;
@@ -149,6 +175,7 @@ class QuadtreeTerrainCube {
 
     // create a list of changes to make, sorted by closest to farthest
     const queuedChangesObj = {};
+    let hasStitchingTransition = false;
 
     const updatedChunks = {};
     this.sides.forEach((side) => {
@@ -156,12 +183,14 @@ class QuadtreeTerrainCube {
       Object.keys(sideChunks).forEach((k) => {
         const node = sideChunks[k];
         const stitchingStrides = {};
-        Object.keys(node.neighbors).forEach((orientation) => {
+        STITCHING_DIRECTIONS.forEach((orientation) => {
           stitchingStrides[orientation] = Math.max(1, (node.neighbors[orientation]?.size?.x || 0) / node.size.x);
         });
         node.stitchingStrides = stitchingStrides;
         node.emissiveParams = this.emissiveParams && { ...this.emissiveParams, k };
-        node.renderSig = `${node.key} [${Object.values(node.stitchingStrides).join('')}] [${node.emissiveParams?.resource || ''}]`;
+        node.stitchingSig = STITCHING_DIRECTIONS.map((orientation) => node.stitchingStrides[orientation]).join('');
+        node.emissiveSig = node.emissiveParams?.resource || '';
+        node.renderSig = `${node.key} [${node.stitchingSig}] [${node.emissiveSig}]`;
         updatedChunks[k] = node;
       });
     });
@@ -185,6 +214,9 @@ class QuadtreeTerrainCube {
           // calculate "renderSig"... if not same as old chunk, needs rebuild
           // TODO: since this group can get big, might be good to break up by side before swap
           if (updatedChunks[chunk.key].renderSig !== renderSig) {
+            if (updatedChunks[chunk.key].stitchingSig !== chunk.stitchingSig) {
+              hasStitchingTransition = true;
+            }
             if (!queuedChangesObj.rebuild) {
               queuedChangesObj.rebuild = { add: [], removeByKey: [] };
             }
@@ -232,8 +264,13 @@ class QuadtreeTerrainCube {
       }
     }
 
-    this.queuedChanges = Object.values(queuedChangesObj)
-      .sort((a, b) => a._distance - b._distance);
+    const queuedChanges = sortQueuedChanges(Object.values(queuedChangesObj));
+    // Stitching changes must land in the same visible swap as the LOD changes that caused them.
+    // If they are spread across frames, neighboring chunks can briefly disagree about their edge
+    // stride and expose a thin background crack.
+    this.queuedChanges = hasStitchingTransition
+      ? [mergeQueuedChanges(queuedChanges)]
+      : queuedChanges;
 
     // debug(x);
     // ^^^
@@ -261,6 +298,7 @@ class QuadtreeTerrainCube {
         size: node.size.x,
         sphereCenter: node.sphereCenter,
         sphereCenterHeight: node.sphereCenterHeight,
+        stitchingSig: node.stitchingSig,
         chunk: this.builder.allocateChunk({
           emissiveParams: node.emissiveParams,
           group: this.groups[node.side],
