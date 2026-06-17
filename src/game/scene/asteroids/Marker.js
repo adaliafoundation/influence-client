@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTexture } from '@react-three/drei';
-import { AdditiveBlending, Color, DoubleSide, Vector2 } from 'three';
+import { AdditiveBlending, DoubleSide, Vector2 } from 'three';
 import { useFrame } from '@react-three/fiber';
 
 import useTravelSolutionIsValid from '~/hooks/useTravelSolutionIsValid';
@@ -32,7 +32,7 @@ const Marker = (props) => {
   const [ points, setPoints ] = useState(asteroidPos);
 
   const travelSolutionIsValid = useTravelSolutionIsValid();
-  
+
   const [
     reticuleTexture,
     shipTexture,
@@ -82,13 +82,14 @@ const Marker = (props) => {
       } else if (hasDestination) {
         x.outerProps.color = orbitColors.main;
         x.showInner = true;
-  
+
       // standard
       } else {
         x.outerProps.map = strokedDiamondTexture;
+        x.outerProps.color = orbitColors.white;
         x.showInner = true;
       }
-      
+
     } else if (isDestination) {
       if (travelSolution) {
         // destination "where it will be" marker
@@ -104,7 +105,7 @@ const Marker = (props) => {
           x.outerProps.map = strokedDiamondTexture;
           x.outerProps.size = 15;
         }
-        
+
       } else {
         x.outerProps.color = orbitColors.white;
         x.showReticule = true;
@@ -128,13 +129,11 @@ const Marker = (props) => {
   }, [ asteroidPos ]);
 
   const reticulePoints = useRef();
-  const animationTime = useRef();
   useFrame((state, delta) => {
-    animationTime.current = (animationTime.current || 0) + delta;
     if (reticulePoints.current) {
-      reticulePoints.current.material.map.rotation = -0.7 * animationTime.current;
-      // const scale = 1 + 0.05 * Math.sin(7.5 * animationTime.current);
-      // reticulePoints.current.material.size = scale * 52;
+      reticulePoints.current.material.map.rotation = delta * 10 / (2* Math.PI);
+      const scale = 1 + 0.05 * Math.sin(7.5 * delta);
+      reticulePoints.current.material.size = scale * 52;
     }
   });
 

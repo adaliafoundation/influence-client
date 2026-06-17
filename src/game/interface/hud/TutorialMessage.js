@@ -5,6 +5,7 @@ import Button from '~/components/ButtonAlt';
 import ClipCorner from '~/components/ClipCorner';
 import IconButton from '~/components/IconButton';
 import { CloseIcon } from '~/components/Icons';
+import useCrewmate from '~/hooks/useCrewmate';
 import { reactBool } from '~/lib/utils';
 import { getCrewmateCompositorImageUrl } from '~/lib/spriteUtils';
 import theme from '~/theme';
@@ -129,7 +130,8 @@ const Buttons = styled.div`
   }
 `;
 
-export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString }) => {
+export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString, crewmateId }) => {
+  const { data: crewmate } = useCrewmate(crewmateImageOptionString ? null : crewmateId);
   const [imageUrl, setImageUrl] = useState();
 
   useEffect(() => {
@@ -147,6 +149,16 @@ export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString }) => {
         }
       }
 
+      if (crewmate) {
+        try {
+          const url = await getCrewmateCompositorImageUrl(crewmate);
+          if (!ignore) setImageUrl(url);
+          return;
+        } catch (error) {
+          console.warn('Failed to render tutorial crewmate locally', error);
+        }
+      }
+
       if (!ignore) {
         setImageUrl(undefined);
       }
@@ -156,7 +168,7 @@ export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString }) => {
     return () => {
       ignore = true;
     };
-  }, [crewmateImageOptionString]);
+  }, [crewmate, crewmateImageOptionString]);
 
   return imageUrl;
 };

@@ -250,6 +250,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
     return crews;
   }, [accountAddress, activeCrewsDisplay, asteroidId, blockTime, crewMovementActivity, ongoing]);
+  const activeCrewTravel = ongoingTravel[crew?.id];
+  const activeCrewIsMoving = !!activeCrewTravel?.curve;
 
   // static stuffs
   const main = useRef(new Group());
@@ -338,6 +340,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           map: textureLoader.current.load(`${process.env.PUBLIC_URL}/textures/crew-marker.png`),
           // depthTest: false,
           depthWrite: false,
+          opacity: 0,
+          transparent: true,
         })
       );
       bgSprite.scale.set(850, 1159, 0);
@@ -436,7 +440,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // handle textures for active crew indicator
   useEffect(() => {
     let isCurrent = true;
-    if (activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
+    if (activeCrewIsMoving && activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
       applyCrewMarkerTexture(
         activeCrewMarker.current,
         captain,
@@ -448,26 +452,26 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       isCurrent = false;
       clearCrewMarkerTexture(activeCrewMarker.current);
     }
-  }, [captain]);
+  }, [activeCrewIsMoving, captain]);
 
   useEffect(() => {
     [0, 1].forEach((i) => {
       if (activeCrewMarker.current?.children?.[i]?.material) {
-        activeCrewMarker.current.children[i].material.opacity = crewMovementActivity ? 1 : 0;
+        activeCrewMarker.current.children[i].material.opacity = activeCrewIsMoving ? 1 : 0;
         activeCrewMarker.current.children[i].material.needsUpdate = true;
       }
     });
-  }, [crewMovementActivity])
+  }, [activeCrewIsMoving])
 
   // add geometry for the active crew arc
   useEffect(() => {
     if (activeCrewArc.current) {
       setArcPoints(activeCrewArc.current, nullArcPoints.current);
-      if (ongoingTravel[crew?.id]?.curve) {
-        setArcPoints(activeCrewArc.current, ongoingTravel[crew.id].curve.getPoints(arcSegments));
+      if (activeCrewTravel?.curve) {
+        setArcPoints(activeCrewArc.current, activeCrewTravel.curve.getPoints(arcSegments));
       }
     }
-  }, [crew?.id, ongoingTravel, setArcPoints]);
+  }, [activeCrewTravel, setArcPoints]);
 
   // handle highlighted crew indicator and arc
   const [hovered, setHovered] = useState();

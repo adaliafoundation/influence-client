@@ -44,6 +44,7 @@ const StyledReactNotification = styled(ReactNotifications)`
     border-radius: 0;
     border-width: 5px;
     cursor: ${p => p.theme.cursors.active};
+    padding: 5px;
   }
 
   & .rnc__notification-item.rnc__notification-item--warning {

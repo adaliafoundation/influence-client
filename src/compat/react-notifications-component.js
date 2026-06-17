@@ -74,26 +74,28 @@ export const Store = {
   removeNotification
 };
 
-export const ReactNotifications = () => {
+export const ReactNotifications = ({ className }) => {
   const queue = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const dismiss = useCallback((id) => () => removeNotification(id), []);
 
   return (
-    <div className="rnc__notification-container--top-center">
-      {queue.map((notification) => {
-        const animationIn = Array.isArray(notification.animationIn) ? notification.animationIn.join(' ') : '';
-        return (
-          <div
-            className={`rnc__notification-item rnc__notification-item--${notification.type || 'info'} ${animationIn}`}
-            key={notification.id}
-            style={notification.width ? { width: `${notification.width}px` } : undefined}>
-            {notification.dismiss.showIcon && (
-              <button className="rnc__notification-close-mark" onClick={dismiss(notification.id)} type="button" />
-            )}
-            {notification.message}
-          </div>
-        );
-      })}
+    <div className={className}>
+      <div className="rnc__notification-container--top-center">
+        {queue.map((notification) => {
+          const animationIn = Array.isArray(notification.animationIn) ? notification.animationIn.join(' ') : '';
+          return (
+            <div
+              className={`rnc__notification-item rnc__notification-item--${notification.type || 'info'} ${animationIn}`}
+              key={notification.id}
+              style={notification.width ? { width: `${notification.width}px` } : undefined}>
+              {notification.dismiss.showIcon && (
+                <button className="rnc__notification-close-mark" onClick={dismiss(notification.id)} type="button" />
+              )}
+              {notification.message}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
