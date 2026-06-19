@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTexture } from '@react-three/drei';
-import { AdditiveBlending, Color, DoubleSide, Vector2 } from 'three';
+import { AdditiveBlending, DoubleSide, Vector2 } from 'three';
 import { useFrame } from '@react-three/fiber';
 
 import useTravelSolutionIsValid from '~/hooks/useTravelSolutionIsValid';
@@ -15,12 +15,24 @@ const initialUniforms = {
   uMaxRadius: { type: 'f', value: markerMaxRadius }
 };
 
+const markerTextureUrls = [
+  `${process.env.PUBLIC_URL}/textures/asteroids/reticule.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/ship.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/solid_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/stroked_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/asteroids/translucent_diamond.png`,
+  `${process.env.PUBLIC_URL}/textures/circleFaded.png`,
+  `${process.env.PUBLIC_URL}/textures/marker.png`
+];
+
+useTexture.preload(markerTextureUrls);
+
 const Marker = (props) => {
   const { asteroidPos, hasDestination, isDestination, isOrigin, isTravelMarker, travelSolution } = props;
   const [ points, setPoints ] = useState(asteroidPos);
 
   const travelSolutionIsValid = useTravelSolutionIsValid();
-  
+
   const [
     reticuleTexture,
     shipTexture,
@@ -29,15 +41,7 @@ const Marker = (props) => {
     translucentDiamondTexture,
     planeTexture,
     asteroidTexture
-  ] = useTexture([
-    `${process.env.PUBLIC_URL}/textures/asteroids/reticule.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/ship.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/solid_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/stroked_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/asteroids/translucent_diamond.png`,
-    `${process.env.PUBLIC_URL}/textures/circleFaded.png`,
-    `${process.env.PUBLIC_URL}/textures/marker.png`
-  ]);
+  ] = useTexture(markerTextureUrls);
 
   useEffect(() => {
     reticuleTexture.center = new Vector2(0.5, 0.5);
@@ -78,13 +82,14 @@ const Marker = (props) => {
       } else if (hasDestination) {
         x.outerProps.color = orbitColors.main;
         x.showInner = true;
-  
+
       // standard
       } else {
         x.outerProps.map = strokedDiamondTexture;
+        x.outerProps.color = orbitColors.white;
         x.showInner = true;
       }
-      
+
     } else if (isDestination) {
       if (travelSolution) {
         // destination "where it will be" marker
@@ -100,7 +105,7 @@ const Marker = (props) => {
           x.outerProps.map = strokedDiamondTexture;
           x.outerProps.size = 15;
         }
-        
+
       } else {
         x.outerProps.color = orbitColors.white;
         x.showReticule = true;
@@ -124,13 +129,11 @@ const Marker = (props) => {
   }, [ asteroidPos ]);
 
   const reticulePoints = useRef();
-  const animationTime = useRef();
   useFrame((state, delta) => {
-    animationTime.current = (animationTime.current || 0) + delta;
     if (reticulePoints.current) {
-      reticulePoints.current.material.map.rotation = -0.7 * animationTime.current;
-      // const scale = 1 + 0.05 * Math.sin(7.5 * animationTime.current);
-      // reticulePoints.current.material.size = scale * 52;
+      reticulePoints.current.material.map.rotation = delta * 10 / (2* Math.PI);
+      const scale = 1 + 0.05 * Math.sin(7.5 * delta);
+      reticulePoints.current.material.size = scale * 52;
     }
   });
 

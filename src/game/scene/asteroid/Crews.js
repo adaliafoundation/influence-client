@@ -22,14 +22,14 @@ import {
 } from 'three';
 import { Address, Asteroid, Crewmate, Entity, Lot, Time } from '@influenceth/sdk';
 import { useHistory } from 'react-router-dom';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { appConfig } from '~/appConfig';
 import { BLOOM_LAYER } from '~/game/Postprocessor';
 import useBlockTime from '~/hooks/useBlockTime';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import activities, { hydrateActivities } from '~/lib/activities';
 import api from '~/lib/api';
+import { getCrewmateSpriteImageUrl } from '~/lib/spriteUtils';
 import { getCrewAbilityBonuses, locationsArrToObj } from '~/lib/utils';
 import theme from '~/theme';
 
@@ -57,11 +57,60 @@ import useSession from '~/hooks/useSession';
 // ^^^
 
 const hopperRadius = 400;
+const arcSegments = 50;
+const arcPointCount = arcSegments + 1;
+const crewMarkerHeight = 1159;
+const crewMarkerMinScale = 0.35;
+const crewMarkerMaxScale = 1.6;
 const arcColor = new Color(theme.colors.glowGreen);
 const hopperColor = new Color(theme.colors.glowGreen);
 const spriteBorderColor = new Color(theme.colors.glowGreen);
 const activeCrewColor = new Color(0xffffff);
 const hoverColor = new Color(theme.colors.success);
+
+const clearCrewMarkerTexture = (crewMarker) => {
+  const material = crewMarker?.children?.[1]?.material;
+  if (!material) return;
+
+  if (material.map) {
+    material.map.dispose();
+  }
+
+  material.map = null;
+  material.opacity = 0;
+  material.needsUpdate = true;
+};
+
+const applyCrewMarkerTexture = async (crewMarker, crewmate, textureLoader, shouldApply) => {
+  const material = crewMarker?.children?.[1]?.material;
+  if (!material) return;
+
+  clearCrewMarkerTexture(crewMarker);
+
+  const imageUrl = await getCrewmateSpriteImageUrl(crewmate);
+  if (!shouldApply()) return;
+
+  if (!imageUrl) {
+    material.opacity = 0;
+    material.needsUpdate = true;
+    return;
+  }
+
+  const texture = textureLoader.load(imageUrl, (loadedTexture) => {
+    if (!shouldApply()) {
+      loadedTexture.dispose();
+      return;
+    }
+    material.needsUpdate = true;
+  });
+
+  if (material.map) {
+    material.map.dispose();
+  }
+  material.map = texture;
+  material.opacity = 1;
+  material.needsUpdate = true;
+};
 
 const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotPosition, radius }) => {
   const blockTime = useBlockTime();
@@ -69,7 +118,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   const queryClient = useQueryClient();
   const history = useHistory();
   const { controls, gl, scene } = useThree();
-  const { crew, crewMovementActivity } = useCrewContext();
+  const { captain, crew, crewMovementActivity } = useCrewContext();
   const { accountAddress } = useSession();
 
   const activeCrewsDisplay = useStore((s) => s.gameplay.activeCrewsDisplay);
@@ -87,9 +136,9 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // TODO: would be nice to include a crew filter on this rather than post-processing to
   //  apply the activeCrewsDisplay filter... then we could also drop crewMovementActivity probably
   //  and just use this with the crews included
-  const { data: ongoing, isLoading } = useQuery(
-    [ 'activities', 'ongoing', asteroidId ],
-    async () => {
+  const { data: ongoing, isLoading } = useQuery({
+    queryKey: [ 'activities', 'ongoing', asteroidId ],
+    queryFn: async () => {
       const ongoingActivities = await api.getOngoingActivities(
         Entity.packEntity({ label: Entity.IDS.ASTEROID, id: asteroidId }),
         Object.keys(activities).filter((k) => !!activities[k].getVisitedLot)
@@ -100,17 +149,15 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       await hydrateActivities(ongoingActivities, queryClient)
       return ongoingActivities;
     },
-    {
-      enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
-    }
-  );
+    enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
+  });
 
   // define the travel params from the ongoing activities
   const ongoingTravel = useMemo(() => {
     const crews = {};
 
     // make sure selected crew is included (in case not on page OR in 'selected' mode)
-    const ongoingActivities = ongoing || [];
+    const ongoingActivities = [...(ongoing || [])];
     if (crewMovementActivity?.data?.crew?.id && !ongoingActivities.find((a) => a.data.crew.id === crewMovementActivity.data.crew.id)) {
       const crewLocation = locationsArrToObj(crewMovementActivity.data.crew.Location?.locations || []) || {};
       if (crewLocation.asteroidId === asteroidId) {
@@ -118,7 +165,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       }
     }
 
-    ongoing?.forEach((activity) => {
+    ongoingActivities.forEach((activity) => {
       const crew = activity.data.crew;
       if (activeCrewsDisplay === 'selected' && accountAddress && crew.id !== crewMovementActivity?.data?.crew?.id) return;
       if (activeCrewsDisplay === 'delegated' && accountAddress && !Address.areEqual(crew.Crew.delegatedTo, accountAddress)) return;
@@ -150,6 +197,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           const isOneWay = activity.event.name === 'CrewStationed';
           if (isOneWay) {
             crews[crew.id] = {
+              crew,
               origin: visitedLotIndex,
               destination: station.lotIndex,
               departure: startTime,
@@ -160,6 +208,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           // first leg of round trip + time on site
           else if (nowSec < finishTime - travelTime) {
             crews[crew.id] = {
+              crew,
               origin: station.lotIndex,
               destination: visitedLotIndex,
               departure: startTime,
@@ -171,6 +220,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           // second leg of round trip
           else {
             crews[crew.id] = {
+              crew,
               origin: visitedLotIndex,
               destination: station.lotIndex,
               departure: finishTime - travelTime,
@@ -200,6 +250,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
     return crews;
   }, [accountAddress, activeCrewsDisplay, asteroidId, blockTime, crewMovementActivity, ongoing]);
+  const activeCrewTravel = ongoingTravel[crew?.id];
+  const activeCrewIsMoving = !!activeCrewTravel?.curve;
 
   // static stuffs
   const main = useRef(new Group());
@@ -210,7 +262,12 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   const highlightedCrewMarker = useRef();
   const activeCrewArc = useRef();
   const highlightedCrewArc = useRef();
-  const nullArcGeometry = useRef(() => new BufferGeometry().setFromPoints([new Vector3(0, 0, 0)]));
+  const nullArcPoints = useRef(Array.from({ length: arcPointCount }, () => new Vector3(0, 0, 0)));
+  const setArcPoints = useCallback((arc, points) => {
+    if (!arc) return;
+    arc.geometry.setFromPoints(points);
+    arc.geometry.computeBoundingSphere();
+  }, []);
   useEffect(() => {
     // init hopper geometry and material for instanced mesh
     hopperGeometry.current = new IcosahedronGeometry(hopperRadius, 0);
@@ -252,9 +309,9 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     attachTo.add(main.current);
 
     // add 2x trajectory arcs
-    const arcOrder = new BufferAttribute(new Float32Array(Array(51).fill().map((_, i) => i + 1)), 1);
+    const arcOrder = new BufferAttribute(new Float32Array(Array(arcPointCount).fill().map((_, i) => i + 1)), 1);
     [activeCrewArc.current, highlightedCrewArc.current] = [0, 1].map((i) => {
-      const geometry = new BufferGeometry().setFromPoints(nullArcGeometry.current);
+      const geometry = new BufferGeometry().setFromPoints(nullArcPoints.current);
       geometry.setAttribute('order', arcOrder);
       return new Line(
         geometry,
@@ -262,7 +319,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           uniforms: {
             uTime: arcTime.current,
             uAlpha: { value: 1.0 },
-            uCount: { value: 51 },
+            uCount: { value: arcPointCount },
             uCol: { type: 'c', value: i === 0 ? activeCrewColor : arcColor },
           },
           fragmentShader: frag,
@@ -283,6 +340,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           map: textureLoader.current.load(`${process.env.PUBLIC_URL}/textures/crew-marker.png`),
           // depthTest: false,
           depthWrite: false,
+          opacity: 0,
+          transparent: true,
         })
       );
       bgSprite.scale.set(850, 1159, 0);
@@ -380,84 +439,77 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
   // handle textures for active crew indicator
   useEffect(() => {
-    if (activeCrewMarker.current?.children?.[1]?.material) {
-      if (crew?.id) {
-        activeCrewMarker.current.children[1].material.map = textureLoader.current.load(`${appConfig.get('Api.influenceImage')}/v2/crews/${crew.id}/captain/image.png?bustOnly=true`);
-        activeCrewMarker.current.children[1].material.opacity = 1;
-        activeCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+    let isCurrent = true;
+    if (activeCrewIsMoving && activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
+      applyCrewMarkerTexture(
+        activeCrewMarker.current,
+        captain,
+        textureLoader.current,
+        () => isCurrent
+      ).catch(() => clearCrewMarkerTexture(activeCrewMarker.current));
     }
     return () => {
-      if (activeCrewMarker.current?.children?.[1]?.material) {
-        if (activeCrewMarker.current.children[1].material.map) {
-          activeCrewMarker.current.children[1].material.map.dispose();
-        }
-
-        activeCrewMarker.current.children[1].material.map = null;
-        activeCrewMarker.current.children[1].material.opacity = 0;
-        activeCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+      isCurrent = false;
+      clearCrewMarkerTexture(activeCrewMarker.current);
     }
-  }, [crew?.id]);
+  }, [activeCrewIsMoving, captain]);
 
   useEffect(() => {
     [0, 1].forEach((i) => {
       if (activeCrewMarker.current?.children?.[i]?.material) {
-        activeCrewMarker.current.children[i].material.opacity = crewMovementActivity ? 1 : 0;
+        activeCrewMarker.current.children[i].material.opacity = activeCrewIsMoving ? 1 : 0;
         activeCrewMarker.current.children[i].material.needsUpdate = true;
       }
     });
-  }, [crewMovementActivity])
+  }, [activeCrewIsMoving])
 
   // add geometry for the active crew arc
   useEffect(() => {
     if (activeCrewArc.current) {
-      activeCrewArc.current.geometry.setFromPoints(nullArcGeometry.current);
-      if (ongoingTravel[crew?.id]?.curve) {
-        activeCrewArc.current.geometry.setFromPoints(ongoingTravel[crew.id].curve.getPoints(50));
+      setArcPoints(activeCrewArc.current, nullArcPoints.current);
+      if (activeCrewTravel?.curve) {
+        setArcPoints(activeCrewArc.current, activeCrewTravel.curve.getPoints(arcSegments));
       }
     }
-  }, [crew?.id, ongoingTravel]);
+  }, [activeCrewTravel, setArcPoints]);
 
   // handle highlighted crew indicator and arc
   const [hovered, setHovered] = useState();
   const [selected, setSelected] = useState();
   const highlightedCrewId = hovered || selected;
   useEffect(() => {
+    let isCurrent = true;
     if (highlightedCrewArc.current && highlightedCrewMarker.current) {
       if (ongoingTravel[highlightedCrewId]?.curve) {
-        highlightedCrewArc.current.geometry.setFromPoints(ongoingTravel[highlightedCrewId].curve.getPoints(50));
+        setArcPoints(highlightedCrewArc.current, ongoingTravel[highlightedCrewId].curve.getPoints(arcSegments));
 
         if (highlightedCrewMarker.current?.children?.[0]?.material) {
           highlightedCrewMarker.current.children[0].material.opacity = 1;
           highlightedCrewMarker.current.children[0].material.needsUpdate = true;
         }
-        if (highlightedCrewMarker.current?.children?.[1]?.material) {
-          highlightedCrewMarker.current.children[1].material.map = textureLoader.current.load(`${appConfig.get('Api.influenceImage')}/v2/crews/${highlightedCrewId}/captain/image.png?bustOnly=true`);
-          highlightedCrewMarker.current.children[1].material.opacity = 1;
-          highlightedCrewMarker.current.children[1].material.needsUpdate = true;
+        const highlightedCaptain = ongoingTravel[highlightedCrewId]?.crew?._crewmates?.[0];
+        if (highlightedCrewMarker.current?.children?.[1]?.material && highlightedCaptain?.Crewmate) {
+          applyCrewMarkerTexture(
+            highlightedCrewMarker.current,
+            highlightedCaptain,
+            textureLoader.current,
+            () => isCurrent
+          ).catch(() => clearCrewMarkerTexture(highlightedCrewMarker.current));
         }
       }
     }
     return () => {
+      isCurrent = false;
       if (highlightedCrewArc.current) {
-        highlightedCrewArc.current.geometry.setFromPoints(nullArcGeometry.current);
+        setArcPoints(highlightedCrewArc.current, nullArcPoints.current);
       }
       if (highlightedCrewMarker.current?.children?.[0]?.material) {
         highlightedCrewMarker.current.children[0].material.opacity = 0;
         highlightedCrewMarker.current.children[0].material.needsUpdate = true;
       }
-      if (highlightedCrewMarker.current?.children?.[1]?.material) {
-        if (highlightedCrewMarker.current.children[1].material.map) {
-          highlightedCrewMarker.current.children[1].material.map.dispose();
-        }
-
-        highlightedCrewMarker.current.children[1].material.map = null;
-        highlightedCrewMarker.current.children[1].material.opacity = 0;
-        highlightedCrewMarker.current.children[1].material.needsUpdate = true;
-      }
+      clearCrewMarkerTexture(highlightedCrewMarker.current);
     };
-  }, [highlightedCrewId, ongoingTravel]);
+  }, [highlightedCrewId, ongoingTravel, setArcPoints]);
 
   // handle card hover on highlighted crew
   const [cardHovered, setCardHovered] = useState();
@@ -496,9 +548,10 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     }
   }, [cardHovered, hovered, selected]);
 
-  const crewMarkerScale = useMemo(() => Math.max(1, Math.sqrt(cameraAltitude / 10000)), [cameraAltitude]);
+  const crewMarkerScale = useMemo(() => (
+    Math.max(crewMarkerMinScale, Math.min(Math.sqrt(cameraAltitude / 10000), crewMarkerMaxScale))
+  ), [cameraAltitude]);
   const hopperScale = useMemo(() => 0.3 * crewMarkerScale, [crewMarkerScale]);
-  const indicatorOffsetScale = useMemo(() => Math.max(1.5, Math.min(1.5 * Math.sqrt(cameraAltitude / 10000), 4)), [crewMarkerScale]);
   const shouldBeActiveCrewHopperIndex = useMemo(() =>
     Object.keys(ongoingTravel).filter((c) => !ongoingTravel[c].hideHopper).findIndex((c) => Number(c) === crew?.id),
     [crew, ongoingTravel]
@@ -533,14 +586,15 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     inverseMatrix.current.copy(attachTo.matrixWorld).invert();
 
     const screenUp = new Vector3(0, 1, 0).applyQuaternion(controls.object.quaternion).normalize();
-    const localUp = screenUp.applyMatrix4(inverseMatrix.current);
+    const localUp = screenUp.transformDirection(inverseMatrix.current);
 
     controls.object.getWorldDirection(cameraDirection.current);
-    const localOut = cameraDirection.current.applyMatrix4(inverseMatrix.current);
+    const localOut = cameraDirection.current.transformDirection(inverseMatrix.current);
 
     crewIndicatorOffset.current.addVectors(
-      localUp.setLength(2 * hopperRadius * crewMarkerScale), // "north" from hopper
-      localOut.setLength(-150 * indicatorOffsetScale) // towards camera (above surface)
+      // Keep the marker's bottom tip anchored on the moving crew / lot position.
+      localUp.setLength(0.5 * crewMarkerHeight * crewMarkerScale),
+      localOut.setLength(-Math.max(80, 150 * crewMarkerScale)) // towards camera (above surface)
     );
 
     // timing.current.total += performance.now() - s;

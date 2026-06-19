@@ -44,6 +44,7 @@ const TrackballModControls = function (object, domElement) {
   var lastScenePosition = new Vector3();
   var _state = STATE.NONE,
   _prevState = STATE.NONE,
+  _activePointerId = null,
   _eye = new Vector3(),
   _movePrev = new Vector2(),
   _moveCurr = new Vector2(),
@@ -63,6 +64,10 @@ const TrackballModControls = function (object, domElement) {
 
   const eventHandlers = {
     contextmenu,
+    pointerdown,
+    pointermove,
+    pointerup,
+    pointercancel,
     mousedown,
     mouseleave,
     mouseup,
@@ -73,6 +78,8 @@ const TrackballModControls = function (object, domElement) {
     keydown,
     keyup
   };
+  const hasPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+  const wheelListenerOptions = { passive: true };
 
   const eventHandler = (event) => {
     if (eventHandlers[event.type]) {
@@ -93,8 +100,12 @@ const TrackballModControls = function (object, domElement) {
 
     // Listeners
     this.domElement.addEventListener('contextmenu', eventHandler, false);
-    this.domElement.addEventListener('mousedown', eventHandler, false);
-    this.domElement.addEventListener('wheel', eventHandler, false);
+    if (hasPointerEvents) {
+      this.domElement.addEventListener('pointerdown', eventHandler, false);
+    } else {
+      this.domElement.addEventListener('mousedown', eventHandler, false);
+    }
+    this.domElement.addEventListener('wheel', eventHandler, wheelListenerOptions);
     this.domElement.addEventListener('touchstart', eventHandler, false);
     this.domElement.addEventListener('touchend', eventHandler, false);
     this.domElement.addEventListener('touchmove', eventHandler, false);
@@ -321,6 +332,7 @@ const TrackballModControls = function (object, domElement) {
 
   function mousedown(event) {
     if (_this.enabled === false) return;
+    _this.handleResize();
     event.preventDefault();
     event.stopPropagation();
 
@@ -345,10 +357,58 @@ const TrackballModControls = function (object, domElement) {
     _this.dispatchEvent(startEvent);
   }
 
+  function pointerdown(event) {
+    if (_this.enabled === false) return;
+    if (event.pointerType === 'touch') return;
+    if (_activePointerId !== null) return;
+
+    _this.handleResize();
+
+    _activePointerId = event.pointerId;
+
+    if (_state === STATE.NONE) {
+      _state = event.button;
+    }
+
+    if (_state === STATE.ROTATE && ! _this.noRotate) {
+      _moveCurr.copy(getMouseOnCircle(event.pageX, event.pageY));
+      _movePrev.copy(_moveCurr);
+    } else if (_state === STATE.ZOOM && ! _this.noZoom) {
+      _zoomStart.copy(getMouseOnScreen(event.pageX, event.pageY));
+      _zoomEnd.copy(_zoomStart);
+    } else if (_state === STATE.PAN && ! _this.noPan) {
+      _panStart.copy(getMouseOnScreen(event.pageX, event.pageY));
+      _panEnd.copy(_panStart);
+    }
+
+    if (_this.domElement.setPointerCapture) {
+      _this.domElement.setPointerCapture(_activePointerId);
+    }
+
+    _this.domElement.addEventListener('pointermove', eventHandler, false);
+    _this.domElement.addEventListener('pointerup', eventHandler, false);
+    _this.domElement.addEventListener('pointercancel', eventHandler, false);
+    _this.dispatchEvent(startEvent);
+  }
+
   function mousemove(event) {
     if (_this.enabled === false) return;
     event.preventDefault();
     event.stopPropagation();
+
+    if (_state === STATE.ROTATE && ! _this.noRotate) {
+      _movePrev.copy(_moveCurr);
+      _moveCurr.copy(getMouseOnCircle(event.pageX, event.pageY));
+    } else if (_state === STATE.ZOOM && ! _this.noZoom) {
+      _zoomEnd.copy(getMouseOnScreen(event.pageX, event.pageY));
+    } else if (_state === STATE.PAN && ! _this.noPan) {
+      _panEnd.copy(getMouseOnScreen(event.pageX, event.pageY));
+    }
+  }
+
+  function pointermove(event) {
+    if (_this.enabled === false) return;
+    if (event.pointerId !== _activePointerId) return;
 
     if (_state === STATE.ROTATE && ! _this.noRotate) {
       _movePrev.copy(_moveCurr);
@@ -371,13 +431,33 @@ const TrackballModControls = function (object, domElement) {
     _this.dispatchEvent(endEvent);
   }
 
+  function pointerup(event) {
+    if (_this.enabled === false) return;
+    if (event.pointerId !== _activePointerId) return;
+
+    _state = STATE.NONE;
+    if (_this.domElement.releasePointerCapture && _activePointerId !== null) {
+      try {
+        _this.domElement.releasePointerCapture(_activePointerId);
+      } catch (e) {}
+    }
+    _activePointerId = null;
+    _this.domElement.removeEventListener('pointermove', eventHandler);
+    _this.domElement.removeEventListener('pointerup', eventHandler);
+    _this.domElement.removeEventListener('pointercancel', eventHandler);
+    _this.dispatchEvent(endEvent);
+  }
+
+  function pointercancel(event) {
+    pointerup(event);
+  }
+
   function mouseleave(event) {
     mouseup(event);
   }
 
   function mousewheel(event) {
     if (_this.enabled === false) return;
-    event.preventDefault();
     event.stopPropagation();
 
     switch (event.deltaMode) {
@@ -403,6 +483,7 @@ const TrackballModControls = function (object, domElement) {
 
   function touchstart(event) {
     if (_this.enabled === false) return;
+    _this.handleResize();
 
     switch (event.touches.length) {
       case 1:
@@ -473,8 +554,12 @@ const TrackballModControls = function (object, domElement) {
 
   this.dispose = function() {
     this.domElement.removeEventListener('contextmenu', eventHandler, false);
+    this.domElement.removeEventListener('pointerdown', eventHandler, false);
+    this.domElement.removeEventListener('pointermove', eventHandler, false);
+    this.domElement.removeEventListener('pointerup', eventHandler, false);
+    this.domElement.removeEventListener('pointercancel', eventHandler, false);
     this.domElement.removeEventListener('mousedown', eventHandler, false);
-    this.domElement.removeEventListener('wheel', eventHandler, false);
+    this.domElement.removeEventListener('wheel', eventHandler, wheelListenerOptions);
     this.domElement.removeEventListener('touchstart', eventHandler, false);
     this.domElement.removeEventListener('touchend', eventHandler, false);
     this.domElement.removeEventListener('touchmove', eventHandler, false);

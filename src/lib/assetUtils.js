@@ -1,50 +1,69 @@
-import { Assets, Building, Product, Ship } from '@influenceth/sdk';
+import { Building, Product, Ship } from '@influenceth/sdk';
+import imageManifest from '@influenceth/sdk/images/manifests/images.v1.json';
 
+import licensedMediaManifest from '~/assets/media/licensedMedia.v1.json';
 import { appConfig } from '~/appConfig';
+import { getIpfsUrl } from '~/lib/ipfsUtils';
 
 const ASSET_CACHE = {};
+export const IMAGE_ASSETS = imageManifest.assets || {};
+export const LICENSED_MEDIA_ASSETS = licensedMediaManifest.assets || {};
 
-export const getCloudfrontUrl = (rawSlug, { w, h, f } = {}) => {
-  const slug = (w || h)
-    ? window.btoa(
-      JSON.stringify({
-        key: rawSlug,
-        bucket: appConfig.get('Cloudfront.bucket'),
-        edits: {
-          resize: {
-            width: w,
-            height: h,
-            fit: f
-          }
-        }
-      })
-    )
-    : rawSlug;
-  return `${appConfig.get('Cloudfront.imageUrl')}/${slug}`;
-}
+export const getImageAsset = (key) => IMAGE_ASSETS[key];
+
+export const getImageAssetUrl = (assetOrKey) => {
+  const asset = typeof assetOrKey === 'string' ? getImageAsset(assetOrKey) : assetOrKey;
+  if (!asset?.cid) return undefined;
+
+  return getIpfsUrl(asset.cid);
+};
+
+const getClientMediaCid = () => (appConfig.get('ClientMedia.cid') || '').replace(/^\/+|\/+$/g, '');
+let warnedMissingClientMediaCid = false;
+
+export const getLicensedMediaAsset = (key) => LICENSED_MEDIA_ASSETS[key];
+
+export const getLicensedAssetUrl = (assetOrKey) => {
+  const asset = typeof assetOrKey === 'string' ? getLicensedMediaAsset(assetOrKey) : assetOrKey;
+  if (!asset) return undefined;
+
+  const clientMediaCid = getClientMediaCid();
+  if (!clientMediaCid) {
+    if (!warnedMissingClientMediaCid) {
+      console.warn('Missing ClientMedia.cid for licensed media assets');
+      warnedMissingClientMediaCid = true;
+    }
+    return undefined;
+  }
+
+  const path = asset.path.replace(/^\/+/, '');
+  return getIpfsUrl(`${clientMediaCid}/${path}`);
+};
+
+export const getStoryImageUrl = (rawSlug) => {
+  if (!rawSlug) return undefined;
+  const key = `stories/${rawSlug.replace(/^influence\/(?:production|staging)\/images\/stories\//, '')}`;
+  return getLicensedAssetUrl(key);
+};
 
 const getSlug = (assetName) => {
   return (assetName || '').replace(/[^a-z]/ig, '');
 }
 
-const getIconUrl = ({ type, assetName, append, w, h, f } = {}) => {
-  const environment = appConfig.get('App.deployment') || 'production';
+const getManifestIconUrl = (key) => {
+  const url = getImageAssetUrl(key);
+  if (!url) console.warn('Missing image manifest asset', key);
+  return url || '';
+};
 
-  return getCloudfrontUrl(
-    `influence/${environment}/images/icons/${type}/${getSlug(assetName)}${append || ''}.png`,
-    { w, h, f }
-  );
-}
-
-export const getModelUrl = ({ type, assetName, modelVersion, append } = {}) => {
+const getModelUrl = ({ type, assetName, modelVersion, append } = {}) => {
   let slug = `models/${type}/${getSlug(assetName)}${append || ''}`;
   if (modelVersion) slug += `.v${modelVersion}`;
   slug += '.glb';
-  return `${appConfig.get('Cloudfront.otherUrl')}/${slug}`;
+  return getLicensedAssetUrl(slug);
 }
 
 export const BUILDING_SIZES = {
-  w150: { w: 150 },
   w400: { w: 400 },
   w1000: { w: 1000 },
 };
@@ -58,24 +77,11 @@ export const getBuildingIcon = (i, size, isHologram) => {
 
   const cacheKey = `buildingIcon_${i}_${useSize}_${isHologram}`;
   if (!ASSET_CACHE[cacheKey]) {
-    const conf = {
-      type: 'buildings',
-      assetName: Building.TYPES[i]?.name,
-      ...BUILDING_SIZES[useSize]
-    };
-
-    if (isHologram) conf.append = '_Site';
-    ASSET_CACHE[cacheKey] = getIconUrl(conf);
-  }
-
-  return ASSET_CACHE[cacheKey];
-};
-
-export const getBuildingModel = (i) => {
-  const cacheKey = `buildingModel_${i}`;
-
-  if (!ASSET_CACHE[cacheKey]) {
-    ASSET_CACHE[cacheKey] = getModelUrl({ type: 'buildings', assetName: Building.TYPES[i]?.name });
+    const assetName = Building.TYPES[i]?.name;
+    const useSite = isHologram && Number(i) > 0;
+    ASSET_CACHE[cacheKey] = getManifestIconUrl(
+      `icons/${useSite ? 'buildings-site' : 'buildings'}/${useSize}/${i}-${getSlug(assetName)}${useSite ? '-site' : ''}.png`
+    );
   }
 
   return ASSET_CACHE[cacheKey];
@@ -90,13 +96,9 @@ export const getLotShipIcon = (i, size) => {
 
   const cacheKey = `buildingShipIcon_${i}_${useSize}`;
   if (!ASSET_CACHE[cacheKey]) {
-    const conf = {
-      type: 'buildings',
-      assetName: Ship.TYPES[i]?.name,
-      ...BUILDING_SIZES[useSize]
-    };
-
-    ASSET_CACHE[cacheKey] = getIconUrl(conf);
+    ASSET_CACHE[cacheKey] = getManifestIconUrl(
+      `icons/lot-ships/${useSize}/${i}-${getSlug(Ship.TYPES[i]?.name)}.png`
+    );
   }
 
   return ASSET_CACHE[cacheKey];
@@ -104,9 +106,6 @@ export const getLotShipIcon = (i, size) => {
 
 
 export const PRODUCT_SIZES = {
-  w25: { w: 25 },
-  w85: { w: 85 },
-  w125: { w: 125 },
   w400: { w: 400 },
 };
 
@@ -120,29 +119,15 @@ export const getProductIcon = (i, size) => {
   const cacheKey = `productIcon_${i}_${useSize}`;
 
   if (!ASSET_CACHE[cacheKey]) {
-    const conf = {
-      type: 'resources',
-      assetName: Product.TYPES[i]?.name,
-      ...PRODUCT_SIZES[useSize]
-    };
-
-    ASSET_CACHE[cacheKey] = getIconUrl(conf);
+    ASSET_CACHE[cacheKey] = getManifestIconUrl(
+      `icons/resources/${useSize}/${i}-${getSlug(Product.TYPES[i]?.name)}.png`
+    );
   }
 
   return ASSET_CACHE[cacheKey];
 };
 
-// TODO: eliminate versioning once we audit / update all models in S3
-export const getProductModel = (i) => {
-  return getModelUrl({
-    type: 'resources',
-    assetName: Product.TYPES[i]?.name,
-    modelVersion: Assets.Product[i]?.modelVersion
-  });
-};
-
 export const SHIP_SIZES = {
-  w150: { w: 150 },
   w400: { w: 400 },
 };
 
@@ -156,14 +141,9 @@ export const getShipIcon = (i, size, isHologram) => {
   const cacheKey = `shipIcon_${i}_${useSize}_${isHologram}`;
 
   if (!ASSET_CACHE[cacheKey]) {
-    const conf = {
-      type: 'ships',
-      assetName: Ship.TYPES[i]?.name,
-      ...SHIP_SIZES[useSize]
-    };
-
-    if (isHologram) conf.append = '_Holo';
-    ASSET_CACHE[cacheKey] = getIconUrl(conf);
+    ASSET_CACHE[cacheKey] = getManifestIconUrl(
+      `icons/${isHologram ? 'ships-holo' : 'ships'}/${useSize}/${i}-${getSlug(Ship.TYPES[i]?.name)}${isHologram ? '-holo' : ''}.png`
+    );
   }
 
   return ASSET_CACHE[cacheKey];

@@ -1,8 +1,12 @@
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 
 import * as utils from '~/lib/geometryUtils';
 import porkchop from '~/lib/porkchop';
-import { rebuildChunkGeometry } from '~/game/scene/asteroid/helpers/TerrainChunkUtils';
+import {
+  initChunkTextures,
+  rebuildChunkGeometry,
+  rebuildChunkMaps
+} from '~/game/scene/asteroid/helpers/TerrainChunkUtils';
 import { getLotGeometry, getLotRegions, getClosestLots } from '~/game/scene/asteroid/helpers/LotGeometry';
 
 let cache = {
@@ -28,13 +32,13 @@ onmessage = function(event) {
         ...event.data.chunk
       });
       break;
-    // case 'rebuildTerrainMaps':
-    //   if (event.data.asteroid) cache.asteroid = event.data.asteroid;
-    //   rebuildTerrainMaps({
-    //     ...cache.asteroid,
-    //     ...event.data.chunk
-    //   });
-    //   break;
+    case 'rebuildTerrainMaps':
+      if (event.data.asteroid) cache.asteroid = event.data.asteroid;
+      rebuildTerrainMaps({
+        ...cache.asteroid,
+        ...event.data.chunk
+      });
+      break;
     case 'buildLotGeometry':
       if (event.data.asteroid) cache.asteroid = event.data.asteroid;
       buildLotGeometry({
@@ -99,23 +103,30 @@ const rebuildTerrainGeometry = function (chunk) {
   ]);
 }
 
-// const rebuildTerrainMaps = function (chunk) {
-//   chunk.offset = new Vector3(chunk.offset[0], chunk.offset[1], chunk.offset[2]);
-//   chunk.stretch = new Vector3(chunk.stretch[0], chunk.stretch[1], chunk.stretch[2]);
-//   initChunkTextures().then(() => {
-//     const maps = rebuildChunkMaps(chunk);
-//     const transferable = [
-//       maps.colorBitmap,
-//       maps.heightBitmap,
-//       maps.normalBitmap,
-//     ];
-//     if (maps.emissiveBitmap) transferable.push(maps.emissiveBitmap);
-//     postMessage({
-//       topic: 'rebuiltTerrainChunkMaps',
-//       maps
-//     }, transferable);
-//   });
-// }
+const rebuildTerrainMaps = function (chunk) {
+  chunk.offset = new Vector3(chunk.offset[0], chunk.offset[1], chunk.offset[2]);
+  chunk.groupMatrix = (new Matrix4()).fromArray(chunk.groupMatrix);
+
+  initChunkTextures().then(() => {
+    const maps = rebuildChunkMaps(chunk);
+    const transferable = [
+      maps.colorBitmap,
+      maps.heightBitmap,
+      maps.normalBitmap,
+      maps.emissiveBitmap,
+    ].filter((bitmap) => typeof ImageBitmap !== 'undefined' && bitmap instanceof ImageBitmap);
+
+    postMessage({
+      topic: 'rebuiltTerrainChunkMaps',
+      maps
+    }, transferable);
+  }).catch((e) => {
+    postMessage({
+      topic: 'rebuiltTerrainChunkMaps',
+      error: e?.message || 'Unable to rebuild terrain maps in worker'
+    });
+  });
+}
 
 const buildLotGeometry = function({ aboveSurface, config, heightMaps, textureQuality }) {
   const { positions, orientations } = getLotGeometry({

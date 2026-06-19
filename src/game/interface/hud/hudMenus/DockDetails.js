@@ -53,8 +53,10 @@ const ShipBlock = styled(AssetBlock)`
 const Ready = styled.div`
   color: ${p => p.theme.colors.main};
   font-weight: bold;
+  min-height: 18px;
   margin-top: 4px;
   text-transform: uppercase;
+  visibility: ${p => p.$visible ? 'visible' : 'hidden'};
 `;
 
 const DockDetails = ({ onClose }) => {
@@ -127,9 +129,9 @@ const DockDetails = ({ onClose }) => {
                     shipType={ship.Ship.shipType}
                     style={{ width: 100, height: 85 }} />
                   <label style={{ padding: '0 8px', width: 'calc(100% - 100px)' }}>
-                    <h3 style={{ fontSize: '17px' }}>{formatters.shipName(ship)}</h3>
-                    <div><b>{`${Ship.TYPES[ship.Ship.shipType]?.name} #${ship.id}`}</b></div>
-                    {blockTime >= ship.Ship.readyAt && <Ready>Launch Ready</Ready>}
+                    <h3 style={{ fontSize: '17px', margin: 0 }}>{formatters.shipName(ship)}</h3>
+                    <div><b>{Ship.TYPES[ship.Ship.shipType]?.name}</b></div>
+                    <Ready $visible={blockTime >= ship.Ship.readyAt}>Launch Ready</Ready>
                   </label>
                 </ThumbnailWithData>
                 <div style={{ width: 54 }}>

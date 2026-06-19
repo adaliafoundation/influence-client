@@ -1,8 +1,9 @@
+import { useCallback } from 'react';
 import styled from 'styled-components';
-import Clipboard from 'react-clipboard.js';
 
 import useStore from '~/hooks/useStore';
 import { CopyIcon } from '~/components/Icons';
+import { copyTextToClipboard } from '~/lib/clipboard';
 
 const StyledDataReadout = styled.div`
   align-items: center;
@@ -32,10 +33,12 @@ const Data = styled.span`
   text-overflow: ellipsis;
 `;
 
-const StyledClipboard = styled(Clipboard)`
+const StyledClipboard = styled.button`
   background-color: transparent;
   border: 0;
   color: ${p => p.theme.colors.mainText};
+  cursor: pointer;
+  padding: 0;
   visibility: hidden;
 
   &:hover {
@@ -54,6 +57,10 @@ const StyledClipboard = styled(Clipboard)`
 const DataReadout = (props) => {
   const { copyable, ...restProps } = props;
   const playSound = useStore(s => s.dispatchEffectStartRequested);
+  const handleCopyClick = useCallback(async () => {
+    playSound('click');
+    await copyTextToClipboard(copyable);
+  }, [copyable, playSound]);
 
   return (
     <StyledDataReadout {...restProps}>
@@ -62,8 +69,8 @@ const DataReadout = (props) => {
         {props.children}
         {copyable && (
           <StyledClipboard
-            data-clipboard-text={copyable}
-            onClick={() => playSound('click')}>
+            onClick={handleCopyClick}
+            type="button">
             <CopyIcon />
           </StyledClipboard>
         )}

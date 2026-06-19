@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
 import esb from 'elastic-builder';
-import { executeSwap, fetchQuotes } from '@avnu/avnu-sdk';
+import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
@@ -804,7 +804,7 @@ const api = {
   // AVNU endpoints
   getSwapQuote: async ({ sellToken, buyToken, amount, account }) => {
     const options = { baseUrl: appConfig.get('Api.avnu') };
-    return fetchQuotes({
+    return getQuotes({
       sellTokenAddress: sellToken,
       buyTokenAddress: buyToken,
       sellAmount: safeBigInt(amount),
@@ -814,7 +814,7 @@ const api = {
 
   executeSwaySwap: async ({ quote, account }) => {
     const options = { baseUrl: appConfig.get('Api.avnu') };
-    return executeSwap(account, quote, {}, options);
+    return executeSwap({ provider: account, quote, slippage: 0.05, executeApprove: true }, options);
   },
 
   // getBook: async (id) => {

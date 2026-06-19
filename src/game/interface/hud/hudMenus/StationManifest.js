@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import { Permission, Station } from '@influenceth/sdk';
-import { List } from 'react-virtualized';
+import { FixedSizeList } from 'react-window';
 
 import Button from '~/components/ButtonAlt';
 import Dropdown from '~/components/Dropdown';
@@ -16,6 +16,7 @@ import useScreenSize from '~/hooks/useScreenSize';
 import useShip from '~/hooks/useShip';
 import useStationedCrews from '~/hooks/useStationedCrews';
 import useStore from '~/hooks/useStore';
+import useCrewmates from '~/hooks/useCrewmates';
 import formatters from '~/lib/formatters';
 import theme from '~/theme';
 import { CrewInputBlock, MiniBarChart } from '../actionDialogs/components';
@@ -66,6 +67,14 @@ const StationManifest = () => {
   const station = useMemo(() => ship || lot?.building, [lot, ship]);
 
   const { data: unfilteredCrews } = useStationedCrews(station);
+  const crewmateIds = useMemo(() => Array.from(new Set(
+    (unfilteredCrews || []).flatMap((c) => c.Crew?.roster || [])
+  )), [unfilteredCrews]);
+  const { data: crewmates } = useCrewmates(crewmateIds);
+  const crewmateMap = useMemo(() => (crewmates || []).reduce((acc, crewmate) => {
+    if (crewmate?.id) acc[crewmate.id] = crewmate;
+    return acc;
+  }, {}), [crewmates]);
 
   const [nameFilter, setNameFilter] = useState('');
   const [selectedCrewId, setSelectedCrewId] = useState();
@@ -82,9 +91,9 @@ const StationManifest = () => {
   const crews = useMemo(() => {
     return (unfilteredCrews || [])
       .filter((c) => formatters.crewName(c).toLowerCase().includes(nameFilter.toLowerCase()))
-      .map((c) => ({ ...c, _crewmates: c.Crew.roster.map((id) => ({ id })) }))
+      .map((c) => ({ ...c, _crewmates: c.Crew.roster.map((id) => crewmateMap[id] || { id }) }))
       .sort((a, b) => formatters.crewName(a) < formatters.crewName(b) ? -1 : 1)
-  }, [unfilteredCrews, nameFilter]);
+  }, [unfilteredCrews, nameFilter, crewmateMap]);
 
   const crewIsStationed = shipId ? (crew?._location?.shipId === ship?.id) : (crew?._location?.buildingId === lot?.building?.id);
   const hasTray = !crewIsStationed || selectedCrewId;
@@ -99,8 +108,8 @@ const StationManifest = () => {
     history.push(`/crew/${selectedCrewId}`);
   }, [selectedCrewId]);
 
-  const renderCrewRow = useCallback(({ key, index, style }) => (
-    <div key={key} style={style}>
+  const renderCrewRow = useCallback(({ index, style }) => (
+    <div style={{ ...style, paddingRight: 10 }}>
       <CrewInputBlock
         cardWidth={64}
         crew={crews[index]}
@@ -110,7 +119,7 @@ const StationManifest = () => {
         subtle
         style={defaultBlockStyle} />
     </div>
-  ), [crews]);
+  ), [crews, selectedCrewId]);
 
   const listWrapper = useRef();
   const [listHeight, setListHeight] = useState(0);
@@ -187,13 +196,15 @@ const StationManifest = () => {
           </>
         )}
         {!shipId && (
-          <List
+          <FixedSizeList
             width={372}
             height={listHeight}
-            rowCount={crews?.length || 0}
-            rowHeight={152}
-            rowRenderer={renderCrewRow}
-          />
+            itemCount={crews?.length || 0}
+            itemSize={152}
+            itemKey={(index) => crews?.[index]?.id || index}
+            overscanCount={5}>
+            {renderCrewRow}
+          </FixedSizeList>
         )}
       </ListWrapper>
 

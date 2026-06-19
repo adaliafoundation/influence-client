@@ -1,0 +1,1082 @@
+{
+  "version": "v1",
+  "generatedAt": "2026-06-11T09:35:08.256Z",
+  "licenseScope": "Client-only licensed media for the Influence client. Do not publish through the SDK image pipeline.",
+  "uploadPrefix": "assets/client-media",
+  "gateways": {
+    "ipfsGatewayEnvVar": "REACT_APP_API_IPFS",
+    "directoryCidConfigKey": "ClientMedia.cid",
+    "directoryCidEnvVar": "REACT_APP_CLIENTMEDIA_CID"
+  },
+  "assets": {
+    "models/ships/EscapeModule.glb": {
+      "key": "models/ships/EscapeModule.glb",
+      "path": "models/ships/EscapeModule.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/EscapeModule.glb",
+      "id": 1,
+      "name": "Escape Module",
+      "variant": 1
+    },
+    "models/ships/HeavyTransport.glb": {
+      "key": "models/ships/HeavyTransport.glb",
+      "path": "models/ships/HeavyTransport.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/HeavyTransport.glb",
+      "id": 3,
+      "name": "Heavy Transport",
+      "variant": 1
+    },
+    "models/ships/LightTransport_Variant2.glb": {
+      "key": "models/ships/LightTransport_Variant2.glb",
+      "path": "models/ships/LightTransport_Variant2.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/LightTransport_Variant2.glb",
+      "id": 2,
+      "name": "Light Transport",
+      "variant": 2
+    },
+    "models/ships/LightTransport_Variant3.glb": {
+      "key": "models/ships/LightTransport_Variant3.glb",
+      "path": "models/ships/LightTransport_Variant3.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/LightTransport_Variant3.glb",
+      "id": 2,
+      "name": "Light Transport",
+      "variant": 3
+    },
+    "models/ships/LightTransport_Variant4.glb": {
+      "key": "models/ships/LightTransport_Variant4.glb",
+      "path": "models/ships/LightTransport_Variant4.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/LightTransport_Variant4.glb",
+      "id": 2,
+      "name": "Light Transport",
+      "variant": 4
+    },
+    "models/ships/LightTransport.glb": {
+      "key": "models/ships/LightTransport.glb",
+      "path": "models/ships/LightTransport.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/LightTransport.glb",
+      "id": 2,
+      "name": "Light Transport",
+      "variant": 1
+    },
+    "models/ships/Shuttle.glb": {
+      "key": "models/ships/Shuttle.glb",
+      "path": "models/ships/Shuttle.glb",
+      "version": "v1",
+      "kind": "model",
+      "family": "ships",
+      "storageKey": "assets/client-media/models/ships/Shuttle.glb",
+      "id": 4,
+      "name": "Shuttle",
+      "variant": 1
+    },
+    "music/ambient1.mp3": {
+      "key": "music/ambient1.mp3",
+      "path": "music/ambient1.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient1.mp3"
+    },
+    "music/ambient10.mp3": {
+      "key": "music/ambient10.mp3",
+      "path": "music/ambient10.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient10.mp3"
+    },
+    "music/ambient11.mp3": {
+      "key": "music/ambient11.mp3",
+      "path": "music/ambient11.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient11.mp3"
+    },
+    "music/ambient12.mp3": {
+      "key": "music/ambient12.mp3",
+      "path": "music/ambient12.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient12.mp3"
+    },
+    "music/ambient2.mp3": {
+      "key": "music/ambient2.mp3",
+      "path": "music/ambient2.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient2.mp3"
+    },
+    "music/ambient3.mp3": {
+      "key": "music/ambient3.mp3",
+      "path": "music/ambient3.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient3.mp3"
+    },
+    "music/ambient4.mp3": {
+      "key": "music/ambient4.mp3",
+      "path": "music/ambient4.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient4.mp3"
+    },
+    "music/ambient5.mp3": {
+      "key": "music/ambient5.mp3",
+      "path": "music/ambient5.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient5.mp3"
+    },
+    "music/ambient6.mp3": {
+      "key": "music/ambient6.mp3",
+      "path": "music/ambient6.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient6.mp3"
+    },
+    "music/ambient7.mp3": {
+      "key": "music/ambient7.mp3",
+      "path": "music/ambient7.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient7.mp3"
+    },
+    "music/ambient8.mp3": {
+      "key": "music/ambient8.mp3",
+      "path": "music/ambient8.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient8.mp3"
+    },
+    "music/ambient9.mp3": {
+      "key": "music/ambient9.mp3",
+      "path": "music/ambient9.mp3",
+      "version": "v1",
+      "kind": "music",
+      "family": "music",
+      "storageKey": "assets/client-media/music/ambient9.mp3"
+    },
+    "sounds/bioreactor-short.m4a": {
+      "key": "sounds/bioreactor-short.m4a",
+      "path": "sounds/bioreactor-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/bioreactor-short.m4a"
+    },
+    "sounds/chatter/bioreactor_1.mp3": {
+      "key": "sounds/chatter/bioreactor_1.mp3",
+      "path": "sounds/chatter/bioreactor_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_1.mp3"
+    },
+    "sounds/chatter/bioreactor_2.mp3": {
+      "key": "sounds/chatter/bioreactor_2.mp3",
+      "path": "sounds/chatter/bioreactor_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_2.mp3"
+    },
+    "sounds/chatter/bioreactor_3.mp3": {
+      "key": "sounds/chatter/bioreactor_3.mp3",
+      "path": "sounds/chatter/bioreactor_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_3.mp3"
+    },
+    "sounds/chatter/bioreactor_4.mp3": {
+      "key": "sounds/chatter/bioreactor_4.mp3",
+      "path": "sounds/chatter/bioreactor_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_4.mp3"
+    },
+    "sounds/chatter/bioreactor_5.mp3": {
+      "key": "sounds/chatter/bioreactor_5.mp3",
+      "path": "sounds/chatter/bioreactor_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_5.mp3"
+    },
+    "sounds/chatter/bioreactor_6.mp3": {
+      "key": "sounds/chatter/bioreactor_6.mp3",
+      "path": "sounds/chatter/bioreactor_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_6.mp3"
+    },
+    "sounds/chatter/bioreactor_7.mp3": {
+      "key": "sounds/chatter/bioreactor_7.mp3",
+      "path": "sounds/chatter/bioreactor_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/bioreactor_7.mp3"
+    },
+    "sounds/chatter/extractor_1.mp3": {
+      "key": "sounds/chatter/extractor_1.mp3",
+      "path": "sounds/chatter/extractor_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_1.mp3"
+    },
+    "sounds/chatter/extractor_2.mp3": {
+      "key": "sounds/chatter/extractor_2.mp3",
+      "path": "sounds/chatter/extractor_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_2.mp3"
+    },
+    "sounds/chatter/extractor_3.mp3": {
+      "key": "sounds/chatter/extractor_3.mp3",
+      "path": "sounds/chatter/extractor_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_3.mp3"
+    },
+    "sounds/chatter/extractor_4.mp3": {
+      "key": "sounds/chatter/extractor_4.mp3",
+      "path": "sounds/chatter/extractor_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_4.mp3"
+    },
+    "sounds/chatter/extractor_5.mp3": {
+      "key": "sounds/chatter/extractor_5.mp3",
+      "path": "sounds/chatter/extractor_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_5.mp3"
+    },
+    "sounds/chatter/extractor_6.mp3": {
+      "key": "sounds/chatter/extractor_6.mp3",
+      "path": "sounds/chatter/extractor_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_6.mp3"
+    },
+    "sounds/chatter/extractor_7.mp3": {
+      "key": "sounds/chatter/extractor_7.mp3",
+      "path": "sounds/chatter/extractor_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/extractor_7.mp3"
+    },
+    "sounds/chatter/factory_1.mp3": {
+      "key": "sounds/chatter/factory_1.mp3",
+      "path": "sounds/chatter/factory_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/factory_1.mp3"
+    },
+    "sounds/chatter/factory_2.mp3": {
+      "key": "sounds/chatter/factory_2.mp3",
+      "path": "sounds/chatter/factory_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/factory_2.mp3"
+    },
+    "sounds/chatter/factory_3.mp3": {
+      "key": "sounds/chatter/factory_3.mp3",
+      "path": "sounds/chatter/factory_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/factory_3.mp3"
+    },
+    "sounds/chatter/factory_4.mp3": {
+      "key": "sounds/chatter/factory_4.mp3",
+      "path": "sounds/chatter/factory_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/factory_4.mp3"
+    },
+    "sounds/chatter/factory_5.mp3": {
+      "key": "sounds/chatter/factory_5.mp3",
+      "path": "sounds/chatter/factory_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/factory_5.mp3"
+    },
+    "sounds/chatter/habitat_1.mp3": {
+      "key": "sounds/chatter/habitat_1.mp3",
+      "path": "sounds/chatter/habitat_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_1.mp3"
+    },
+    "sounds/chatter/habitat_2.mp3": {
+      "key": "sounds/chatter/habitat_2.mp3",
+      "path": "sounds/chatter/habitat_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_2.mp3"
+    },
+    "sounds/chatter/habitat_3.mp3": {
+      "key": "sounds/chatter/habitat_3.mp3",
+      "path": "sounds/chatter/habitat_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_3.mp3"
+    },
+    "sounds/chatter/habitat_4.mp3": {
+      "key": "sounds/chatter/habitat_4.mp3",
+      "path": "sounds/chatter/habitat_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_4.mp3"
+    },
+    "sounds/chatter/habitat_5.mp3": {
+      "key": "sounds/chatter/habitat_5.mp3",
+      "path": "sounds/chatter/habitat_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_5.mp3"
+    },
+    "sounds/chatter/habitat_6.mp3": {
+      "key": "sounds/chatter/habitat_6.mp3",
+      "path": "sounds/chatter/habitat_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_6.mp3"
+    },
+    "sounds/chatter/habitat_7.mp3": {
+      "key": "sounds/chatter/habitat_7.mp3",
+      "path": "sounds/chatter/habitat_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_7.mp3"
+    },
+    "sounds/chatter/habitat_8.mp3": {
+      "key": "sounds/chatter/habitat_8.mp3",
+      "path": "sounds/chatter/habitat_8.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/habitat_8.mp3"
+    },
+    "sounds/chatter/marketplace_1.mp3": {
+      "key": "sounds/chatter/marketplace_1.mp3",
+      "path": "sounds/chatter/marketplace_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_1.mp3"
+    },
+    "sounds/chatter/marketplace_2.mp3": {
+      "key": "sounds/chatter/marketplace_2.mp3",
+      "path": "sounds/chatter/marketplace_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_2.mp3"
+    },
+    "sounds/chatter/marketplace_3.mp3": {
+      "key": "sounds/chatter/marketplace_3.mp3",
+      "path": "sounds/chatter/marketplace_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_3.mp3"
+    },
+    "sounds/chatter/marketplace_4.mp3": {
+      "key": "sounds/chatter/marketplace_4.mp3",
+      "path": "sounds/chatter/marketplace_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_4.mp3"
+    },
+    "sounds/chatter/marketplace_5.mp3": {
+      "key": "sounds/chatter/marketplace_5.mp3",
+      "path": "sounds/chatter/marketplace_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_5.mp3"
+    },
+    "sounds/chatter/marketplace_6.mp3": {
+      "key": "sounds/chatter/marketplace_6.mp3",
+      "path": "sounds/chatter/marketplace_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_6.mp3"
+    },
+    "sounds/chatter/marketplace_7.mp3": {
+      "key": "sounds/chatter/marketplace_7.mp3",
+      "path": "sounds/chatter/marketplace_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/marketplace_7.mp3"
+    },
+    "sounds/chatter/refinery_1.mp3": {
+      "key": "sounds/chatter/refinery_1.mp3",
+      "path": "sounds/chatter/refinery_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_1.mp3"
+    },
+    "sounds/chatter/refinery_2.mp3": {
+      "key": "sounds/chatter/refinery_2.mp3",
+      "path": "sounds/chatter/refinery_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_2.mp3"
+    },
+    "sounds/chatter/refinery_3.mp3": {
+      "key": "sounds/chatter/refinery_3.mp3",
+      "path": "sounds/chatter/refinery_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_3.mp3"
+    },
+    "sounds/chatter/refinery_4.mp3": {
+      "key": "sounds/chatter/refinery_4.mp3",
+      "path": "sounds/chatter/refinery_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_4.mp3"
+    },
+    "sounds/chatter/refinery_5.mp3": {
+      "key": "sounds/chatter/refinery_5.mp3",
+      "path": "sounds/chatter/refinery_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_5.mp3"
+    },
+    "sounds/chatter/refinery_6.mp3": {
+      "key": "sounds/chatter/refinery_6.mp3",
+      "path": "sounds/chatter/refinery_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_6.mp3"
+    },
+    "sounds/chatter/refinery_7.mp3": {
+      "key": "sounds/chatter/refinery_7.mp3",
+      "path": "sounds/chatter/refinery_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/refinery_7.mp3"
+    },
+    "sounds/chatter/shipyard_1.mp3": {
+      "key": "sounds/chatter/shipyard_1.mp3",
+      "path": "sounds/chatter/shipyard_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_1.mp3"
+    },
+    "sounds/chatter/shipyard_2.mp3": {
+      "key": "sounds/chatter/shipyard_2.mp3",
+      "path": "sounds/chatter/shipyard_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_2.mp3"
+    },
+    "sounds/chatter/shipyard_3.mp3": {
+      "key": "sounds/chatter/shipyard_3.mp3",
+      "path": "sounds/chatter/shipyard_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_3.mp3"
+    },
+    "sounds/chatter/shipyard_4.mp3": {
+      "key": "sounds/chatter/shipyard_4.mp3",
+      "path": "sounds/chatter/shipyard_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_4.mp3"
+    },
+    "sounds/chatter/shipyard_5.mp3": {
+      "key": "sounds/chatter/shipyard_5.mp3",
+      "path": "sounds/chatter/shipyard_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_5.mp3"
+    },
+    "sounds/chatter/shipyard_6.mp3": {
+      "key": "sounds/chatter/shipyard_6.mp3",
+      "path": "sounds/chatter/shipyard_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/shipyard_6.mp3"
+    },
+    "sounds/chatter/spaceport_1.mp3": {
+      "key": "sounds/chatter/spaceport_1.mp3",
+      "path": "sounds/chatter/spaceport_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/spaceport_1.mp3"
+    },
+    "sounds/chatter/spaceport_2.mp3": {
+      "key": "sounds/chatter/spaceport_2.mp3",
+      "path": "sounds/chatter/spaceport_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/spaceport_2.mp3"
+    },
+    "sounds/chatter/spaceport_3.mp3": {
+      "key": "sounds/chatter/spaceport_3.mp3",
+      "path": "sounds/chatter/spaceport_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/spaceport_3.mp3"
+    },
+    "sounds/chatter/spaceport_4.mp3": {
+      "key": "sounds/chatter/spaceport_4.mp3",
+      "path": "sounds/chatter/spaceport_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/spaceport_4.mp3"
+    },
+    "sounds/chatter/warehouse_1.mp3": {
+      "key": "sounds/chatter/warehouse_1.mp3",
+      "path": "sounds/chatter/warehouse_1.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_1.mp3"
+    },
+    "sounds/chatter/warehouse_2.mp3": {
+      "key": "sounds/chatter/warehouse_2.mp3",
+      "path": "sounds/chatter/warehouse_2.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_2.mp3"
+    },
+    "sounds/chatter/warehouse_3.mp3": {
+      "key": "sounds/chatter/warehouse_3.mp3",
+      "path": "sounds/chatter/warehouse_3.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_3.mp3"
+    },
+    "sounds/chatter/warehouse_4.mp3": {
+      "key": "sounds/chatter/warehouse_4.mp3",
+      "path": "sounds/chatter/warehouse_4.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_4.mp3"
+    },
+    "sounds/chatter/warehouse_5.mp3": {
+      "key": "sounds/chatter/warehouse_5.mp3",
+      "path": "sounds/chatter/warehouse_5.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_5.mp3"
+    },
+    "sounds/chatter/warehouse_6.mp3": {
+      "key": "sounds/chatter/warehouse_6.mp3",
+      "path": "sounds/chatter/warehouse_6.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_6.mp3"
+    },
+    "sounds/chatter/warehouse_7.mp3": {
+      "key": "sounds/chatter/warehouse_7.mp3",
+      "path": "sounds/chatter/warehouse_7.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "building-chatter",
+      "storageKey": "assets/client-media/sounds/chatter/warehouse_7.mp3"
+    },
+    "sounds/click.mp3": {
+      "key": "sounds/click.mp3",
+      "path": "sounds/click.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/click.mp3"
+    },
+    "sounds/extractor-short.m4a": {
+      "key": "sounds/extractor-short.m4a",
+      "path": "sounds/extractor-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/extractor-short.m4a"
+    },
+    "sounds/factory-short.m4a": {
+      "key": "sounds/factory-short.m4a",
+      "path": "sounds/factory-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/factory-short.m4a"
+    },
+    "sounds/failure.mp3": {
+      "key": "sounds/failure.mp3",
+      "path": "sounds/failure.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/failure.mp3"
+    },
+    "sounds/habitat-short.m4a": {
+      "key": "sounds/habitat-short.m4a",
+      "path": "sounds/habitat-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/habitat-short.m4a"
+    },
+    "sounds/marketplace-short.m4a": {
+      "key": "sounds/marketplace-short.m4a",
+      "path": "sounds/marketplace-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/marketplace-short.m4a"
+    },
+    "sounds/refinery-short.m4a": {
+      "key": "sounds/refinery-short.m4a",
+      "path": "sounds/refinery-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/refinery-short.m4a"
+    },
+    "sounds/ship-flight-loop.m4a": {
+      "key": "sounds/ship-flight-loop.m4a",
+      "path": "sounds/ship-flight-loop.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/ship-flight-loop.m4a"
+    },
+    "sounds/shipyard-short.m4a": {
+      "key": "sounds/shipyard-short.m4a",
+      "path": "sounds/shipyard-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/shipyard-short.m4a"
+    },
+    "sounds/spaceport-short.m4a": {
+      "key": "sounds/spaceport-short.m4a",
+      "path": "sounds/spaceport-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/spaceport-short.m4a"
+    },
+    "sounds/success.mp3": {
+      "key": "sounds/success.mp3",
+      "path": "sounds/success.mp3",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/success.mp3"
+    },
+    "sounds/warehouse-short.m4a": {
+      "key": "sounds/warehouse-short.m4a",
+      "path": "sounds/warehouse-short.m4a",
+      "version": "v1",
+      "kind": "sound",
+      "family": "sounds",
+      "storageKey": "assets/client-media/sounds/warehouse-short.m4a"
+    },
+    "stories/adalian-recruitment/1.jpg": {
+      "key": "stories/adalian-recruitment/1.jpg",
+      "path": "stories/adalian-recruitment/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/adalian-recruitment/1.jpg"
+    },
+    "stories/adalian-recruitment/2.jpg": {
+      "key": "stories/adalian-recruitment/2.jpg",
+      "path": "stories/adalian-recruitment/2.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/adalian-recruitment/2.jpg"
+    },
+    "stories/adalian-recruitment/3.jpg": {
+      "key": "stories/adalian-recruitment/3.jpg",
+      "path": "stories/adalian-recruitment/3.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/adalian-recruitment/3.jpg"
+    },
+    "stories/adalians/1.jpg": {
+      "key": "stories/adalians/1.jpg",
+      "path": "stories/adalians/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/adalians/1.jpg"
+    },
+    "stories/always-leave-a-note/1.jpg": {
+      "key": "stories/always-leave-a-note/1.jpg",
+      "path": "stories/always-leave-a-note/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/always-leave-a-note/1.jpg"
+    },
+    "stories/counterthrust/1.jpg": {
+      "key": "stories/counterthrust/1.jpg",
+      "path": "stories/counterthrust/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/counterthrust/1.jpg"
+    },
+    "stories/earth-and-the-void/1.jpg": {
+      "key": "stories/earth-and-the-void/1.jpg",
+      "path": "stories/earth-and-the-void/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/earth-and-the-void/1.jpg"
+    },
+    "stories/fly-me-to-the-moon/1.jpg": {
+      "key": "stories/fly-me-to-the-moon/1.jpg",
+      "path": "stories/fly-me-to-the-moon/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/fly-me-to-the-moon/1.jpg"
+    },
+    "stories/foothold/1.jpg": {
+      "key": "stories/foothold/1.jpg",
+      "path": "stories/foothold/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/foothold/1.jpg"
+    },
+    "stories/greatness/1.jpg": {
+      "key": "stories/greatness/1.jpg",
+      "path": "stories/greatness/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/greatness/1.jpg"
+    },
+    "stories/groundbreaking/1.jpg": {
+      "key": "stories/groundbreaking/1.jpg",
+      "path": "stories/groundbreaking/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/groundbreaking/1.jpg"
+    },
+    "stories/keep-em-separated/1.jpg": {
+      "key": "stories/keep-em-separated/1.jpg",
+      "path": "stories/keep-em-separated/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/keep-em-separated/1.jpg"
+    },
+    "stories/landfall/1.jpg": {
+      "key": "stories/landfall/1.jpg",
+      "path": "stories/landfall/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/landfall/1.jpg"
+    },
+    "stories/no-sound-in-space/1.jpg": {
+      "key": "stories/no-sound-in-space/1.jpg",
+      "path": "stories/no-sound-in-space/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/no-sound-in-space/1.jpg"
+    },
+    "stories/stardust/1.jpg": {
+      "key": "stories/stardust/1.jpg",
+      "path": "stories/stardust/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/stardust/1.jpg"
+    },
+    "stories/the-cake-is-a-half-truth/1.jpg": {
+      "key": "stories/the-cake-is-a-half-truth/1.jpg",
+      "path": "stories/the-cake-is-a-half-truth/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/the-cake-is-a-half-truth/1.jpg"
+    },
+    "stories/the-planets/1.jpg": {
+      "key": "stories/the-planets/1.jpg",
+      "path": "stories/the-planets/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/the-planets/1.jpg"
+    },
+    "stories/the-proposal/1.jpg": {
+      "key": "stories/the-proposal/1.jpg",
+      "path": "stories/the-proposal/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/the-proposal/1.jpg"
+    },
+    "videos/intro-streaming.m3u8": {
+      "key": "videos/intro-streaming.m3u8",
+      "path": "videos/intro-streaming.m3u8",
+      "version": "v1",
+      "kind": "video-playlist",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming.m3u8"
+    },
+    "videos/intro-streaming0.ts": {
+      "key": "videos/intro-streaming0.ts",
+      "path": "videos/intro-streaming0.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming0.ts"
+    },
+    "videos/intro-streaming1.ts": {
+      "key": "videos/intro-streaming1.ts",
+      "path": "videos/intro-streaming1.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming1.ts"
+    },
+    "videos/intro-streaming10.ts": {
+      "key": "videos/intro-streaming10.ts",
+      "path": "videos/intro-streaming10.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming10.ts"
+    },
+    "videos/intro-streaming11.ts": {
+      "key": "videos/intro-streaming11.ts",
+      "path": "videos/intro-streaming11.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming11.ts"
+    },
+    "videos/intro-streaming12.ts": {
+      "key": "videos/intro-streaming12.ts",
+      "path": "videos/intro-streaming12.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming12.ts"
+    },
+    "videos/intro-streaming13.ts": {
+      "key": "videos/intro-streaming13.ts",
+      "path": "videos/intro-streaming13.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming13.ts"
+    },
+    "videos/intro-streaming14.ts": {
+      "key": "videos/intro-streaming14.ts",
+      "path": "videos/intro-streaming14.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming14.ts"
+    },
+    "videos/intro-streaming15.ts": {
+      "key": "videos/intro-streaming15.ts",
+      "path": "videos/intro-streaming15.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming15.ts"
+    },
+    "videos/intro-streaming16.ts": {
+      "key": "videos/intro-streaming16.ts",
+      "path": "videos/intro-streaming16.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming16.ts"
+    },
+    "videos/intro-streaming17.ts": {
+      "key": "videos/intro-streaming17.ts",
+      "path": "videos/intro-streaming17.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming17.ts"
+    },
+    "videos/intro-streaming18.ts": {
+      "key": "videos/intro-streaming18.ts",
+      "path": "videos/intro-streaming18.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming18.ts"
+    },
+    "videos/intro-streaming19.ts": {
+      "key": "videos/intro-streaming19.ts",
+      "path": "videos/intro-streaming19.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming19.ts"
+    },
+    "videos/intro-streaming2.ts": {
+      "key": "videos/intro-streaming2.ts",
+      "path": "videos/intro-streaming2.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming2.ts"
+    },
+    "videos/intro-streaming20.ts": {
+      "key": "videos/intro-streaming20.ts",
+      "path": "videos/intro-streaming20.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming20.ts"
+    },
+    "videos/intro-streaming3.ts": {
+      "key": "videos/intro-streaming3.ts",
+      "path": "videos/intro-streaming3.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming3.ts"
+    },
+    "videos/intro-streaming4.ts": {
+      "key": "videos/intro-streaming4.ts",
+      "path": "videos/intro-streaming4.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming4.ts"
+    },
+    "videos/intro-streaming5.ts": {
+      "key": "videos/intro-streaming5.ts",
+      "path": "videos/intro-streaming5.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming5.ts"
+    },
+    "videos/intro-streaming6.ts": {
+      "key": "videos/intro-streaming6.ts",
+      "path": "videos/intro-streaming6.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming6.ts"
+    },
+    "videos/intro-streaming7.ts": {
+      "key": "videos/intro-streaming7.ts",
+      "path": "videos/intro-streaming7.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming7.ts"
+    },
+    "videos/intro-streaming8.ts": {
+      "key": "videos/intro-streaming8.ts",
+      "path": "videos/intro-streaming8.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming8.ts"
+    },
+    "videos/intro-streaming9.ts": {
+      "key": "videos/intro-streaming9.ts",
+      "path": "videos/intro-streaming9.ts",
+      "version": "v1",
+      "kind": "video-segment",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro-streaming9.ts"
+    },
+    "videos/intro.m3u8": {
+      "key": "videos/intro.m3u8",
+      "path": "videos/intro.m3u8",
+      "version": "v1",
+      "kind": "video-playlist",
+      "family": "intro",
+      "storageKey": "assets/client-media/videos/intro.m3u8"
+    }
+  }
+}

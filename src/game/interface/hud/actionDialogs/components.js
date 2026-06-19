@@ -21,7 +21,7 @@ import {
   Time
 } from '@influenceth/sdk';
 import numeral from 'numeral';
-import { List } from 'react-virtualized';
+import { VariableSizeList } from 'react-window';
 
 import AsteroidRendering from '~/components/AsteroidRendering';
 import Button from '~/components/ButtonAlt';
@@ -84,8 +84,9 @@ import useShip from '~/hooks/useShip';
 import { reactBool, formatFixed, formatTimer, nativeBool, locationsArrToObj, keyify, formatPrice, getCrewAbilityBonuses, ordersToFills } from '~/lib/utils';
 import actionStage from '~/lib/actionStages';
 import constants from '~/lib/constants';
-import { getBuildingIcon, getLotShipIcon, getShipIcon } from '~/lib/assetUtils';
+import { getLotShipIcon, getShipIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
+import { getBuildingSpriteStyle, getLotShipSpriteStyle, getShipSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import theme, { hexToRGB } from '~/theme';
 import { theming } from '../ActionDialog';
 import ThumbnailWithData from '~/components/AssetThumbnailWithData';
@@ -1486,7 +1487,7 @@ export const SelectionDialog = ({ children, isCompletable, open, onClose, onComp
 
 const ListWrapper = styled.div`
   min-height: 250px;
-  overflow: hidden auto;
+  overflow: hidden;
 `;
 export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open, title }) => {
   const { height: screenHeight } = useScreenSize();
@@ -1512,12 +1513,17 @@ export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open
   const hydratedLocation = useHydratedLocation(firstNonEmptyCrewLocation);
 
   const listWrapper = useRef();
+  const listRef = useRef();
   const [listHeight, setListHeight] = useState(0);
   useEffect(() => {
     setListHeight(listWrapper.current?.clientHeight || 500);
-  }, [crews?.length, screenHeight]);
+  }, [crews?.length, open, screenHeight]);
 
-  const getCrewRowHeight = useCallback(({ index }) => {
+  useEffect(() => {
+    listRef.current?.resetAfterIndex(0, true);
+  }, [crews?.length, firstNonEmptyCrew?.id, firstEmptyCrew?.id]);
+
+  const getCrewRowHeight = useCallback((index) => {
     if (!crews?.[index]) return 0;
     const crew = crews[index];
     const isFirstNonEmpty = crew.id === firstNonEmptyCrew?.id;
@@ -1525,14 +1531,14 @@ export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open
     return 152 + ((isFirstNonEmpty || isFirstEmpty) ? 26 : 0);
   }, [crews, firstNonEmptyCrew?.id, firstEmptyCrew?.id]);
 
-  const renderCrewRow = useCallback(({ key, index, style }) => {
+  const renderCrewRow = useCallback(({ index, style }) => {
     if (!crews?.[index]) return null;
     const crew = crews[index];
     const disabled = disabler ? disabler(crew) : false;
     const isFirstNonEmpty = crew.id === firstNonEmptyCrew?.id;
     const isFirstEmpty = crew.id === firstEmptyCrew?.id;
     return (
-      <div key={key} style={style}>
+      <div style={style}>
         <CrewInputBlock
           cardWidth={64}
           crew={crew}
@@ -1555,7 +1561,7 @@ export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open
           style={{ marginBottom: 8, opacity: disabled ? 0.5 : 1, width: '100%' }} />
       </div>
     );
-  }, [crews, disabler, firstNonEmptyCrew?.id, firstEmptyCrew?.id, hydratedLocation]);
+  }, [crews, disabler, firstNonEmptyCrew?.id, firstEmptyCrew?.id, hydratedLocation, selection?.id]);
 
   return (
     <SelectionDialog
@@ -1565,13 +1571,16 @@ export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open
       open={open}
       title={title || 'Crew Selection'}>
       <ListWrapper ref={listWrapper}>
-        <List
+        <VariableSizeList
+          ref={listRef}
           width={372}
           height={listHeight}
-          rowCount={crews?.length || 0}
-          rowHeight={getCrewRowHeight}
-          rowRenderer={renderCrewRow}
-        />
+          itemCount={crews?.length || 0}
+          itemSize={getCrewRowHeight}
+          itemKey={(index) => crews?.[index]?.id || index}
+          overscanCount={5}>
+          {renderCrewRow}
+        </VariableSizeList>
       </ListWrapper>
     </SelectionDialog>
   );
@@ -3467,13 +3476,18 @@ export const AsteroidImage = ({ asteroid, size }) => {
 }
 
 export const ShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, iconOverlayColor, inventories, inventoryBonuses, showInventoryStatusForType, simulated, size = 'w150', backgroundSize = 'cover', style = {} }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const shipAsset = Ship.TYPES[Math.abs(shipType)]; // abs for simulated ships
   if (!shipAsset) return null;
 
   const capacity = getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
+  const spriteStyle = size === 'w150' ? getShipSpriteStyle(shipAsset.i, simulated) : null;
   return (
     <ShipThumbnailWrapper style={style}>
-      <ResourceImage src={getShipIcon(shipAsset.i, size, simulated)} style={{ backgroundSize }} />
+      <ResourceImage
+        src={spriteStyle ? undefined : getShipIcon(shipAsset.i, size, simulated)}
+        style={{ backgroundSize, ...spriteStyle }} />
       {showInventoryStatusForType !== undefined && (
         <>
           <InventoryUtilization
@@ -3494,13 +3508,18 @@ export const ShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, ic
 };
 
 export const LotShipImage = ({ shipType, iconBadge, iconBadgeColor, iconOverlay, iconOverlayColor, inventories, inventoryBonuses, showInventoryStatusForType, size = 'w150', backgroundSize = 'cover', style = {} }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const shipAsset = Ship.TYPES[Math.abs(shipType)]; // abs for simulated ships
   if (!shipAsset) return null;
 
   const capacity = getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
+  const spriteStyle = size === 'w150' ? getLotShipSpriteStyle(shipAsset.i) : null;
   return (
     <ShipThumbnailWrapper style={style}>
-      <ResourceImage src={getLotShipIcon(shipAsset.i, size)} style={{ backgroundSize }} />
+      <ResourceImage
+        src={spriteStyle ? undefined : getLotShipIcon(shipAsset.i, size)}
+        style={{ backgroundSize, ...spriteStyle }} />
       {showInventoryStatusForType !== undefined && (
         <>
           <InventoryUtilization
@@ -3536,14 +3555,18 @@ export const BuildingImage = ({
   style,
   unfinished
 }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.buildings);
+
   const buildingAsset = Building.TYPES[buildingType];
   if (!buildingAsset) return null;
 
   const capacity = inventory ? getCapacityStats(inventory, inventoryBonuses) : getCapacityUsage(inventories, showInventoryStatusForType, inventoryBonuses);
   const closerLimit = (capacity.volume.used + capacity.volume.reserved) / capacity.volume.max > (capacity.mass.used + capacity.mass.reserved) / capacity.mass.max ? 'volume' : 'mass';
+  const spriteStyle = getBuildingSpriteStyle(buildingAsset.i, unfinished);
   return (
     <BuildingThumbnailWrapper outlineColor={iconBorderColor} style={style}>
-      <ResourceImage src={getBuildingIcon(buildingAsset.i, 'w150', unfinished)} />
+      <ResourceImage
+        style={spriteStyle || undefined} />
       {inventory !== false && (capacity?.mass?.max || capacity?.mass?.volume) && (
         <>
           <InventoryLabel overloaded={error}>

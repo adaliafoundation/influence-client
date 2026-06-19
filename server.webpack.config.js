@@ -4,6 +4,12 @@ const TerserPlugin = require('terser-webpack-plugin');
 module.exports = {
   entry: './server.js',
   mode: 'production',
+  ignoreWarnings: [
+    (warning) => (
+      warning?.module?.resource?.includes('/express/lib/view.js')
+      && /Critical dependency: the request of a dependency is an expression/.test(warning?.message || '')
+    )
+  ],
   node: {
     __dirname: false
   },

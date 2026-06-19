@@ -6,10 +6,10 @@ import Details from '~/components/DetailsModal';
 import HeroLayout from '~/components/HeroLayout';
 import { GenesisIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
-import { getCloudfrontUrl } from '~/lib/assetUtils';
+import { getStoryImageUrl } from '~/lib/assetUtils';
 import { nativeBool } from '~/lib/utils';
 
-const coverImage = getCloudfrontUrl('influence/production/images/stories/earth-and-the-void/1.jpg', { w: 1500 });
+const coverImage = getStoryImageUrl('influence/production/images/stories/earth-and-the-void/1.jpg', { w: 1500 });
 
 const Flourish = styled.div`
   align-items: center;

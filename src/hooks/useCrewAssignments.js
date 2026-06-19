@@ -1,6 +1,6 @@
 // TODO: ecs refactor -- maybe deprecated? what about random event stories?
 
-// import { useQuery } from 'react-query';
+// import { useQuery } from '@tanstack/react-query';
 // import useSession from '~/hooks/useSession';
 
 // import api from '~/lib/api';

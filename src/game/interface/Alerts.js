@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ReactNotifications, Store as notify } from 'react-notifications-component';
-import 'react-notifications-component/dist/theme.css';
+import '~/compat/react-notifications-component.css';
 import 'animate.css';
 
 import { LinkIcon } from '~/components/Icons';
@@ -44,6 +44,7 @@ const StyledReactNotification = styled(ReactNotifications)`
     border-radius: 0;
     border-width: 5px;
     cursor: ${p => p.theme.cursors.active};
+    padding: 5px;
   }
 
   & .rnc__notification-item.rnc__notification-item--warning {

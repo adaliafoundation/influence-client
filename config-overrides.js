@@ -1,3 +1,4 @@
+const path = require('path');
 const { addBabelPlugin, override, setWebpackTarget } = require('customize-cra');
 
 // Custom loader for GLSL shaders
@@ -22,6 +23,15 @@ const adjustWorkbox = () => config => {
       p.config.maximumFileSizeToCacheInBytes = 30 * 1024 * 1024;
     }
   });
+
+  return config;
+};
+
+const suppressSourceMapWarnings = () => config => {
+  config.ignoreWarnings = [
+    ...(config.ignoreWarnings || []),
+    warning => /Failed to parse source map/.test(warning?.message || '')
+  ];
 
   return config;
 };
@@ -62,6 +72,19 @@ const addSVGR = () => config => {
   return config;
 };
 
+const addCompatibilityAliases = () => config => {
+  config.resolve = config.resolve || {};
+  config.resolve.alias = {
+    ...(config.resolve.alias || {}),
+    'react-popper': path.resolve(__dirname, 'src/compat/react-popper.js'),
+    'react-notifications-component': path.resolve(__dirname, 'src/compat/react-notifications-component.js'),
+    'react-notifications-component/dist/theme.css': path.resolve(__dirname, 'src/compat/react-notifications-component.css'),
+    'react-ticker': path.resolve(__dirname, 'src/compat/react-ticker.js')
+  };
+
+  return config;
+};
+
 patchNpmModules = () => config => {
   const loaders = config.module.rules.find(rule => Array.isArray(rule.oneOf)).oneOf;
 
@@ -92,6 +115,8 @@ module.exports = override(
     }
   ]),
   patchNpmModules(),
+  suppressSourceMapWarnings(),
+  addCompatibilityAliases(),
   addGlslifyLoader(),
   addDataUriFileLoader(),
   addSVGR()

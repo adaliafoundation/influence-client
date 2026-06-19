@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient,  } from 'react-query';
+import { useQuery, useQueryClient,  } from '@tanstack/react-query';
 import { Entity, Lot, Permission, Ship } from '@influenceth/sdk';
 
 import useBlockTime from '~/hooks/useBlockTime';
@@ -9,14 +9,14 @@ import { entitiesCacheKey } from '~/lib/cacheKey';
 
 
 const useLotEntities = (lotId, entityLabel, isPreloaded) => {
-  return useQuery(
-    entitiesCacheKey(entityLabel, { lotId }),
-    () => {
+  return useQuery({
+    queryKey: entitiesCacheKey(entityLabel, { lotId }),
+    queryFn: () => {
       const lotEntity = Entity.formatEntity({ id: lotId, label: Entity.IDS.LOT });
       return api.getEntities({ label: entityLabel, match: { 'Location.locations.uuid': lotEntity?.uuid } });
     },
-    { enabled: !!(lotId > 0 && entityLabel && isPreloaded) }
-  )
+    enabled: !!(lotId > 0 && entityLabel && isPreloaded)
+  })
 };
 
 const useLot = (rawLotId) => {
@@ -32,9 +32,9 @@ const useLot = (rawLotId) => {
   // console.log({ lot: lot.PrepaidAgreements?.length })
 
   // prepop all the entities on the lot in the cache (so can do in a single query)
-  const { data: lotDataPrepopped, isLoading: lotDataIsLoading } = useQuery(
-    ['lotEntitiesPrepopulation', lotId],
-    async () => {
+  const { data: lotDataPrepopped, isLoading: lotDataIsLoading } = useQuery({
+    queryKey: ['lotEntitiesPrepopulation', lotId],
+    queryFn: async () => {
       if (!lotId) console.error('useLot has bad lotId');
 
       // populate from single query... set query data
@@ -58,8 +58,8 @@ const useLot = (rawLotId) => {
 
       return true;
     },
-    { enabled: !!lotEntity?.uuid }
-  );
+    enabled: !!lotEntity?.uuid
+  });
 
   // (presuming this is already loaded so doesn't cause any overhead)
   const { data: asteroid, isLoading: asteroidLoading } = useEntity(lotId ? { label: Entity.IDS.ASTEROID, id: Number(Lot.toPosition(lotId)?.asteroidId) } : undefined);

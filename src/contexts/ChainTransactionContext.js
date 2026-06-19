@@ -2,7 +2,7 @@ import { createContext, useCallback, useEffect, useMemo, useRef, useState } from
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
 import { isEqual, get } from 'lodash';
 import { hash, num, shortString, uint256 } from 'starknet';
-import { fetchBuildExecuteTransaction, fetchQuotes } from '@avnu/avnu-sdk';
+import { getQuotes, quoteToCalls } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import useActivitiesContext from '~/hooks/useActivitiesContext';
@@ -596,7 +596,8 @@ export function ChainTransactionProvider({ children }) {
           // if non-zero, check if have enough to cover estimated fee
           // NOTE: if stark sponsoring fees, should allow zero balance in relevant token
           if (gasTokenBalance > 0n) {
-            const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode: { gasToken } });
+            const feeMode = { mode: 'default', gasToken };
+            const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode });
             if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
               paymasterToken = gasToken;
               break;
@@ -610,7 +611,7 @@ export function ChainTransactionProvider({ children }) {
 
     console.log('paymasterToken', paymasterToken, gasTokens);
     if (paymasterToken) {
-      return await walletAccount.executePaymasterTransaction(formattedCalls, { feeMode: { gasToken: paymasterToken } });
+      return await walletAccount.executePaymasterTransaction(formattedCalls, { feeMode: { mode: 'default', gasToken: paymasterToken } });
     } else {
       return await walletAccount.execute(formattedCalls, {});
     }
@@ -839,7 +840,7 @@ export function ChainTransactionProvider({ children }) {
                     buyAmount: safeBigInt(Math.ceil(slippageMult * parseInt(totalPrice - balanceInTargetToken))),
                     takerAddress: accountAddress,
                   });
-                  const quotes = await fetchQuotes({
+                  const quotes = await getQuotes({
                     sellTokenAddress: totalPriceToken === appConfig.get('Starknet.Address.usdcToken')
                       ? appConfig.get('Starknet.Address.ethToken')
                       : appConfig.get('Starknet.Address.usdcToken'),
@@ -850,13 +851,12 @@ export function ChainTransactionProvider({ children }) {
                   if (!quotes?.[0]) throw new Error('Insufficient swap liquidity');
 
                   // prepend swap calls
-                  const swapTx = await fetchBuildExecuteTransaction(
-                    quotes[0].quoteId,
-                    accountAddress,
+                  const swapTx = await quoteToCalls({
+                    quoteId: quotes[0].quoteId,
+                    takerAddress: accountAddress,
                     slippage,
-                    true,
-                    { baseUrl: appConfig.get('Api.avnu') }
-                  );
+                    executeApprove: true,
+                  }, { baseUrl: appConfig.get('Api.avnu') });
 
                   console.log('prepend calls', swapTx.calls);
                   calls.unshift(...swapTx.calls);

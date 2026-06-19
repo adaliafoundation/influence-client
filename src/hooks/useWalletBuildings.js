@@ -4,7 +4,7 @@ import { Building, Entity } from '@influenceth/sdk';
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
 import api from '~/lib/api';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { entitiesCacheKey } from '~/lib/cacheKey';
 
@@ -40,14 +40,14 @@ const useWalletBuildings = () => {
     return null;
   }, [accountAddress, accountCrewIds, crewsLoading]);
 
-  return useQuery(
-    entitiesCacheKey(Entity.IDS.BUILDING, { controllerId: accountCrewIds, status: statuses }),
-    async () => {
+  return useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.BUILDING, { controllerId: accountCrewIds, status: statuses }),
+    queryFn: async () => {
       const response = await api.searchAssets('buildings', query);
       return response?.hits || [];
     },
-    { enabled: !!query }
-  );
+    enabled: !!query
+  });
 };
 
 export default useWalletBuildings;

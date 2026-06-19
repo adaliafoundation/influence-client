@@ -6,6 +6,10 @@ The browser game client for Influence.
 This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
 Commercial use is not permitted without a separate license from Unstoppable Games, Inc.
 
+This license applies to the contents of this repository only. Externally hosted media assets referenced by the client,
+including music, sounds, videos, story images, and 3D models, are not covered by this repository's license and are
+licensed separately for use with the Influence client only.
+
 For the avoidance of doubt:
 The licensor considers non-commercial use under this license to include deployments or uses that collect funds solely
 to recover the reasonable costs of operating, maintaining, or administering the software, provided that such use is

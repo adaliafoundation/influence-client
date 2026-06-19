@@ -1,133 +1,146 @@
-import { useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import styled, { css, keyframes } from 'styled-components';
-import { ArgentXIcon, BraavosIcon } from './Icons';
-import useStore from '~/hooks/useStore';
+import styled from 'styled-components';
 
-const width = 380;
+import { ArgentXIcon, BraavosIcon } from '~/components/Icons';
+import { hexToRGB } from '~/theme';
 
-const Backdrop = styled.div`
-  align-items: center;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(4px);
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 99999;
-`;
-
-const Dialog = styled.div`
-  background: #171717;
-  border-radius: 24px;
+const Panel = styled.div`
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  max-height: ${p => p.expanded ? '560px' : 0};
+  min-height: 0;
+  overflow: hidden;
+  opacity: ${p => p.expanded ? 1 : 0};
   position: relative;
-  width: ${width}px;
-
-  & > h2 {
-    color: white;
-    font-size: 20px;
-    line-height: 28px;
-    margin: 0;
-    text-align: center;
-  }
-  & > h6 {
-    color: #9ca3af;
-    font-size: 14px;
-    margin: 0;
-    text-align: center;
-  }
+  transition: max-height 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-width 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 220ms ease,
+    transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  width: 300px;
 `;
 
-const CloseButton = styled.div`
-  align-items: center;
-  background: #262626;
-  border-radius: 14px;
-  cursor: pointer;
-  display: flex;
-  height: 28px;
-  justify-content: center;
-  position: absolute;
-  right: 24px;
-  top: 24px;
-  transition: background 100ms ease;
-  width: 28px;
-  &:hover {
-    background: #444;
-  }
-`;
-
-const Main = styled.div`
-  align-items: center;
+const Prompt = styled.div`
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  justify-content: flex-end;
-  padding-top: 12px;
-`;
-
-const ButtonIcon = styled.span``;
-const Button = styled.div`
-  align-items: center;
-  background: #072935;
-  border: 1px solid #57d5ff;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  height: 62px;
-  justify-content: center;
-  outline: 0px solid green;
-  padding: 12px;
-  position: relative;
-  transition: background 100ms ease;
+  opacity: ${p => p.busy ? 0.62 : 1};
+  pointer-events: ${p => p.busy ? 'none' : 'auto'};
+  transition: opacity 180ms ease;
   width: 100%;
-  &:hover {
-    background: #0f4153;
+
+  @media (max-width: ${p => p.theme.breakpoints.mobile}px) {
+    padding: 24px 20px 24px;
+
+    & > h2 {
+      font-size: 24px;
+      line-height: 30px;
+    }
+  }
+`;
+
+const Options = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const OptionButton = styled.button`
+  background: transparent;
+  border: 1px solid ${p => p.theme.colors.main};
+  border-radius: 35px;
+  color: ${p => p.theme.colors.main};
+  cursor: ${p => p.theme.cursors[p.disabled ? 'default' : 'active']};
+  display: flex;
+  font-family: 'Jura', sans-serif;
+  font-size: 20px;
+  height: 70px;
+  padding: 3px;
+  pointer-events: auto;
+  position: relative;
+  text-transform: none;
+  transition: all 100ms ease;
+  width: 100%;
+
+  &:active:not(:disabled) {
+    & > div {
+      background-color: ${p => p.theme.colors.darkMain};
+    }
   }
 
-  & > ${ButtonIcon} {
-    align-items: center;
+  &:hover:not(:disabled) {
+    border-color: ${p => p.theme.colors.brightMain};
     color: white;
-    display: flex;
-    font-size: 28px;
-    position: absolute;
-    left: 12px;
-    top: 12px;
-    height: 38px;
+
+    & > div {
+      background-color: rgba(${p => hexToRGB(p.theme.colors.main)}, 0.5);
+    }
+
+    & > svg {
+      stroke: ${p => p.theme.colors.brightMain};
+    }
   }
 
   & > div {
-    text-align: center;
-    & > label {
-      color: white;
-      display: block;
-      font-size: 15px;
-      font-weight: bold;
-    }
-    & > span {
-      color: #8c8c8c;
-      font-size: 12px;
-    }
+    background-color: rgba(${p => hexToRGB(p.theme.colors.main)}, 0.25);
+    border-radius: 31px;
+    justify-content: flex-start;
+    height: 62px;
+    padding-left: 10px;
+    transition: background-color 100ms ease;
   }
 `;
 
-const Alts = styled.div`
-  color: #777;
-  cursor: pointer;
-  margin-top: 16px;
-  transition: color 100ms ease;
+const OptionContent = styled.div`
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  text-align: left;
+  width: 100%;
+`;
 
-  &:hover {
+const ButtonIcon = styled.span`
+  align-items: center;
+  color: white;
+  display: flex;
+  flex: 0 0 38px;
+  justify-content: center;
+
+  & > svg {
+    max-height: 32px;
+    max-width: 32px;
+  }
+`;
+
+const ButtonText = styled.span`
+  display: flex;
+  filter: drop-shadow(0px 0px 2px rgba(1, 1, 1, 1));
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+
+  & > label {
     color: white;
+    cursor: inherit;
+    display: block;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+    text-transform: none;
+  }
+
+  & > span {
+    color: ${p => p.theme.colors.secondaryText};
+    display: block;
+    font-size: 12px;
+    line-height: 16px;
+    margin-top: 2px;
+    text-transform: none;
   }
 `;
 
-// TODO: update argent icons (to "Ready" icons)
 const configs = {
   argentMobile: {
     id: 'argentMobile',
@@ -137,17 +150,31 @@ const configs = {
         <path d="M18.316 8H13.684C13.5292 8 13.4052 8.1272 13.4018 8.28531C13.3082 12.7296 11.0323 16.9477 7.11513 19.9355C6.99077 20.0303 6.96243 20.2085 7.05335 20.3369L9.76349 24.1654C9.85569 24.2957 10.0353 24.3251 10.1618 24.2294C12.6111 22.3734 14.5812 20.1345 16 17.6529C17.4187 20.1345 19.389 22.3734 21.8383 24.2294C21.9646 24.3251 22.1443 24.2957 22.2366 24.1654L24.9467 20.3369C25.0375 20.2085 25.0092 20.0303 24.885 19.9355C20.9676 16.9477 18.6918 12.7296 18.5983 8.28531C18.5949 8.1272 18.4708 8 18.316 8Z" fill="white"></path>
       </svg>
     ),
-    label: 'Ready (mobile)'
+    label: 'Ready Mobile',
+    sublabel: 'Mobile app, formerly Argent'
   },
   argentX: {
     id: 'argentX',
     icon: <ArgentXIcon />,
-    label: 'Ready Wallet (formerly Argent)'
+    label: 'Ready Wallet',
+    sublabel: 'Formerly Argent X'
   },
   braavos: {
     id: 'braavos',
     icon: <BraavosIcon />,
     label: 'Braavos'
+  },
+  controller: {
+    id: 'controller',
+    icon: (
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#191a1a"></rect>
+        <path d="M11.6 10.2H20.4V14.8H11.6V10.2Z" fill="#FBCB4A"></path>
+        <path d="M8 18.1H24V22.7H8V18.1Z" fill="#FBCB4A"></path>
+      </svg>
+    ),
+    label: 'Cartridge Controller',
+    sublabel: 'Embedded account'
   },
   webWallet: {
     id: 'webWallet',
@@ -157,43 +184,45 @@ const configs = {
       </svg>
     ),
     label: 'Email',
-    sublabel: 'Powered by Ready'
+    sublabel: 'Provided by Ready'
   },
 
 }
 
-const LoginPrompt = ({ onClick, target }) => {
-  const lastConnectedWalletId = useStore(s => s.lastConnectedWalletId);
+configs.argentWebWallet = configs.webWallet;
+configs.cartridge = configs.controller;
 
-  const conf = useMemo(() => configs[lastConnectedWalletId] || configs.webWallet, [lastConnectedWalletId]);
+const LoginPrompt = ({
+  busy,
+  expanded = true,
+  onClick,
+  options = ['webWallet', 'controller', 'argentX', 'braavos', 'argentMobile']
+}) => {
+  const optionConfigs = options.map((option) => configs[option]).filter(Boolean);
 
-  return createPortal(
-    (
-      <Backdrop>
-        <Dialog>
-          <CloseButton onClick={() => onClick()}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9.77275 3.02275C9.99242 2.80308 9.99242 2.44692 9.77275 2.22725C9.55308 2.00758 9.19692 2.00758 8.97725 2.22725L6 5.20451L3.02275 2.22725C2.80308 2.00758 2.44692 2.00758 2.22725 2.22725C2.00758 2.44692 2.00758 2.80308 2.22725 3.02275L5.20451 6L2.22725 8.97725C2.00758 9.19692 2.00758 9.55308 2.22725 9.77275C2.44692 9.99242 2.80308 9.99242 3.02275 9.77275L6 6.79549L8.97725 9.77275C9.19692 9.99242 9.55308 9.99242 9.77275 9.77275C9.99242 9.55308 9.99242 9.19692 9.77275 8.97725L6.79549 6L9.77275 3.02275Z" fill="currentColor"></path>
-            </svg>
-          </CloseButton>
-          <h6>Connect to</h6>
-          <h2>Influence</h2>
-          <Main>
-            <Button onClick={() => onClick(conf.id)}>
-              <ButtonIcon>
-                {conf.icon}
-              </ButtonIcon>
-              <div>
-                <label>{conf.label}</label>
-                {conf.sublabel && <span>{conf.sublabel}</span>}
-              </div>
-            </Button>
-            <Alts onClick={() => onClick(false)}>Other Login Options...</Alts>
-          </Main>
-        </Dialog>
-      </Backdrop>
-    ),
-    document.body
+  return (
+    <Panel busy={busy} expanded={expanded}>
+      <Prompt busy={busy}>
+        <Options>
+          {optionConfigs.map((conf) => (
+            <OptionButton
+              disabled={busy}
+              key={conf.id}
+              onClick={() => onClick(conf.id)}>
+              <OptionContent>
+                <ButtonIcon>
+                  {conf.icon}
+                </ButtonIcon>
+                <ButtonText>
+                  <label>{conf.label}</label>
+                  {conf.sublabel && <span>{conf.sublabel}</span>}
+                </ButtonText>
+              </OptionContent>
+            </OptionButton>
+          ))}
+        </Options>
+      </Prompt>
+    </Panel>
   );
 };
 

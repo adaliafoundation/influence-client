@@ -16,7 +16,7 @@ import AsteroidGraphic from './components/AsteroidGraphic';
 import theme, { hexToRGB } from '~/theme';
 import LiveTimer from '~/components/LiveTimer';
 import AsteroidBonuses from './AsteroidBonuses';
-import { getProductIcon } from '~/lib/assetUtils';
+import { getProductSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import { nativeBool, reactBool } from '~/lib/utils';
 import useCrewContext from '~/hooks/useCrewContext';
 
@@ -308,7 +308,6 @@ const ResourceRow = styled.div`
   align-items: center;
   background-color: transparent;
   color: ${p => p.theme.colors.resources[p.category]};
-  cursor: ${p => p.theme.cursors.active};
   display: flex;
   flex-direction: row;
   margin-left: -8px;
@@ -398,6 +397,8 @@ const spectralLabels = {
 };
 
 const ResourceDetails = ({ abundances, asteroid, isManager }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.resources);
+
   const history = useHistory();
   const { category: initialCategory } = useParams();
   const selectOrigin = useStore(s => s.dispatchOriginSelected);
@@ -422,12 +423,6 @@ const ResourceDetails = ({ abundances, asteroid, isManager }) => {
   const handleHover = useCallback((category, isHovering) => () => {
     setHover(isHovering ? category : null);
   }, []);
-
-  const goToResourceViewer = useCallback((resource) => (e) => {
-    e.stopPropagation();
-    history.push(`/model/resource/${resource.name}?back=${encodeURIComponent(history.location.pathname)}`)
-    return false;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goToResourceMap = useCallback((resource) => (e) => {
     e.stopPropagation();
@@ -578,8 +573,8 @@ const ResourceDetails = ({ abundances, asteroid, isManager }) => {
                 </BonusItem>
               )}
               {selected.resources.map((resource) => (
-                <ResourceRow key={resource.i} category={selected.categoryKey} onClick={goToResourceViewer(resource)}>
-                  <ResourceIcon style={{ backgroundImage: `url(${getProductIcon(resource.i, 'w85')})` }} />
+                <ResourceRow key={resource.i} category={selected.categoryKey}>
+                  <ResourceIcon style={getProductSpriteStyle(resource.i) || undefined} />
                   <ResourceInfo>
                     <label>{resource.name}</label>
                     <BarChart value={resource.abundance} maxValue={selected.resources[0].abundance} twoLine>
@@ -633,8 +628,7 @@ const ResourceDetails = ({ abundances, asteroid, isManager }) => {
                               data-tooltip-place="left"
                               data-tooltip-content={resource.name}
                               data-tooltip-id="globalTooltip"
-                              onClick={goToResourceViewer(resource)}
-                              style={{ backgroundImage: `url(${getProductIcon(resource.i, 'w25')})` }} />
+                              style={getProductSpriteStyle(resource.i) || undefined} />
                           ))}
                         </div>
                       </ResourceGroupItems>

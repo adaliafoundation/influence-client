@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { isEqual, uniq } from 'lodash';
 import { Address, Entity } from '@influenceth/sdk';
 
@@ -199,7 +199,7 @@ export function ActivitiesProvider({ children }) {
               // walk through `entities` entries of label type
               // refetch group keys no longer part of, and refetch group keys it just became part of
               // TODO: just fetch active?
-              queryClient.getQueriesData(['entities', label]).forEach(([ queryKey, data ]) => {
+              queryClient.getQueriesData({ queryKey: ['entities', label] }).forEach(([ queryKey, data ]) => {
                 if (data === undefined) {
                   if (debugInvalidation) console.log('bad query cache value', queryKey, data);
                   return;

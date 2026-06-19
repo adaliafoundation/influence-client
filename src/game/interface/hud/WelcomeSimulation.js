@@ -4,7 +4,6 @@ import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import Loader from 'react-spinners/PuffLoader';
 
-import { appConfig } from '~/appConfig';
 import { ChevronDoubleDownIcon } from '~/components/Icons';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
@@ -14,7 +13,7 @@ import useSimulationSteps from '~/simulation/useSimulationSteps';
 import MockDataManager from '~/simulation/MockDataManager';
 import MockTransactionManager from '~/simulation/MockTransactionManager';
 import theme from '~/theme';
-import TutorialMessage, { messageWidth } from './TutorialMessage';
+import TutorialMessage, { messageWidth, useCrewmateTutorialImageUrl } from './TutorialMessage';
 import { fireTrackingEvent } from '~/lib/utils';
 
 const BUBBLE_WIDTH = 60;
@@ -54,16 +53,7 @@ const Bubble = styled.div`
 `;
 
 const CrewmateImage = styled.div`
-  background-image: 
-  ${p => p.crewmateImageOptionString
-    ? `url("${appConfig.get('Api.influenceImage')}/v1/crew/provided/image.svg?bustOnly=true&options=${escape(p.crewmateImageOptionString)}")`
-    : (
-      p.crewmateId
-      ? `url("${appConfig.get('Api.influenceImage')}/v1/crew/${p.crewmateId}/image.png?bustOnly=true")`
-      : 'none'
-    )
-  };
-
+  background-image: ${p => p.imageUrl ? `url("${p.imageUrl}")` : 'none'};
   background-position: top center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -100,6 +90,10 @@ const WelcomeSimulation = () => {
   const [canAutohide, setCanAutohide] = useState(false);
 
   const { currentStep, currentStepIndex, isLastStep, isTransitioning } = useSimulationSteps();
+  const bubbleImageUrl = useCrewmateTutorialImageUrl({
+    crewmateImageOptionString: currentStep?.crewmateImageOptionString,
+    crewmateId: currentStep?.crewmateId
+  });
 
   const initialLoad = useRef(true);
 
@@ -149,10 +143,7 @@ const WelcomeSimulation = () => {
           isIn={currentStep && !isTransitioning && !launcherPage && !cutscenePlaying && isHidden}
           onClick={() => setIsHidden(false)}
           ref={(currentStep && !isTransitioning && isHidden) ? setCoachmarkRef(COACHMARK_IDS.simulationRightButton) : undefined}>
-          <CrewmateImage 
-            crewmateId={currentStep?.crewmateId}
-            crewmateImageOptionString={currentStep?.crewmateImageOptionString}
-          />
+          <CrewmateImage imageUrl={bubbleImageUrl} />
           <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
             <Loader size={BUBBLE_WIDTH} color={theme.colors.brightMain} speedMultiplier={0.5} />
           </div>

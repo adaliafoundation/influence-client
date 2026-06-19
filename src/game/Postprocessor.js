@@ -40,15 +40,26 @@ const FRAGMENT_SHADER = `
 `;
 
 const darkMaterial = new MeshBasicMaterial({ color: 'black' });
-const backgrounds = {};
-const colors = {};
-const materials = {};
 
 const defaultBloomParams = {
+  resolutionScale: 1,
   threshold: 0,
   strength: 0.8,
   radius: 0.5,
 }
+
+const clampBloomResolutionScale = (resolutionScale) => Math.min(1, Math.max(0.25, resolutionScale || 1));
+
+const getRenderSize = (size, pixelRatio, resolutionScale = 1) => new Vector2(
+  Math.max(1, Math.round(size.width * pixelRatio * resolutionScale)),
+  Math.max(1, Math.round(size.height * pixelRatio * resolutionScale))
+);
+
+const createRenderTarget = (size) => new WebGLRenderTarget(size.x, size.y, {
+  format: RGBAFormat,
+  colorSpace: SRGBColorSpace,
+  type: FloatType
+});
 
 const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   const { gl: renderer, camera, scene, size } = useThree();
@@ -58,10 +69,15 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   const bloomPass = useRef();
   const bloomComposer = useRef();
   const finalComposer = useRef();
+  const bloomTarget = useRef();
+  const finalTarget = useRef();
+  const backgrounds = useRef({});
+  const colors = useRef({});
+  const materials = useRef({});
 
   function darkenNonBloomed(obj) {
     if (obj.isScene && obj.background) {
-      backgrounds[obj.uuid] = obj.background;
+      backgrounds.current[obj.uuid] = obj.background;
       obj.background = null;
     }
     if (obj.isLensflare) {
@@ -76,12 +92,12 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
         // TODO: is double-traversing some nodes, that's why these if's are here
         //  why is this happening?
         if (obj.material.displacementMap) {
-          if (!Object.keys(colors).includes(obj.uuid)) {
-            colors[obj.uuid] = obj.material.color;
-            obj.material.setValues({ color: 0x000000 });
+          if (!colors.current[obj.uuid]) {
+            colors.current[obj.uuid] = obj.material.color.clone();
+            obj.material.color.set(0x000000);
           }
         } else if (obj.material.uuid !== darkMaterial.uuid) {
-          materials[obj.uuid] = obj.material;
+          materials.current[obj.uuid] = obj.material;
           obj.material = darkMaterial;
         }
       }
@@ -89,50 +105,59 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
   }
 
   function restoreMaterial( obj ) {
-    if (obj.isScene && backgrounds[obj.uuid]) {
-      obj.background = backgrounds[obj.uuid];
+    if (obj.isScene && backgrounds.current[obj.uuid]) {
+      obj.background = backgrounds.current[obj.uuid];
+      delete backgrounds.current[obj.uuid];
     }
     if (obj.isLensflare) {
       obj.visible = true;
     } else if (obj.material && obj.material.opacity === 0) {
       obj.visible = true;
     } else if (obj.material) {
-      if (obj.material.displacementMap && Object.keys(colors).includes(obj.uuid)) {
-        obj.material.setValues({ color: 0xffffff });
-        delete colors[ obj.uuid ];
-      } else if (!obj.material.displacementMap && materials[ obj.uuid ]) {
-        obj.material = materials[ obj.uuid ];
-        delete materials[ obj.uuid ];
+      if (obj.material.displacementMap && colors.current[obj.uuid]) {
+        obj.material.color.copy(colors.current[obj.uuid]);
+        delete colors.current[ obj.uuid ];
+      } else if (!obj.material.displacementMap && materials.current[ obj.uuid ]) {
+        obj.material = materials.current[ obj.uuid ];
+        delete materials.current[ obj.uuid ];
       }
     }
   }
 
   useEffect(() => {
     renderer.toneMapping = bloomParams?.toneMapping === undefined ? ACESFilmicToneMapping : bloomParams?.toneMapping;
-  }, [bloomParams?.toneMapping]);
+  }, [renderer, bloomParams?.toneMapping]);
 
   useEffect(() => {
     renderer.toneMappingExposure = bloomParams?.toneMappingExposure || 1;
-  }, [bloomParams?.toneMappingExposure]);
+  }, [renderer, bloomParams?.toneMappingExposure]);
+
+  useEffect(() => {
+    if (!bloomPass.current) return;
+
+    Object.keys(defaultBloomParams).forEach((k) => {
+      if (k === 'resolutionScale') return;
+      bloomPass.current[k] = Object.keys(bloomParams).includes(k) ? bloomParams[k] : defaultBloomParams[k];
+    });
+  }, [bloomParams?.radius, bloomParams?.strength, bloomParams?.threshold]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     renderer.setPixelRatio(pixelRatio);
-    const renderScene = new RenderPass(scene, camera);
+    const bloomSize = getRenderSize(size, pixelRatio, clampBloomResolutionScale(bloomParams?.resolutionScale));
+    const finalSize = getRenderSize(size, pixelRatio);
 
-    bloomPass.current = new UnrealBloomPass(new Vector2(size.width * pixelRatio, size.height * pixelRatio));
+    bloomPass.current = new UnrealBloomPass(bloomSize);
     Object.keys(defaultBloomParams).forEach((k) => {
+      if (k === 'resolutionScale') return;
       bloomPass.current[k] = Object.keys(bloomParams).includes(k) ? bloomParams[k] : defaultBloomParams[k];
     });
 
-    const target = new WebGLRenderTarget(size.width * pixelRatio, size.height * pixelRatio, {
-      format: RGBAFormat,
-      colorSpace: SRGBColorSpace,
-      type: FloatType
-    });
+    bloomTarget.current = createRenderTarget(bloomSize);
+    finalTarget.current = createRenderTarget(finalSize);
 
-    bloomComposer.current = new EffectComposer(renderer, target);
+    bloomComposer.current = new EffectComposer(renderer, bloomTarget.current);
     bloomComposer.current.renderToScreen = false;
-    bloomComposer.current.addPass(renderScene);
+    bloomComposer.current.addPass(new RenderPass(scene, camera));
     bloomComposer.current.addPass(bloomPass.current);
 
     const selectiveBloomPass = new ShaderPass(
@@ -152,11 +177,25 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
     
     const outputPass = new OutputPass();
 
-    finalComposer.current = new EffectComposer(renderer, target);
-    finalComposer.current.addPass(renderScene);
+    finalComposer.current = new EffectComposer(renderer, finalTarget.current);
+    finalComposer.current.addPass(new RenderPass(scene, camera));
     finalComposer.current.addPass(selectiveBloomPass);
     finalComposer.current.addPass(outputPass);
-  }, [bloomParams, size.width, size.height, pixelRatio]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return () => {
+      bloomPass.current?.dispose?.();
+      bloomComposer.current?.dispose?.();
+      finalComposer.current?.dispose?.();
+      selectiveBloomPass?.material?.dispose?.();
+      bloomTarget.current?.dispose?.();
+      finalTarget.current?.dispose?.();
+      bloomTarget.current = null;
+      finalTarget.current = null;
+      backgrounds.current = {};
+      colors.current = {};
+      materials.current = {};
+    };
+  }, [camera, renderer, scene, size.width, size.height, pixelRatio, bloomParams?.resolutionScale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFrame(({ camera, gl, scene }) => {
     try {
@@ -164,9 +203,14 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
       if (!(bloomComposer.current && finalComposer.current)) return;
 
       // render scene with bloom
-      scene.traverse(darkenNonBloomed);
-      bloomComposer.current.render();
-      scene.traverse(restoreMaterial);
+      let darkened = false;
+      try {
+        scene.traverse(darkenNonBloomed);
+        darkened = true;
+        bloomComposer.current.render();
+      } finally {
+        if (darkened) scene.traverse(restoreMaterial);
+      }
 
       // render the entire scene, then render bloom scene on top
       finalComposer.current.render();

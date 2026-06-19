@@ -71,7 +71,9 @@ app.get('/index.html', async (req, res) => {
 
   // if this is a bot, replace og-tags before response
   if (isBot(req.get('User-Agent'))) {
-    const tags = await getOpengraphTags(req.originalUrl);
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    const origin = `${protocol}://${req.get('host')}`;
+    const tags = await getOpengraphTags(req.originalUrl, origin);
     const meta = Object.keys(tags).map((k) => {
       if (k === 'twitter:card' || k === 'twitter:site') {
         return `<meta name="${k}" value="${tags[k]}" />`;

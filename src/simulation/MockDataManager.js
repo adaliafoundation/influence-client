@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building, Deposit, DryDock, Entity, Extractor, Inventory, Lot, Order, Permission, Processor, Product, Ship } from '@influenceth/sdk';
 
 import useSimulationState from '~/hooks/useSimulationState';
@@ -97,7 +97,12 @@ const MockDataItem = ({ overwrite }) => {
   const [overwrittenAt, setOverwrittenAt] = useState(-1);
 
   // (this will listen to updates on that queryKey and assumes they will come from elsewhere in the application)
-  const { dataUpdatedAt } = useQuery(overwrite.queryKey, () => {}, { enabled: false, staleTime: Infinity });
+  const { dataUpdatedAt } = useQuery({
+    queryKey: overwrite.queryKey,
+    queryFn: () => null,
+    enabled: false,
+    staleTime: Infinity
+  });
 
   // if new overwrite, always overwrite
   useEffect(() => {

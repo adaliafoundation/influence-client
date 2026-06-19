@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import cloneDeep from 'lodash/cloneDeep';
 
 import useBlockTime from '~/hooks/useBlockTime';
@@ -15,11 +15,11 @@ const useBusyActivity = (entity) => {
 
   const busyEvents = useMemo(() => Object.keys(activities).filter((i) => !!activities[i].getBusyItem || !!activities[i].requiresCrewTime), []);
 
-  const { data: recentItems, dataUpdatedAt, isLoading, refetch } = useQuery(
-    [ 'activities', entity?.label, Number(entity?.id), 'busy' ],
-    () => api.getEntityActivities(entity, { events: busyEvents, pageSize: 24 }),
-    { enabled: !!entity }
-  );
+  const { data: recentItems, dataUpdatedAt, isLoading, refetch } = useQuery({
+    queryKey: [ 'activities', entity?.label, Number(entity?.id), 'busy' ],
+    queryFn: () => api.getEntityActivities(entity, { events: busyEvents, pageSize: 24 }),
+    enabled: !!entity
+  });
 
   // if crew is busy AND there is no unready finishable action (i.e. this activity will be shown)
   // then it must be because of an unfinishable unready action (where !!getBusyItem) OR because of

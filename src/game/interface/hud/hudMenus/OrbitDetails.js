@@ -16,8 +16,8 @@ import useAsteroidShips from '~/hooks/useAsteroidShips';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
-import { getShipIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
+import { getShipSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import { ShipImage } from '../actionDialogs/components';
 import { Tray, majorBorderColor } from './components/components';
 
@@ -121,17 +121,21 @@ const ShipBlock = styled(AssetBlock)`
 const Ready = styled.div`
   color: ${p => p.theme.colors.main};
   font-weight: bold;
+  min-height: 18px;
   margin-top: 4px;
   text-transform: uppercase;
+  visibility: ${p => p.$visible ? 'visible' : 'hidden'};
 `;
 
 const ShipRow = ({ ship }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.ships);
+
   const onClickShip = useShipLink({ shipId: ship.id, zoomToShip: true })
   return (
     <SelectableRow onClick={onClickShip}>
       <Thumbnail>
         <MyAssetWrapper><MyAssetIcon /></MyAssetWrapper>
-        <ResourceImage src={getShipIcon(ship.Ship.shipType, 'w150')} contain />
+        <ResourceImage style={getShipSpriteStyle(ship.Ship.shipType) || undefined} contain />
         <ClipCorner dimension={10} color={majorBorderColor} />
       </Thumbnail>
       <Info>
@@ -204,9 +208,9 @@ const DockDetails = ({ onClose }) => {
                     shipType={ship.Ship.shipType}
                     style={{ width: 100, height: 85 }} />
                   <label style={{ padding: '0 8px', width: 'calc(100% - 100px)' }}>
-                    <h3 style={{ fontSize: '17px' }}>{formatters.shipName(ship)}</h3>
+                    <h3 style={{ fontSize: '17px', margin: 0 }}>{formatters.shipName(ship)}</h3>
                     <div><b>{Ship.TYPES[ship.Ship.shipType]?.name}</b></div>
-                    {blockTime >= ship.Ship.readyAt && <Ready>Launch Ready</Ready>}
+                    <Ready $visible={blockTime >= ship.Ship.readyAt}>Launch Ready</Ready>
                   </label>
                 </ThumbnailWithData>
                 <div style={{ width: 54 }}>

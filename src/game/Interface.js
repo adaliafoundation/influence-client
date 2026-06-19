@@ -32,7 +32,6 @@ import RandomEvent from './interface/RandomEvent';
 import Intro from './Intro';
 import Cutscene from './Cutscene';
 import Launcher from './Launcher';
-import QueryLoader from './QueryLoader';
 import theme from '~/theme';
 
 const StyledInterface = styled.div`
@@ -156,7 +155,6 @@ const Interface = () => {
       {showDevTools && <DevToolsViewer />}
       <StyledInterface hide={interfaceHidden}>
         {!isMobile && <Tooltip id="globalTooltip" place="left" />}
-        <QueryLoader />
         <MainContainer>
           <Switch>
             <Redirect from="/:i(\d+)" to="/asteroids/:i" />
@@ -172,7 +170,7 @@ const Interface = () => {
             <Route exact path="/listview/:assetType?">
               <ListView />
             </Route>
-            <Route path="/model/:assetType/:assetName?">
+            <Route path="/model/ship/:assetName?">
               <LinkedViewer />
             </Route>
             <Route path="/marketplace/:asteroidId([0-9]+)/:lotIndex(all|[0-9]+)?/:discriminator?">

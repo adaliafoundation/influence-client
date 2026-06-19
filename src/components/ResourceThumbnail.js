@@ -5,7 +5,7 @@ import Lottie from 'lottie-react';
 import MovingStripesSquare from '~/assets/icons/animated/MovingStripesSquare.json';
 
 import ClipCorner from '~/components/ClipCorner';
-import { getProductIcon } from '~/lib/assetUtils';
+import { getProductSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import { hexToRGB } from '~/theme';
 import { reactBool } from '~/lib/utils';
 import ThumbnailBottomBanner from './ThumbnailBottomBanner';
@@ -88,7 +88,9 @@ export const ResourceThumbnailWrapper = styled.div`
 `;
 
 export const ResourceImage = styled.div`
-  background: transparent url("${p => p.src}") center center;
+  background-color: transparent;
+  background-image: ${p => p.src ? `url("${p.src}")` : 'none'};
+  background-position: center center;
   background-size: ${p => p.contain ? 'contain' : 'cover'};
   background-repeat: no-repeat;
   position: absolute;
@@ -257,11 +259,14 @@ const Menu = ({ children }) => {
   upperRightBadgeColor,
   ...props
 }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.resources);
+
   const tooltipProps = tooltipContainer ? {
     'data-tooltip-place': 'top',
     'data-tooltip-content': tooltipOverride || resource.name,
     'data-tooltip-id': tooltipContainer
   } : {};
+  const spriteStyle = getProductSpriteStyle(resource.i);
   return (
     <ResourceThumbnailWrapper
       backgroundColor={backgroundColor}
@@ -273,7 +278,7 @@ const Menu = ({ children }) => {
       {...props}
       {...tooltipProps}>
       {underlay}
-      <ResourceImage contain={props.contain} src={getProductIcon(resource.i, parseInt(size) > 125 ? 'w400' : 'w125')} />
+      <ResourceImage contain={props.contain} style={spriteStyle || undefined} />
       <ClipCorner dimension={10} color={outlineColor || defaultBorderColor} />
       {badge !== undefined && <ResourceBadge badge={badge} badgeDenominator={badgeDenominator} />}
       {iconBadge !== undefined && <ThumbnailIconBadge iconBadgeCorner={iconBadgeCorner} iconBadgeColor={iconBadgeColor}>{iconBadge}</ThumbnailIconBadge>}

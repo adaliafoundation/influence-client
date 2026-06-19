@@ -15,6 +15,7 @@ export function DevToolProvider({ children }) {
   const [backgroundOverrideName, setBackgroundOverrideName] = useState();
   const [backgroundStrength, setBackgroundStrength] = useState();
   const [bloomRadius, setBloomRadius] = useState();
+  const [bloomResolutionScale, setBloomResolutionScale] = useState();
   const [bloomSmoothing, setBloomSmoothing] = useState();
   const [bloomStrength, setBloomStrength] = useState();
   const [darklightColor, setDarklightColor] = useState();
@@ -42,6 +43,7 @@ export function DevToolProvider({ children }) {
     setBackgroundOverrideName();
     setBackgroundStrength();
     setBloomRadius();
+    setBloomResolutionScale();
     setBloomSmoothing();
     setBloomStrength();
     setDarklightColor();
@@ -72,6 +74,7 @@ export function DevToolProvider({ children }) {
       backgroundOverrideName,
       backgroundStrength,
       bloomRadius,
+      bloomResolutionScale,
       bloomSmoothing,
       bloomStrength,
       darklightColor,
@@ -99,6 +102,7 @@ export function DevToolProvider({ children }) {
     setBackgroundOverrideName,
     setBackgroundStrength,
     setBloomRadius,
+    setBloomResolutionScale,
     setBloomSmoothing,
     setBloomStrength,
     setDarklightColor,
@@ -126,6 +130,7 @@ export function DevToolProvider({ children }) {
     backgroundOverrideName,
     backgroundStrength,
     bloomRadius,
+    bloomResolutionScale,
     bloomSmoothing,
     bloomStrength,
     darklightColor,

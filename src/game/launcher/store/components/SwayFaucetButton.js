@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import styled from 'styled-components';
 import BrightButton from '~/components/BrightButton';
 import { PuffLoader } from 'react-spinners';
@@ -55,8 +55,8 @@ const SwayFaucetButton = ({ noLabel }) => {
       setRequestingSway(false);
     }
 
-    queryClient.invalidateQueries({ queryKey: 'faucetInfo', refetchType: 'none' });
-    queryClient.refetchQueries({ queryKey: 'faucetInfo', type: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['faucetInfo'], refetchType: 'none' });
+    queryClient.refetchQueries({ queryKey: ['faucetInfo'], type: 'active' });
     queryClient.invalidateQueries({ queryKey: ['walletBalance', 'sway'] });
   }, [accountAddress, login, provider]);
 

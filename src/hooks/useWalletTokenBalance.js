@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { uint256 } from 'starknet';
 
 import useSession from '~/hooks/useSession';
@@ -8,10 +8,10 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
   const { accountAddress: defaultAccount, provider } = useSession();
 
   const accountAddress = overrideAccount || defaultAccount;
-  return useQuery(
-    [ 'walletBalance', tokenLabel, accountAddress ],
-    async () => {
-      if (!accountAddress) return undefined; // shouldn't happen (but seemingly does)
+  return useQuery({
+    queryKey: [ 'walletBalance', tokenLabel, accountAddress ],
+    queryFn: async () => {
+      if (!accountAddress || !provider) return 0n;
       try {
         const balance = await provider.callContract({
           contractAddress: tokenAddress,
@@ -22,17 +22,16 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
         return standardized ? uint256.uint256ToBN({ low: standardized[0], high: standardized[1] }) : 0n;
       } catch (e) {
         console.error(e);
+        return 0n;
       }
     },
-    {
-      enabled: !!provider && !!accountAddress,
-      // Balance updates are already driven by transaction/activity invalidations.
-      // Avoid background polling because each balanceOf is a starknet_call.
-      refetchInterval: false,
-      refetchOnReconnect: true,
-      refetchOnWindowFocus: true,
-    }
-  );
+    enabled: !!provider && !!accountAddress,
+    // Balance updates are already driven by transaction/activity invalidations.
+    // Avoid background polling because each balanceOf is a starknet_call.
+    refetchInterval: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+  });
 };
 
 export const useEthBalance = (overrideAccount) => {

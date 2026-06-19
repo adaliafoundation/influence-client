@@ -6,6 +6,7 @@ import isEqual from 'lodash/isEqual';
 import { Building, Entity, Lot } from '@influenceth/sdk';
 
 import constants from '~/lib/constants';
+import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import { TOKEN } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
 import SIMULATION_CONFIG from '~/simulation/simulationConfig';
@@ -15,7 +16,6 @@ export const STORE_NAME = 'influence';
 
 const {
   CHUNK_RESOLUTION,
-  GRAPHICS_DEFAULTS,
   ENABLE_SHADOWS,
   MIN_FOV,
   MAX_FOV
@@ -149,6 +149,9 @@ const useStore = create(
           pixelRatio: 1,
           skybox: true,
           // (these will default per the gpu tier):
+          bloomResolutionScale: undefined,
+          enablePostprocessing: undefined,
+          frameRateCap: undefined,
           shadowQuality: undefined,
           textureQuality: undefined,
         },
@@ -183,7 +186,7 @@ const useStore = create(
 
         dispatchGpuInfo: (gpuInfo) => set(produce(state => {
           // this sets defaults if they are not already
-          const defaults = GRAPHICS_DEFAULTS[gpuInfo.tier] || {};
+          const defaults = getGraphicsDefaults(gpuInfo);
           Object.keys(defaults).forEach((k) => {
             if (!state.graphics.hasOwnProperty(k) || state.graphics[k] === undefined) {
               state.graphics[k] = defaults[k];
@@ -279,7 +282,7 @@ const useStore = create(
         dispatchGraphicsAutodetectSet: (which, gpuInfo) => set(produce(state => {
           state.graphics.autodetect = which;
           if (state.graphics.autodetect) {
-            const defaults = GRAPHICS_DEFAULTS[gpuInfo.tier] || {};
+            const defaults = getGraphicsDefaults(gpuInfo);
             Object.keys(defaults).forEach((k) => {
               state.graphics[k] = defaults[k];
             });

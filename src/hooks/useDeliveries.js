@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Entity } from '@influenceth/sdk';
 
 import api from '~/lib/api';
@@ -19,11 +19,11 @@ const useDeliveries = ({ destination, destinationSlot, origin, originSlot, statu
     return k;
   }, [ destination, origin, status ]);
 
-  const { data: rawData, isLoading, dataUpdatedAt } = useQuery(
-    entitiesCacheKey(Entity.IDS.DELIVERY, cacheKey),
-    () => api.getDeliveries(destination, origin, status),
-    { enabled: !!(destination || origin) }
-  );
+  const { data: rawData, isLoading, dataUpdatedAt } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.DELIVERY, cacheKey),
+    queryFn: () => api.getDeliveries(destination, origin, status),
+    enabled: !!(destination || origin)
+  });
 
   return useMemo(() => ({
     data: isLoading ? undefined : (rawData || []).filter((d) => {

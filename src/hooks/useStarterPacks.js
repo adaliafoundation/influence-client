@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { trim } from 'lodash';
 
 import { MyAssetDoubleIcon, MyAssetIcon, MyAssetTripleIcon } from '~/components/Icons';
@@ -9,7 +9,10 @@ import theme from '~/theme';
 export const barebonesCrewmateAppearance = '0x1200010000000000041';
 
 const useStarterPacks = () => {
-  const { data: products } = useQuery(['stripeProducts'], () => api.getStripeProducts());
+  const { data: products } = useQuery({
+    queryKey: ['stripeProducts'],
+    queryFn: () => api.getStripeProducts()
+  });
 
   const starterPackPricing = useMemo(() => {
     const packs = {};

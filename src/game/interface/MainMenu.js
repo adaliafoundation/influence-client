@@ -152,13 +152,6 @@ const MainMenu = () => {
   }, []);
 
   const { backLabel, onClickBack } = useMemo(() => {
-    if (location.pathname.includes('/model/resource')) {
-      return {
-        backLabel: 'Exit',
-        onClickBack: () => history.goBack()
-      }
-    }
-
     // ship zoom scene can be in OR out
     if (zoomScene?.type === 'SHIP') {
       if (zoomStatus === 'in' || zoomStatus === 'out') {

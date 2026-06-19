@@ -1,8 +1,5 @@
-import { Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import LoadingAnimation from 'react-spinners/PropagateLoader';
-import styled from 'styled-components';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ErrorBoundary from './ErrorBoundary';
 import Game from './Game';
@@ -18,25 +15,12 @@ const queryClient = new QueryClient({
   }
 });
 
-const Loader = styled.div`
-  align-items: center;
-  background-color: black;
-  display: flex;
-  height: 100%;
-  justify-content: center;
-  position: absolute;
-  width: 100%;
-  z-index: 10000;
-`;
-
 createRoot(document.getElementById('root')).render(
-  <Suspense fallback={<Loader><LoadingAnimation color="white" loading /></Loader>}>
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient} contextSharing>
-        <Game />
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </Suspense>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <Game />
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 // listen for installprompt (should keep this before serviceworker registration)

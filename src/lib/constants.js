@@ -39,29 +39,6 @@ const constants = {
   UPDATE_QUADTREE_EVERY: 0.33, // (multiplied by CHUNK_SPLIT_DISTANCE)
 
   TELEMETRY_SCALE: 1.15,
-
-  // Default performance settings
-  // (corresponding to GPU tiers 0-3)
-  // TODO: don't want to defauly shadowQuality to a value until actually implemented
-  //       (i.e. in case want to alter defaults)
-  GRAPHICS_DEFAULTS: [
-    {
-      // shadowQuality: 0,
-      textureQuality: 1
-    },
-    {
-      // shadowQuality: 0,
-      textureQuality: 2
-    },
-    {
-      // shadowQuality: 1,
-      textureQuality: 2
-    },
-    {
-      // shadowQuality: 2,
-      textureQuality: 3
-    }
-  ]
 };
 
 export default constants;

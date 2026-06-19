@@ -1,11 +1,13 @@
+import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 
-import { appConfig } from '~/appConfig';
 import Button from '~/components/ButtonAlt';
 import ClipCorner from '~/components/ClipCorner';
 import IconButton from '~/components/IconButton';
 import { CloseIcon } from '~/components/Icons';
+import useCrewmate from '~/hooks/useCrewmate';
 import { reactBool } from '~/lib/utils';
+import { getCrewmateCompositorImageUrl } from '~/lib/spriteUtils';
 import theme from '~/theme';
 
 const messageClipCorner = 20;
@@ -29,16 +31,7 @@ const CrewmateOverflow = styled.div`
 `;
 
 const CrewmateImage = styled.div`
-  background-image: 
-  ${p => p.crewmateImageOptionString
-    ? `url("${appConfig.get('Api.influenceImage')}/v1/crew/provided/image.svg?bustOnly=true&options=${escape(p.crewmateImageOptionString)}")`
-    : (
-      p.crewmateId
-      ? `url("${appConfig.get('Api.influenceImage')}/v1/crew/${p.crewmateId}/image.png?bustOnly=true")`
-      : 'none'
-    )
-  };
-
+  background-image: ${p => p.imageUrl ? `url("${p.imageUrl}")` : 'none'};
   background-position: top center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -137,14 +130,59 @@ const Buttons = styled.div`
   }
 `;
 
+export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString, crewmateId }) => {
+  const { data: crewmate } = useCrewmate(crewmateImageOptionString ? null : crewmateId);
+  const [imageUrl, setImageUrl] = useState();
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadImage = async () => {
+      if (crewmateImageOptionString) {
+        try {
+          const options = JSON.parse(crewmateImageOptionString);
+          const url = await getCrewmateCompositorImageUrl({ Crewmate: options });
+          if (!ignore) setImageUrl(url);
+          return;
+        } catch (error) {
+          console.warn('Failed to render tutorial crewmate locally', error);
+        }
+      }
+
+      if (crewmate) {
+        try {
+          const url = await getCrewmateCompositorImageUrl(crewmate);
+          if (!ignore) setImageUrl(url);
+          return;
+        } catch (error) {
+          console.warn('Failed to render tutorial crewmate locally', error);
+        }
+      }
+
+      if (!ignore) {
+        setImageUrl(undefined);
+      }
+    };
+
+    loadImage();
+    return () => {
+      ignore = true;
+    };
+  }, [crewmate, crewmateImageOptionString]);
+
+  return imageUrl;
+};
+
 const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmateId, isIn, leftButton, onClose, rightButton, setButtonRef, step, ...props }) => {
+  const imageUrl = useCrewmateTutorialImageUrl({ crewmateImageOptionString, crewmateId });
+
   return (
     <TutorialMessageWrapper isIn={reactBool(isIn)} {...props}>
       {step && (
         <>
           <CrewmateWrapper>
             <CrewmateOverflow>
-              <CrewmateImage crewmateId={crewmateId} crewmateImageOptionString={crewmateImageOptionString} />
+              {imageUrl ? <CrewmateImage imageUrl={imageUrl} /> : null}
             </CrewmateOverflow>
           </CrewmateWrapper>
 

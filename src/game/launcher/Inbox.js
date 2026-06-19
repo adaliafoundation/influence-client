@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
 import styled from 'styled-components';
 import { Address, Encryption } from '@influenceth/sdk';

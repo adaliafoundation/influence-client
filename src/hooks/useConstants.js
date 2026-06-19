@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Address } from '@influenceth/sdk';
 
 import api from '~/lib/api';
@@ -18,16 +18,16 @@ const parseAs = {
 };
 
 const useConstants = (constantOrConstants) => {
-  return useQuery(
-    [ 'constants', constantOrConstants ],
-    async () => {
+  return useQuery({
+    queryKey: [ 'constants', constantOrConstants ],
+    queryFn: async () => {
       const isArr = Array.isArray(constantOrConstants);
       const c = await api.getConstants(isArr ? constantOrConstants : [constantOrConstants]);
       Object.keys(c).forEach((k) => c[k] = parseAs[k] ? parseAs[k](c[k]) : c[k]);
       return isArr ? c : c[constantOrConstants];
     },
-    { enabled: !!constantOrConstants }
-  );
+    enabled: !!constantOrConstants
+  });
 };
 
 export default useConstants;

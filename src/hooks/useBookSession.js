@@ -4,7 +4,7 @@ import cloneDeep from 'lodash/cloneDeep'
 import useBookTokens from '~/hooks/useBookTokens';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
-import { getCloudfrontUrl } from '~/lib/assetUtils';
+import { getStoryImageUrl } from '~/lib/assetUtils';
 
 export const bookIds = {
   ADALIAN_RECRUITMENT: 'adalian-recruitment.json',
@@ -58,7 +58,7 @@ export const getBookCompletionImage = (book, imageWidth = defaultImageWidth) => 
   if (!book) return null;
 
   const lastStory = book[book.length - 1];
-  return getCloudfrontUrl(lastStory.completionImage || lastStory.image, { w: imageWidth });
+  return getStoryImageUrl(lastStory.completionImage || lastStory.image, { w: imageWidth });
 }
 
 const useBookSession = (crewId, crewmateId) => {
@@ -193,9 +193,9 @@ const useBookSession = (crewId, crewmateId) => {
     // resize the cover images (add fullsizeImage for "download art" button)
     const imageWidth = defaultImageWidth;
     const fullsizeSlug = pathContent?.image || currentStory?.image;
-    const imageOverrides = { fullsizeImage: getCloudfrontUrl(fullsizeSlug) };
-    if (fullsizeSlug) imageOverrides.image = getCloudfrontUrl(fullsizeSlug, { w: imageWidth });
-    if (currentStory?.completionImage) imageOverrides.completionImage = getCloudfrontUrl(currentStory.completionImage, { w: imageWidth });
+    const imageOverrides = { fullsizeImage: getStoryImageUrl(fullsizeSlug) };
+    if (fullsizeSlug) imageOverrides.image = getStoryImageUrl(fullsizeSlug, { w: imageWidth });
+    if (currentStory?.completionImage) imageOverrides.completionImage = getStoryImageUrl(currentStory.completionImage, { w: imageWidth });
 
     // return bookSession and storySession
     const { paths, ...storyDefaults } = currentStory;

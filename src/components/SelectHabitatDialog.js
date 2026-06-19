@@ -2,7 +2,8 @@ import { useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 import { Building, Entity } from '@influenceth/sdk'
 
-import { getBuildingIcon, getCloudfrontUrl } from '~/lib/assetUtils';
+import { getStoryImageUrl } from '~/lib/assetUtils';
+import { getBuildingSpriteStyle, SPRITE_ATLAS_GROUPS, useSpriteAtlases } from '~/lib/spriteUtils';
 import ChoicesDialog from './ChoicesDialog';
 import { ResourceImage } from './ResourceThumbnail';
 import ClipCorner from './ClipCorner';
@@ -10,7 +11,7 @@ import useBuilding from '~/hooks/useBuilding';
 import formatters from '~/lib/formatters';
 import useAsteroid from '~/hooks/useAsteroid';
 
-const coverImage = getCloudfrontUrl('influence/production/images/stories/adalian-recruitment/3.jpg', { w: 1500 });
+const coverImage = getStoryImageUrl('influence/production/images/stories/adalian-recruitment/3.jpg', { w: 1500 });
 
 const BuildingThumbnailWrapper = styled.div`
   border: 1px solid #333;
@@ -85,6 +86,8 @@ const fromEntityFormat = (loc) => {
 
 // TODO: this dialog may now be deprecated
 const SelectHabitatDialog = ({ onAccept, onReject }) => {
+  useSpriteAtlases(SPRITE_ATLAS_GROUPS.buildings);
+
   const randomAssignment = 1;// TODO: should not be hardcoded
   const { data: habitat } = useBuilding(randomAssignment);
   const habitatLocation = useMemo(() => fromEntityFormat(habitat?.Location?.location), [habitat])
@@ -113,7 +116,7 @@ const SelectHabitatDialog = ({ onAccept, onReject }) => {
           <h3>Starting Location</h3>
           <HabCard>
             <BuildingThumbnailWrapper>
-              <ResourceImage src={getBuildingIcon(Building.IDS.HABITAT, 'w150')} />
+              <ResourceImage style={getBuildingSpriteStyle(Building.IDS.HABITAT) || undefined} />
               <ClipCorner dimension={10} />
             </BuildingThumbnailWrapper>
             <div>

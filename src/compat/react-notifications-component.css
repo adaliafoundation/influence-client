@@ -1,0 +1,30 @@
+.rnc__notification-container--top-center {
+  display: flex;
+  flex-direction: column;
+  left: 50%;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 10002;
+}
+
+.rnc__notification-item {
+  margin-top: 8px;
+  pointer-events: all;
+  position: relative;
+}
+
+.rnc__notification-close-mark {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.rnc__notification-close-mark:after {
+  content: '×';
+}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { fetchBuildExecuteTransaction } from '@avnu/avnu-sdk';
+import { quoteToCalls } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
@@ -47,13 +47,12 @@ const useSwapHelper = () => {
         if (quotes?.[0]) {
           remainingTargetUSDC -= priceHelper.from(sellAmount, token).to(TOKEN.USDC);
 
-          const swapTx = await fetchBuildExecuteTransaction(
-            quotes?.[0].quoteId,
-            accountAddress,
-            undefined,
-            true,
-            avnuOptions
-          );
+          const swapTx = await quoteToCalls({
+            quoteId: quotes?.[0].quoteId,
+            takerAddress: accountAddress,
+            slippage: allowableSlippage,
+            executeApprove: true,
+          }, avnuOptions);
           calls.push(...swapTx.calls);
         }
       }

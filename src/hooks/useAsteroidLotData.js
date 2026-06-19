@@ -1,13 +1,13 @@
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import api from '~/lib/api';
 
 const useAsteroidLotData = (asteroidId) => {
-  return useQuery(
-    [ 'asteroidPackedLotData', Number(asteroidId) ],
-    () => api.getAsteroidLotData(asteroidId),
-    { enabled: !!asteroidId }
-  );
+  return useQuery({
+    queryKey: [ 'asteroidPackedLotData', Number(asteroidId) ],
+    queryFn: () => api.getAsteroidLotData(asteroidId),
+    enabled: !!asteroidId
+  });
 };
 
 export default useAsteroidLotData;

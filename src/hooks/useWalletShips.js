@@ -4,7 +4,7 @@ import { Entity } from '@influenceth/sdk';
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
 import api from '~/lib/api';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { entitiesCacheKey } from '~/lib/cacheKey';
 
@@ -39,14 +39,14 @@ const useWalletShips = () => {
     return null;
   }, [accountAddress, accountCrewIds, crewsLoading]);
 
-  return useQuery(
-    entitiesCacheKey(Entity.IDS.SHIP, { owner: accountAddress, controllerId: accountCrewIds }),
-    async () => {
+  return useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.SHIP, { owner: accountAddress, controllerId: accountCrewIds }),
+    queryFn: async () => {
       const response = await api.searchAssets('ships', query);
       return response?.hits || [];
     },
-    { enabled: !!query }
-  );
+    enabled: !!query
+  });
 };
 
 export default useWalletShips;

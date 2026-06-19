@@ -6,6 +6,7 @@ import { Planet } from '@influenceth/sdk';
 import useCoarseTime from '~/hooks/useCoarseTime';
 import useStore from '~/hooks/useStore';
 import useWebWorker from '~/hooks/useWebWorker';
+import { WorkerQueuePriority } from '~/lib/workerQueue';
 import theme from '~/theme';
 import Orbit from './planets/Orbit';
 
@@ -32,7 +33,8 @@ const Planets = () => {
             orbitals: planets.map(p => p.orbital)
           },
           elapsed: coarseTime,
-          _cacheable: 'planets'
+          _cacheable: 'planets',
+          _priority: WorkerQueuePriority.renderCritical
         },
         (data) => {
           isUpdating.current = false;

@@ -5,7 +5,7 @@ const { appConfig } = require('./src/appConfig');
 
 const instance = axios.create({ baseURL: `${appConfig.get('Api.influence')}/og/data?t=1` });
 
-const getOpengraphTags = async (originalUrl) => {
+const getOpengraphTags = async (originalUrl, origin) => {
   const urlParts = originalUrl.split('/').slice(1);
 
   // "play" is landing page prefix (i.e. this was a url generated for sharing)...
@@ -17,9 +17,9 @@ const getOpengraphTags = async (originalUrl) => {
     'twitter:site': '@influenceth',
     'og:title': 'Influence | Space Strategy MMO',
     'og:description': 'Space strategy MMO built on Ethereum',
-    'og:image': 'https://d1c1daundk1ax0.cloudfront.net/influence/production/images/misc/influence.jpg',
-    'og:image:width': '630',
-    'og:image:height': '1200',
+    'og:image': `${origin}/og/influence.jpg`,
+    'og:image:width': '1200',
+    'og:image:height': '630',
   };
 
   try {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { PuffLoader } from 'react-spinners';
 
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
@@ -41,8 +41,8 @@ const EthFaucetButton = ({ onError, onProcessing, onSuccess, noLabel }) => {
       if (onError) onError('Faucet request failed, please try again later.');
     }
 
-    queryClient.invalidateQueries({ queryKey: 'faucetInfo', refetchType: 'none' });
-    queryClient.refetchQueries({ queryKey: 'faucetInfo', type: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['faucetInfo'], refetchType: 'none' });
+    queryClient.refetchQueries({ queryKey: ['faucetInfo'], type: 'active' });
     queryClient.invalidateQueries({ queryKey: ['walletBalance', 'eth'] });
   }, [provider]);
 

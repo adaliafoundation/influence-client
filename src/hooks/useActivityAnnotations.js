@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import api from '~/lib/api';
 import { cleanseTxHash } from '~/lib/utils';
@@ -12,11 +12,11 @@ const useActivityAnnotations = (activity) => {
     [activity]
   );
   
-  return useQuery(
-    ['annotations', cleanseTxHash(query?.transactionHash), `${query?.logIndex}`],
-    () => api.getAnnotations(query),
-    { enabled: !!query }
-  );
+  return useQuery({
+    queryKey: ['annotations', cleanseTxHash(query?.transactionHash), `${query?.logIndex}`],
+    queryFn: () => api.getAnnotations(query),
+    enabled: !!query
+  });
 };
 
 export default useActivityAnnotations;

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crewmate, Entity, Permission, RandomEvent, Ship, System } from '@influenceth/sdk';
 
 import { appConfig } from '~/appConfig';
@@ -103,17 +103,17 @@ export function CrewProvider({ children }) {
     () => (rawCrews || []).reduce((acc, c) => [...acc, ...c.Crew.roster], []),
     [rawCrews, rawCrewsUpdatedAt]
   );
-  const { data: myCrewCrewmates, isLoading: crewmatesLoading } = useQuery(
-    entitiesCacheKey(Entity.IDS.CREWMATE, combinedCrewRoster.join(',')), // TODO: joined key
-    () => api.getCrewmates(combinedCrewRoster),
-    { enabled: combinedCrewRoster?.length > 0 }
-  );
+  const { data: myCrewCrewmates, isLoading: crewmatesLoading } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.CREWMATE, combinedCrewRoster.join(',')), // TODO: joined key
+    queryFn: () => api.getCrewmates(combinedCrewRoster),
+    enabled: combinedCrewRoster?.length > 0
+  });
 
-  const { data: myOwnedCrewmates, isLoading: myOwnedCrewmatesLoading } = useQuery(
-    entitiesCacheKey(Entity.IDS.CREWMATE, { owner: accountAddress }),
-    () => api.getAccountCrewmates(accountAddress),
-    { enabled: !!token }
-  );
+  const { data: myOwnedCrewmates, isLoading: myOwnedCrewmatesLoading } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.CREWMATE, { owner: accountAddress }),
+    queryFn: () => api.getAccountCrewmates(accountAddress),
+    enabled: !!token
+  });
 
   const [adalianRecruits, arvadianRecruits] = useMemo(() => {
     if (!myOwnedCrewmates) return [[], []];

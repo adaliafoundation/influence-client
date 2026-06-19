@@ -11,7 +11,7 @@ import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { StaleWhileRevalidate } from 'workbox-strategies';
+import { CacheFirst, StaleWhileRevalidate } from 'workbox-strategies';
 
 clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
@@ -39,6 +39,14 @@ registerRoute(
     return true;
   },
   createHandlerBoundToURL(process.env.PUBLIC_URL + '/index.html')
+);
+
+// CID-addressed IPFS assets are immutable. Cache them once and do not revalidate.
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/ipfs/'),
+  new CacheFirst({
+    cacheName: 'ipfs-assets'
+  })
 );
 
 // Cache images that aren't handled by the precache

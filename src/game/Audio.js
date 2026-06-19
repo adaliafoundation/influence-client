@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Howler, Howl } from 'howler';
 
-import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
+import { getLicensedAssetUrl } from '~/lib/assetUtils';
 
 class Sound extends Howl {
   constructor(args) {
@@ -16,112 +16,111 @@ class Sound extends Howl {
   }
 }
 
-const basePath = appConfig.get('Cloudfront.otherUrl');
 const sounds = {
   ambient: [
-    new Sound({ src: [ `${basePath}/music/ambient1.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient2.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient3.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient4.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient5.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient6.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient7.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient8.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient9.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient10.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient11.mp3` ], html5: true, preload: false, volume: 1.0 }),
-    new Sound({ src: [ `${basePath}/music/ambient12.mp3` ], html5: true, preload: false, volume: 0.5 })
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient1.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient2.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient3.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient4.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient5.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient6.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient7.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient8.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient9.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient10.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient11.mp3') ], html5: true, preload: false, volume: 1.0 }),
+    new Sound({ src: [ getLicensedAssetUrl('music/ambient12.mp3') ], html5: true, preload: false, volume: 0.5 })
   ],
-  click: new Sound({ src: [ `${basePath}/sounds/click.mp3` ], html5: true, preload: false, volume: 0.25 }),
-  failure: new Sound({ src: [ `${basePath}/sounds/failure.mp3` ], html5: true, preload: false, volume: 1.0 }),
-  success: new Sound({ src: [ `${basePath}/sounds/success.mp3` ], html5: true, preload: false, volume: 1.0 }),
-  ship: new Sound({ src: [ `${basePath}/sounds/ship-flight-loop.m4a` ], html5: true, preload: false, volume: 1.0 }),
+  click: new Sound({ src: [ getLicensedAssetUrl('sounds/click.mp3') ], html5: true, preload: false, volume: 0.25 }),
+  failure: new Sound({ src: [ getLicensedAssetUrl('sounds/failure.mp3') ], html5: true, preload: false, volume: 1.0 }),
+  success: new Sound({ src: [ getLicensedAssetUrl('sounds/success.mp3') ], html5: true, preload: false, volume: 1.0 }),
+  ship: new Sound({ src: [ getLicensedAssetUrl('sounds/ship-flight-loop.m4a') ], html5: true, preload: false, volume: 1.0 }),
 
   // Buildings
-  bioreactor: new Sound({ src: [ `${basePath}/sounds/bioreactor-short.m4a` ], html5: true, preload: false, volume: 0.5 }),
-  extractor: new Sound({ src: [ `${basePath}/sounds/extractor-short.m4a` ], html5: true, preload: false, volume: 0.2 }),
-  factory: new Sound({ src: [ `${basePath}/sounds/factory-short.m4a` ], html5: true, preload: false, volume: 0.5 }),
-  habitat: new Sound({ src: [ `${basePath}/sounds/habitat-short.m4a` ], html5: true, preload: false, volume: 0.5 }),
-  marketplace: new Sound({ src: [ `${basePath}/sounds/marketplace-short.m4a` ], html5: true, preload: false, volume: 0.4 }),
-  refinery: new Sound({ src: [ `${basePath}/sounds/refinery-short.m4a` ], html5: true, preload: false, volume: 0.7 }),
-  shipyard: new Sound({ src: [ `${basePath}/sounds/shipyard-short.m4a` ], html5: true, preload: false, volume: 0.9 }),
-  spaceport: new Sound({ src: [ `${basePath}/sounds/spaceport-short.m4a` ], html5: true, preload: false, volume: 0.4 }),
-  warehouse: new Sound({ src: [ `${basePath}/sounds/warehouse-short.m4a` ], html5: true, preload: false, volume: 0.7 }),
+  bioreactor: new Sound({ src: [ getLicensedAssetUrl('sounds/bioreactor-short.m4a') ], html5: true, preload: false, volume: 0.5 }),
+  extractor: new Sound({ src: [ getLicensedAssetUrl('sounds/extractor-short.m4a') ], html5: true, preload: false, volume: 0.2 }),
+  factory: new Sound({ src: [ getLicensedAssetUrl('sounds/factory-short.m4a') ], html5: true, preload: false, volume: 0.5 }),
+  habitat: new Sound({ src: [ getLicensedAssetUrl('sounds/habitat-short.m4a') ], html5: true, preload: false, volume: 0.5 }),
+  marketplace: new Sound({ src: [ getLicensedAssetUrl('sounds/marketplace-short.m4a') ], html5: true, preload: false, volume: 0.4 }),
+  refinery: new Sound({ src: [ getLicensedAssetUrl('sounds/refinery-short.m4a') ], html5: true, preload: false, volume: 0.7 }),
+  shipyard: new Sound({ src: [ getLicensedAssetUrl('sounds/shipyard-short.m4a') ], html5: true, preload: false, volume: 0.9 }),
+  spaceport: new Sound({ src: [ getLicensedAssetUrl('sounds/spaceport-short.m4a') ], html5: true, preload: false, volume: 0.4 }),
+  warehouse: new Sound({ src: [ getLicensedAssetUrl('sounds/warehouse-short.m4a') ], html5: true, preload: false, volume: 0.7 }),
   'buildingChatter.1': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/warehouse_7.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/warehouse_7.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.2': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/extractor_7.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/extractor_7.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.3': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/refinery_7.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/refinery_7.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.4': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/bioreactor_7.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/bioreactor_7.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.5': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/factory_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/factory_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/factory_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/factory_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/factory_5.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/factory_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/factory_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/factory_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/factory_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/factory_5.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.6': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/shipyard_6.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/shipyard_6.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.7': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/spaceport_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/spaceport_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/spaceport_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/spaceport_4.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/spaceport_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/spaceport_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/spaceport_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/spaceport_4.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.8': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/marketplace_7.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/marketplace_7.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
   'buildingChatter.9': [
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_1.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_2.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_3.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_4.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_5.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_6.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_7.mp3` ], html5: true, preload: false, volume: 0.8 }),
-    new Sound({ src: [ `${basePath}/sounds/chatter/habitat_8.mp3` ], html5: true, preload: false, volume: 0.8 })
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_1.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_2.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_3.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_4.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_5.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_6.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_7.mp3') ], html5: true, preload: false, volume: 0.8 }),
+    new Sound({ src: [ getLicensedAssetUrl('sounds/chatter/habitat_8.mp3') ], html5: true, preload: false, volume: 0.8 })
   ],
 };
 

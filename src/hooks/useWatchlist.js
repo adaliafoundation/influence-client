@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Entity } from '@influenceth/sdk';
 
 import api from '~/lib/api';
@@ -8,14 +8,14 @@ import useSession from '~/hooks/useSession';
 const useWatchlist = () => {
   const { token } = useSession();
 
-  const watchlist = useQuery(
-    [ 'watchlist', token ],
-    async () => {
+  const watchlist = useQuery({
+    queryKey: [ 'watchlist', token ],
+    queryFn: async () => {
       const list = (await api.getWatchlist()) || [];
       return await api.getEntities({ ids: list.map(w => w.asteroid), label: Entity.IDS.ASTEROID });
     },
-    { enabled: !!token }
-  );
+    enabled: !!token
+  });
 
   const ids = useMemo(() => {
     if (watchlist.data) return watchlist.data.map(w => w.id);
