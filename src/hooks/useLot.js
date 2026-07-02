@@ -6,6 +6,7 @@ import useBlockTime from '~/hooks/useBlockTime';
 import useEntity from '~/hooks/useEntity';
 import api from '~/lib/api';
 import { entitiesCacheKey } from '~/lib/cacheKey';
+import { getActiveUseLotAgreement, getExpiredUseLotAgreement } from '~/lib/leaseUtils';
 
 
 const useLotEntities = (lotId, entityLabel, isPreloaded) => {
@@ -77,8 +78,10 @@ const useLot = (rawLotId) => {
 
     const { asteroidId, lotIndex } = Lot.toPosition(lotId) || {};
     // TODO: do we need Whitelist*Agreements here?
-    const prepaidAgreements = (lot?.PrepaidAgreements || []).filter((a) => a?.endTime > blockTime);
-    const agreement = ((prepaidAgreements.length > 0 ? prepaidAgreements : lot?.ContractAgreements) || []).find((a) => a.permission === Permission.IDS.USE_LOT);
+    const prepaidAgreements = lot?.PrepaidAgreements || [];
+    const activePrepaidAgreement = getActiveUseLotAgreement(prepaidAgreements, blockTime);
+    const expiredPrepaidAgreement = getExpiredUseLotAgreement(prepaidAgreements, blockTime);
+    const agreement = activePrepaidAgreement || (lot?.ContractAgreements || []).find((a) => a.permission === Permission.IDS.USE_LOT);
     const building = (buildings || []).find((e) => e.Building.status > 0);
     const depositsToShow = (deposits || []).filter((e) => e.Deposit.status > 0);// && !(e.Deposit.status === Deposit.STATUSES.USED && e.Deposit.remainingYield === 0));
     const shipsToShow = (ships || []).filter((s) => [Ship.STATUSES.UNDER_CONSTRUCTION, Ship.STATUSES.AVAILABLE].includes(s.Ship.status));
@@ -98,6 +101,8 @@ const useLot = (rawLotId) => {
       deposits: depositsToShow,
       ships: shipsToShow,
       surfaceShip,
+      _activeUseLotAgreement: activePrepaidAgreement,
+      _expiredUseLotAgreement: expiredPrepaidAgreement,
 
       Control: agreement?.permitted?.id
         ? {
@@ -110,6 +115,7 @@ const useLot = (rawLotId) => {
           _superController: asteroid?.control
         },
       ContractPolicies: asteroid?.ContractPolicies,
+      PrepaidAgreementAuctionSet: asteroid?.PrepaidAgreementAuctionSet,
       PrepaidPolicies: (asteroid?.PrepaidPolicies || []).map((p) => {
         // for simplicity, apply AP's special lot rating here so don't have to apply it everywhere else
         if (p.permission === Permission.IDS.USE_LOT && asteroid.id === 1) {

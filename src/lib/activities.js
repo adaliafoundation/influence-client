@@ -2380,6 +2380,21 @@ const activities = {
   PrepaidPolicyRemoved: getPolicyAndAgreementConfig(),
   PrepaidMerklePolicyAssigned: getPolicyAndAgreementConfig(),
   PrepaidMerklePolicyRemoved: getPolicyAndAgreementConfig(),
+  PrepaidAgreementAuctionConfigured: {
+    getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.asteroid }]
+  },
+  ComponentUpdated_PrepaidAgreementAuctionSet: {
+    getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.entity }]
+  },
+  PrepaidAgreementAuctionStarted: {
+    getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.lot }]
+  },
+  PrepaidAgreementAuctionCancelled: {
+    getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.lot }]
+  },
+  ComponentUpdated_PrepaidAgreementAuction: {
+    getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.entity }]
+  },
 
   ContractAgreementAccepted: getPolicyAndAgreementConfig(true, true),
   PrepaidMerkleAgreementAccepted: getPolicyAndAgreementConfig(true, true, true),

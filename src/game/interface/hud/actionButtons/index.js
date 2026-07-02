@@ -19,6 +19,7 @@ import FormLotLeaseAgreement from './FormLotLeaseAgreement';
 import JettisonCargo from './JettisonCargo';
 import LandShip from './LandShip';
 import LaunchShip from './LaunchShip';
+import ManageLotLeaseAuction from './ManageLotLeaseAuction';
 import MultiBuy from './MultiBuy';
 import MultiSell from './MultiSell';
 import PlanBuilding from './PlanBuilding';
@@ -59,6 +60,7 @@ const ActionsButtons = {
   JettisonCargo,
   LandShip,
   LaunchShip,
+  ManageLotLeaseAuction,
   MultiBuy,
   MultiSell,
   PlanBuilding,

@@ -26,8 +26,34 @@ import theme from '~/theme';
 import actionButtons from '../../actionButtons';
 import useBlockTime from '~/hooks/useBlockTime';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
+import { getAsteroidAuctionSettings } from '~/lib/leaseUtils';
 
 const borderColor = `rgba(255, 255, 255, 0.15)`;
+const maxPolicyDurationDays = Permission.MAX_POLICY_DURATION / 86400;
+const normalizePolicyDetails = (policyType, details = {}) => {
+  if (Number(policyType) === Permission.POLICY_IDS.PREPAID) {
+    return {
+      rate: Number(details.rate || 0),
+      initialTerm: Number(details.initialTerm || 0),
+      noticePeriod: Number(details.noticePeriod || 0),
+    };
+  }
+  if (Number(policyType) === Permission.POLICY_IDS.CONTRACT) {
+    return {
+      contract: Address.toStandard(details.contract || details.address || ''),
+    };
+  }
+  return {};
+};
+const policyDetailsAreEqual = (policyType, a, b) => {
+  const normalizedA = normalizePolicyDetails(policyType, a);
+  const normalizedB = normalizePolicyDetails(policyType, b);
+  const keys = Array.from(new Set([
+    ...Object.keys(normalizedA),
+    ...Object.keys(normalizedB),
+  ]));
+  return keys.every((key) => normalizedA[key] === normalizedB[key]);
+};
 const DataBlock = styled.div``;
 const Desc = styled.div`
   align-items: center;
@@ -119,19 +145,26 @@ const Policy = styled.div`
 
 const PrepaidInputBlock = styled(InputBlock)`
   & label {
-    color: white;
+    color: ${p => p.$invalid ? p.theme.colors.error : 'white'};
   }
   & > div {
     display: flex;
     flex-direction: row;
     width: 100%;
     & > input {
+      ${p => p.$invalid ? `border-color: ${p.theme.colors.error};` : ''}
       width: 110px;
     }
     & > span {
       font-size: 90%;
     }
   }
+`;
+const PrepaidHelpText = styled.div`
+  color: ${p => p.$invalid ? p.theme.colors.error : theme.colors.secondaryText};
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 6px;
 `;
 
 const Toggle = styled.div``;
@@ -224,7 +257,16 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
   const { accountAddress } = useSession();
   const { crew } = useCrewContext();
   const simulationEnabled = useSimulationEnabled();
-  const { currentPolicy, updateAllowlists, updatePolicy, allowlistChangePending, policyChangePending } = usePolicyManager(entity, permission);
+  const {
+    currentPolicy,
+    updateAllowlists,
+    updateAuctionSettings,
+    updatePolicy,
+    updatePolicyAndAuctionSettings,
+    allowlistChangePending,
+    auctionSettingsChangePending,
+    policyChangePending
+  } = usePolicyManager(entity, permission);
   const {
     policyType: originalPolicyType,
     policyDetails: originalPolicyDetails,
@@ -236,7 +278,16 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
   const [policyType, setPolicyType] = useState(Number(originalPolicyType));
   const [details, setDetails] = useState(originalPolicyDetails);
   const [accountAllowlist, setAccountAllowlist] = useState(originalAccountAllowlist || []);
+  const originalAuctionSettings = useMemo(
+    () => getAsteroidAuctionSettings(entity),
+    [entity?.PrepaidAgreementAuctionSet]
+  );
+  const [auctionDetails, setAuctionDetails] = useState({
+    mode: originalAuctionSettings.mode,
+    gracePeriod: originalAuctionSettings.gracePeriod / 86400,
+  });
   const [allowlist, setAllowlist] = useState(originalAllowlist || []);
+  const showAuctionSettings = entity?.label === Entity.IDS.ASTEROID && permission === Permission.IDS.USE_LOT;
 
   /**
    * Editing
@@ -244,13 +295,17 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
   const [allowlistDirty, setAllowlistDirty] = useState(false);
   const [editing, setEditing] = useState();
 
-  const saving = editing === 'allowlist' ? allowlistChangePending : policyChangePending;
+  const saving = editing === 'allowlist' ? allowlistChangePending : (policyChangePending || auctionSettingsChangePending);
 
   // reset if object is changed
   useEffect(() => {
     setPolicyType(Number(originalPolicyType));
     setDetails(originalPolicyDetails);
-  }, [editing, originalPolicyType, originalPolicyDetails]);
+    setAuctionDetails({
+      mode: originalAuctionSettings.mode,
+      gracePeriod: originalAuctionSettings.gracePeriod / 86400,
+    });
+  }, [editing, originalPolicyType, originalPolicyDetails, originalAuctionSettings]);
 
   useEffect(() => {
     setAllowlist(originalAllowlist || []);
@@ -263,25 +318,35 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
     if (key === 'rate') newVal /= 24;
     setDetails((v) => ({ ...v, [key]: newVal }));
   }, []);
+  const handleAuctionChange = useCallback((key) => (e) => {
+    let newVal = e.currentTarget.value;
+    if (key === 'mode') newVal = Number(newVal);
+    setAuctionDetails((v) => ({ ...v, [key]: newVal }));
+  }, []);
 
   const isDirty = useMemo(() => {
-    return policyType !== originalPolicyType
-      || Object.keys(details).reduce((acc, k) => acc || details[k] !== originalPolicyDetails[k], false)
-      || Object.keys(originalPolicyDetails).reduce((acc, k) => acc || details[k] !== originalPolicyDetails[k], false)
-      || allowlistDirty;
-  }, [allowlistDirty, policyType, originalPolicyType, originalPolicyDetails, details]);
+    const auctionDirty = showAuctionSettings && (
+      Number(auctionDetails.mode) !== Number(originalAuctionSettings.mode) ||
+      Number(auctionDetails.gracePeriod || 0) !== Number(originalAuctionSettings.gracePeriod / 86400)
+    );
+    return Number(policyType) !== Number(originalPolicyType)
+      || !policyDetailsAreEqual(policyType, details, originalPolicyDetails)
+      || allowlistDirty
+      || auctionDirty;
+  }, [allowlistDirty, auctionDetails, details, originalAuctionSettings, originalPolicyDetails, originalPolicyType, policyType, showAuctionSettings]);
 
   const isIncomplete = useMemo(() => {
+    if (showAuctionSettings && auctionDetails.gracePeriod < 0) return true;
     if (policyType === Permission.POLICY_IDS.PREPAID) {
-      if (!details.rate || details.rate < 0) return true;
-      if (details.initialTerm < 0 || details.noticePeriod < 0) return true;
-      return parseFloat(details.initialTerm) + parseFloat(details.noticePeriod) > Permission.MAX_POLICY_DURATION;
+      if (!(details.rate > 0 || (permission === Permission.IDS.USE_LOT && Number(details.rate) === 0))) return true;
+      if (details.initialTerm <= 0 || details.noticePeriod < 0) return true;
+      return parseFloat(details.initialTerm) + parseFloat(details.noticePeriod) > maxPolicyDurationDays;
     }
     if (policyType === Permission.POLICY_IDS.CONTRACT) {
       return !/^0x[0-9a-f]{60,}/i.test(details.contract); // looks loosely like an address
     }
     return false;
-  }, [policyType, details]);
+  }, [auctionDetails.gracePeriod, permission, policyType, details, showAuctionSettings]);
 
   const allowlistAdd = useCallback((crew) => {
     if (!crew) return;
@@ -316,9 +381,38 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
     if (editing === 'allowlist') {
       updateAllowlists(allowlist, accountAllowlist);
     } else {
-      updatePolicy(policyType, details);
+      const policyDirty = Number(policyType) !== Number(originalPolicyType)
+        || !policyDetailsAreEqual(policyType, details, originalPolicyDetails);
+      const auctionDirty = showAuctionSettings && (
+        Number(auctionDetails.mode) !== Number(originalAuctionSettings.mode) ||
+        Number(auctionDetails.gracePeriod || 0) !== Number(originalAuctionSettings.gracePeriod / 86400)
+      );
+
+      if (policyDirty && auctionDirty) {
+        updatePolicyAndAuctionSettings(policyType, details, auctionDetails);
+        return;
+      }
+      if (policyDirty) updatePolicy(policyType, details);
+      if (showAuctionSettings) {
+        if (auctionDirty) updateAuctionSettings(auctionDetails);
+      }
     }
-  }, [accountAllowlist, allowlist, editing, policyType, details]);
+  }, [
+    accountAllowlist,
+    allowlist,
+    auctionDetails,
+    details,
+    editing,
+    originalAuctionSettings,
+    originalPolicyDetails,
+    originalPolicyType,
+    policyType,
+    showAuctionSettings,
+    updateAllowlists,
+    updateAuctionSettings,
+    updatePolicy,
+    updatePolicyAndAuctionSettings,
+  ]);
 
   const toggleEditing = useCallback((which) => {
     setEditing(which);
@@ -388,6 +482,8 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
       return newVal;
     });
   }, []);
+  const prepaidInitialTermInvalid = Number(details.initialTerm || 0) <= 0;
+  const prepaidPeriodInvalid = Number(details.initialTerm || 0) + Number(details.noticePeriod || 0) > maxPolicyDurationDays;
 
   return (
     <CollapsibleBlock
@@ -510,12 +606,11 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                   
                   {!isPayAsYouGo && (
                     <>
-                      <PrepaidInputBlock>
+                      <PrepaidInputBlock $invalid={prepaidInitialTermInvalid}>
                         <label>Minimum Period</label>
                         <div>
                           <UncontrolledTextInput
                             disabled={nativeBool(saving)}
-                            max={12}
                             min={0}
                             onChange={handleChange('initialTerm')}
                             step={1}
@@ -529,7 +624,6 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                         <div>
                           <UncontrolledTextInput
                             disabled={nativeBool(saving)}
-                            max={12}
                             min={0}
                             onChange={handleChange('noticePeriod')}
                             step={1}
@@ -538,6 +632,9 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                           <span>days</span>
                         </div>
                       </PrepaidInputBlock>
+                      <PrepaidHelpText $invalid={prepaidPeriodInvalid}>
+                        Maximum total period (minimum + notice period) must be {maxPolicyDurationDays} days or less.
+                      </PrepaidHelpText>
                     </>
                   )}
                 </Section>
@@ -555,6 +652,36 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                         value={details.contract || ''} />
                     </div>
                   </InputBlock>
+                </Section>
+              )}
+              {showAuctionSettings && (
+                <Section>
+                  <PolicySelector>
+                    <label>Expired Building-Lot Auctions</label>
+                    <Policy
+                      onClick={saving ? null : () => setAuctionDetails((v) => ({ ...v, mode: Permission.AUCTION_MODES.MANUAL }))}
+                      isSelected={Number(auctionDetails.mode) === Permission.AUCTION_MODES.MANUAL}>
+                      <RadioCheckedIcon /><RadioUncheckedIcon /> Manual
+                    </Policy>
+                    <Policy
+                      onClick={saving ? null : () => setAuctionDetails((v) => ({ ...v, mode: Permission.AUCTION_MODES.AUTO }))}
+                      isSelected={Number(auctionDetails.mode) === Permission.AUCTION_MODES.AUTO}>
+                      <RadioCheckedIcon /><RadioUncheckedIcon /> Automatic
+                    </Policy>
+                  </PolicySelector>
+                  <PrepaidInputBlock>
+                    <label>Auction Grace Period</label>
+                    <div>
+                      <UncontrolledTextInput
+                        disabled={nativeBool(saving)}
+                        min={0}
+                        onChange={handleAuctionChange('gracePeriod')}
+                        step={1}
+                        type="number"
+                        value={`${auctionDetails.gracePeriod}`} />
+                      <span>days</span>
+                    </div>
+                  </PrepaidInputBlock>
                 </Section>
               )}
             </>
@@ -600,6 +727,18 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                         <DataRow><label>Notice Period</label><span>{formatFixed(originalPolicyDetails?.noticePeriod, 3)} day (IRL)</span></DataRow>
                       </>
                     )}
+                </>
+              )}
+              {showAuctionSettings && (
+                <>
+                  <DataRow>
+                    <label>Expired Building Lots</label>
+                    <span>{originalAuctionSettings.mode === Permission.AUCTION_MODES.AUTO ? 'Automatic Auction' : 'Manual Auction'}</span>
+                  </DataRow>
+                  <DataRow>
+                    <label>Auction Grace Period</label>
+                    <span>{formatFixed(originalAuctionSettings.gracePeriod / 86400, 2)} day (IRL)</span>
+                  </DataRow>
                 </>
               )}
               {([Permission.POLICY_IDS.CONTRACT, Permission.POLICY_IDS.PREPAID].includes(policyType)) && (

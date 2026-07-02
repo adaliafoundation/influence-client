@@ -40,6 +40,7 @@ import SetCourse from './actionDialogs/SetCourse';
 import SellingList from './actionDialogs/SellingList';
 import ShoppingList from './actionDialogs/ShoppingList';
 import StationCrew from './actionDialogs/StationCrew';
+import StartLotLeaseAuction from './actionDialogs/StartLotLeaseAuction';
 import SurfaceTransfer from './actionDialogs/SurfaceTransfer';
 import TransferAgreement from './actionDialogs/TransferAgreement';
 import TransferToSite from './actionDialogs/TransferToSite';
@@ -266,6 +267,7 @@ const ActionDialog = ({ type, params }) => {
         {type === 'SET_COURSE' && <SetCourse {...allProps} />}
         {type === 'SELLING_LIST' && <SellingList {...allProps} />}
         {type === 'SHOPPING_LIST' && <ShoppingList {...allProps} />}
+        {type === 'START_LOT_LEASE_AUCTION' && <StartLotLeaseAuction {...allProps} />}
         {type === 'STATION_CREW' && <StationCrew {...allProps} />}
         {type === 'STATION_CREW_AS_GUESTS' && <StationCrew {...allProps} guests />}
         {type === 'SURFACE_TRANSFER' && <SurfaceTransfer {...allProps} />}

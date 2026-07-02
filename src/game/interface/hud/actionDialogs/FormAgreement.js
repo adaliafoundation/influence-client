@@ -38,6 +38,13 @@ import useLot from '~/hooks/useLot';
 import useAsteroid from '~/hooks/useAsteroid';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { copyTextToClipboard } from '~/lib/clipboard';
+import {
+  getEntityCrew,
+  getLotLeaseAuctionStatus,
+  getLotLeasePayment,
+  isLeaseHolderOrBuildingController,
+  toSway
+} from '~/lib/leaseUtils';
 
 const FormSection = styled.div`
   margin-top: 12px;
@@ -48,7 +55,7 @@ const FormSection = styled.div`
 
 const InputLabel = styled.div`
   align-items: center;
-  color: #888;
+  color: ${p => p.$invalid ? p.theme.colors.error : '#888'};
   display: flex;
   flex-direction: row;
   font-size: 14px;
@@ -62,6 +69,10 @@ const InputLabel = styled.div`
       font-weight: normal;
     }
   }
+`;
+
+const LeasePeriodTextInput = styled(UncontrolledTextInput)`
+  ${p => p.$invalid ? `border-color: ${p.theme.colors.error};` : ''}
 `;
 
 const DisabledUncontrolledTextInput = styled(UncontrolledTextInput)`
@@ -147,36 +158,78 @@ const FormAgreement = ({
   const { provider } = useSession();
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
-  const { currentAgreement, currentPolicy, cancelAgreement, enterAgreement, extendAgreement, pendingChange } = agreementManager;
+  const { currentAgreement, currentAgreementRaw, currentPolicy, cancelAgreement, enterAgreement, extendAgreement, pendingChange } = agreementManager;
   const { data: asteroid } = useAsteroid(locationsArrToObj(entity?.Location?.locations || []).asteroidId);
   const blockTime = useBlockTime();
-  const { crew } = useCrewContext();
+  const { accountCrewIds, crew } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
   const location = useHydratedLocation(locationsArrToObj(entity?.Location?.locations || []));
 
-  const { data: controller } = useCrew((entity?.label === Entity.IDS.LOT ? asteroid : entity)?.Control?.controller?.id);
+  const { data: controller, isLoading: controllerIsLoading } = useCrew((entity?.label === Entity.IDS.LOT ? asteroid : entity)?.Control?.controller?.id);
   // NOTE: this flow is only relevant to prepaid and contract policy types now, so no account-permitted stuff here yet
   const { data: permitted } = useCrew(currentAgreement?.permitted?.id);
+  const { data: buildingController, isLoading: buildingControllerIsLoading } = useCrew(entity?.building?.Control?.controller?.id);
+
+  const isLotLease = entity?.label === Entity.IDS.LOT && permission === Permission.IDS.USE_LOT;
+  const auctionStatus = useMemo(
+    () => isLotLease ? getLotLeaseAuctionStatus({ asteroid, lot: entity, blockTime }) : null,
+    [asteroid, blockTime, entity, isLotLease]
+  );
+  const isExpiredLeaseRenewal = useMemo(() => (
+    isLotLease &&
+    currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID &&
+    !!auctionStatus?.expiredAgreement &&
+    isLeaseHolderOrBuildingController({
+      accountCrewIds,
+      lot: entity,
+      previousAgreement: auctionStatus.expiredAgreement
+    })
+  ), [accountCrewIds, auctionStatus?.expiredAgreement, currentPolicy?.policyType, entity, isLotLease]);
+  const isAuctionPurchase = useMemo(() => (
+    isLotLease &&
+    currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID &&
+    !!auctionStatus?.expiredAgreement &&
+    !isExpiredLeaseRenewal
+  ), [auctionStatus?.expiredAgreement, currentPolicy?.policyType, isExpiredLeaseRenewal, isLotLease]);
+  const isLeaseExtension = isExtension || isExpiredLeaseRenewal;
+  const paymentAgreement = isExpiredLeaseRenewal ? auctionStatus?.expiredAgreement : currentAgreementRaw;
+  const auctionDetails = useMemo(() => {
+    if (!isAuctionPurchase) return null;
+
+    const gracePeriod = Number(auctionStatus?.settings?.gracePeriod || 0);
+    const auctionElapsed = Number(auctionStatus?.auctionElapsed || 0);
+    const descendingElapsed = Math.max(0, auctionElapsed - gracePeriod);
+    const isAuctionComplete = descendingElapsed >= Permission.AUCTION_DESCENDING_PERIOD;
+    const descendingRemaining = Math.max(0, Permission.AUCTION_DESCENDING_PERIOD - descendingElapsed);
+
+    return {
+      isGracePeriod: auctionElapsed < gracePeriod,
+      isAuctionComplete,
+      graceRemaining: Math.max(0, gracePeriod - auctionElapsed),
+      descendingElapsed,
+      descendingRemaining,
+    };
+  }, [auctionStatus?.auctionElapsed, auctionStatus?.settings?.gracePeriod, isAuctionPurchase]);
 
   const maxTerm = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
-    if (isExtension && currentAgreement?.endTime > now) {
-      return 365 - secondsToDays(Math.max(0, currentAgreement?.endTime - currentAgreement?.startTime));
+    if (isLeaseExtension && paymentAgreement?.endTime > now) {
+      return 365 - secondsToDays(Math.max(0, paymentAgreement?.endTime - paymentAgreement?.startTime));
     }
     return 365;
-  }, [currentAgreement, isExtension]);
+  }, [isLeaseExtension, paymentAgreement]);
 
   const maxTermFloored = useMemo(() => Math.floor(maxTerm * 10) / 10, [maxTerm]);
 
   const minTerm = useMemo(() => {
-    return (isExtension) ? 1 : currentPolicy?.policyDetails?.initialTerm || 0
-  }, [currentPolicy]);
+    return (isLeaseExtension) ? 1 : currentPolicy?.policyDetails?.initialTerm || 0
+  }, [currentPolicy, isLeaseExtension]);
 
   const [initialPeriod, setInitialPeriod] = useState(
     (pendingChange?.vars?.term || pendingChange?.vars?.added_term)
       ? secondsToDays(pendingChange.vars.term || pendingChange.vars.added_term)
-      : (isExtension ? Math.min(maxTermFloored, 30) : (currentPolicy?.policyDetails?.initialTerm || 0))
+      : (isLeaseExtension ? Math.min(maxTermFloored, 30) : (currentPolicy?.policyDetails?.initialTerm || 0))
   );
 
   const remainingPeriod = useMemo(() => currentAgreement?.endTime - blockTime, [blockTime, currentAgreement?.endTime]);
@@ -201,33 +254,88 @@ const FormAgreement = ({
     if (currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) {
       return [
         {
-          label: `${isExtension ? 'Added ' : ''}Lease Length`,
+          label: `${isLeaseExtension ? 'Added ' : ''}Lease Length`,
           value: `${initialPeriod} day${initialPeriod === 1 ? '' : 's'}`,
-          direction: 0,
         },
         {
           label: 'Notice Period',
-          value: isExtension
-            ? `${formatFixed(currentAgreement?.noticePeriod || 0, 1)} day${currentAgreement?.noticePeriod === 1 ? '' : 's'}`
+          value: isLeaseExtension
+            ? `${formatFixed(secondsToDays(paymentAgreement?.noticePeriod || 0), 1)} day${secondsToDays(paymentAgreement?.noticePeriod || 0) === 1 ? '' : 's'}`
             : `${formatFixed(currentPolicy?.policyDetails?.noticePeriod || 0, 1)} day${currentPolicy?.policyDetails?.noticePeriod === 1 ? '' : 's'}`,
-          direction: 0,
         },
+        ...(isAuctionPurchase ? [{
+          label: auctionDetails?.isGracePeriod ? 'Grace Period Remaining' : 'Auction Elapsed',
+          value: auctionDetails?.isGracePeriod
+            ? formatTimer(auctionDetails.graceRemaining, 2)
+            : formatTimer(auctionDetails?.descendingElapsed || 0, 2),
+          isTimeStat: true,
+        }, {
+          label: 'Auction Remaining',
+          value: auctionDetails?.isAuctionComplete ? '-' : formatTimer(auctionDetails?.descendingRemaining || 0, 2),
+          isTimeStat: true,
+        }, {
+          label: 'Auction Premium',
+          value: `${formatFixed(toSway(auctionStatus.auctionPrice), 2)} SWAY`,
+        }] : []),
+        ...(isExpiredLeaseRenewal && auctionStatus?.leaseLapseAmount > 0n ? [{
+          label: 'Lapsed Lease',
+          value: `${formatFixed(toSway(auctionStatus.leaseLapseAmount), 2)} SWAY`,
+        }] : []),
       ];
     }
     return [];
-  }, [crew, currentAgreement, currentPolicy, initialPeriod, isExtension, isTermination, remainingPeriod]);
+  }, [auctionDetails, auctionStatus, crew, currentPolicy, initialPeriod, isAuctionPurchase, isExpiredLeaseRenewal, isLeaseExtension, isTermination, paymentAgreement, remainingPeriod]);
 
-  const totalLeaseCost = useMemo(() => {
-    const p = initialPeriod || 0;
-    const r = currentPolicy?.policyDetails?.rate || 0;
-    const precision = TOKEN_SCALE[TOKEN.SWAY] * 1e3; // TODO: check contracts for what should actually use here
-    return Math.round(p * 24 * r * precision) / precision;
-    ;
-  }, [initialPeriod, currentPolicy]);
+  const term = useMemo(() => Math.round(daysToSeconds(initialPeriod || 0)), [initialPeriod]);
+  const termPrice = useMemo(() => {
+    const rate = isLeaseExtension
+      ? paymentAgreement?.rate
+      : Math.floor((currentPolicy?.policyDetails?.rate || 0) * TOKEN_SCALE[TOKEN.SWAY]);
+    return getLotLeasePayment({
+      agreement: paymentAgreement,
+      isExtension: isLeaseExtension,
+      now: blockTime,
+      rate,
+      term
+    });
+  }, [blockTime, currentPolicy?.policyDetails?.rate, isLeaseExtension, paymentAgreement, term]);
+  const displayedRatePerDay = useMemo(() => (
+    isLeaseExtension && paymentAgreement?.rate !== undefined
+      ? toSway(paymentAgreement.rate) * 24
+      : (currentPolicy?.policyDetails?.rate || 0) * 24
+  ), [currentPolicy?.policyDetails?.rate, isLeaseExtension, paymentAgreement?.rate]);
+  const auctionPayment = useMemo(() => {
+    if (!isAuctionPurchase || !auctionStatus?.isAuctionAvailable) return null;
+    const split = Permission.getAuctionPaymentSplit({
+      auctionAmount: auctionStatus.auctionPrice,
+      leaseLapseAmount: auctionStatus.leaseLapseAmount,
+      hasBuildingController: !!entity?.building?.Control?.controller?.id
+    });
+    return {
+      ...split,
+      buildingControllerRecipient: buildingController?.Crew?.delegatedTo,
+      controllerRecipient: controller?.Crew?.delegatedTo,
+      previousTenant: getEntityCrew(auctionStatus.expiredAgreement?.permitted?.id),
+    };
+  }, [auctionStatus, buildingController?.Crew?.delegatedTo, controller?.Crew?.delegatedTo, entity?.building?.Control?.controller?.id, isAuctionPurchase]);
+  const auctionCost = useMemo(() => (
+    auctionPayment
+      ? safeBigInt(auctionPayment.toController) + safeBigInt(auctionPayment.toBuildingController)
+      : 0n
+  ), [auctionPayment]);
+  const auctionRecipientsLoading = isAuctionPurchase && auctionStatus?.isAuctionAvailable && (
+    controllerIsLoading ||
+    !controller?.Crew?.delegatedTo ||
+    (
+      auctionPayment?.toBuildingController > 0n &&
+      (buildingControllerIsLoading || !buildingController?.Crew?.delegatedTo)
+    )
+  );
+  const totalLeaseCost = useMemo(() => toSway(termPrice + auctionCost), [auctionCost, termPrice]);
 
   const insufficientAssets = useMemo(
-    () => safeBigInt(Math.ceil(isTermination ? refundableAmount : totalLeaseCost)) > swayBalance,
-    [swayBalance, refundableAmount, totalLeaseCost, isTermination]
+    () => (isTermination ? safeBigInt(Math.ceil(refundableAmount)) : (termPrice + auctionCost)) > swayBalance,
+    [swayBalance, refundableAmount, termPrice, auctionCost, isTermination]
   );
 
   const [eligible, setEligible] = useState(false);
@@ -277,24 +385,17 @@ const FormAgreement = ({
     if (e.currentTarget.value === '') return setInitialPeriod('');
     const parsed = numeral(e.currentTarget.value);
     setInitialPeriod(numeral(Math.max(minTerm, Math.min(parsed.value(), maxTerm))).format('0.00'));
-  }, [currentPolicy?.policyDetails?.initialTerm, maxTerm]);
+  }, [maxTerm, minTerm]);
 
   const onEnterAgreement = useCallback(() => {
     const recipient = controller?.Crew?.delegatedTo;
-    // TODO: should these conversions be in useAgreementManager?
-    const term = daysToSeconds(initialPeriod);
-    console.log({ totalLeaseCost, x: totalLeaseCost * TOKEN_SCALE[TOKEN.SWAY] });
-    const termPrice = Math.ceil(totalLeaseCost * TOKEN_SCALE[TOKEN.SWAY]);
-    enterAgreement({ recipient, term, termPrice });
-  }, [controller?.Crew?.delegatedTo, enterAgreement, initialPeriod, totalLeaseCost]);
+    enterAgreement({ auctionPayment, recipient, term, termPrice });
+  }, [auctionPayment, controller?.Crew?.delegatedTo, enterAgreement, term, termPrice]);
 
   const onExtendAgreement = useCallback(() => {
     const recipient = controller?.Crew?.delegatedTo;
-    // TODO: should these conversions be in useAgreementManager?
-    const term = Math.round(daysToSeconds(initialPeriod));
-    const termPrice = Math.round(totalLeaseCost * TOKEN_SCALE[TOKEN.SWAY]);
     extendAgreement({ recipient, term, termPrice });
-  }, [controller?.Crew?.delegatedTo, extendAgreement, initialPeriod, totalLeaseCost]);
+  }, [controller?.Crew?.delegatedTo, extendAgreement, term, termPrice]);
 
   const onTerminateAgreement = useCallback(() => {
     cancelAgreement({
@@ -330,23 +431,35 @@ const FormAgreement = ({
         onGo: onExtendAgreement
       };
     }
+    if (isExpiredLeaseRenewal) {
+      return {
+        icon: <ExtendAgreementIcon />,
+        label: 'Restore Expired Lot Lease',
+        status: stage === actionStages.NOT_STARTED ? 'Prepaid Lease' : undefined,
+        goLabel: 'Restore Lease',
+        onGo: onExtendAgreement
+      };
+    }
     return {
       icon: entity.label === Entity.IDS.LOT ? <FormLotAgreementIcon /> : <FormAgreementIcon />,
-      label: `Form ${entity.label === Entity.IDS.LOT ? 'Lot' : 'Asset'} Agreement`,
+      label: isAuctionPurchase ? 'Lease Auctioned Lot' : `Form ${entity.label === Entity.IDS.LOT ? 'Lot' : 'Asset'} Agreement`,
       status: stage === actionStages.NOT_STARTED
         ? (policyType === Permission.POLICY_IDS.PREPAID ? 'Prepaid Lease' : 'Custom Contract')
         : undefined,
-      goLabel: 'Create Agreement',
+      goLabel: isAuctionPurchase ? 'Lease Lot' : 'Create Agreement',
       onGo: onEnterAgreement
     }
-  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage]);
+  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isAuctionPurchase, isExpiredLeaseRenewal, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage]);
 
   const disableGo = useMemo(() => {
     if (insufficientAssets) return true;
+    if (isAuctionPurchase && !auctionStatus?.isAuctionAvailable) return true;
+    if (auctionRecipientsLoading) return true;
     if (isTermination && currentAgreement?._canGiveNoticeStart > blockTime) return true;
     if (initialPeriod === '' || initialPeriod <= 0) return true;
     return false;
-  }, [blockTime, initialPeriod, insufficientAssets, isTermination, currentAgreement]);
+  }, [auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement]);
+  const leasePeriodInvalid = !isTermination && (isLeaseExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (initialPeriod === '' || initialPeriod <= 0);
   return (
     <>
       <ActionDialogHeader
@@ -424,19 +537,20 @@ const FormAgreement = ({
             </FlexSectionBlock>
           )}
 
-          {!isTermination && (isExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (
+          {!isTermination && (isLeaseExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (
             <FlexSectionBlock
-              title={`${isExtension ? 'Extend' : 'Lease'} For`}
+              title={`${isLeaseExtension ? (isExpiredLeaseRenewal ? 'Restore' : 'Extend') : 'Lease'} For`}
               bodyStyle={{ height: 'auto', padding: '6px 12px' }}>
 
               <FormSection>
-                <InputLabel>
-                  <label>{isExtension ? 'Added' : 'Leasing'} Period</label>
+                <InputLabel $invalid={leasePeriodInvalid}>
+                  <label>{isLeaseExtension ? 'Added' : 'Leasing'} Period</label>
                 </InputLabel>
                 <TextInputWrapper rightLabel="days">
-                  <UncontrolledTextInput
+                  <LeasePeriodTextInput
                     disabled={stage !== actionStages.NOT_STARTED}
-                    min={currentPolicy?.policyDetails?.initialTerm}
+                    $invalid={leasePeriodInvalid}
+                    min={minTerm}
                     max={maxTermFloored}
                     onBlur={handlePeriodBlur}
                     onChange={handlePeriodChange}
@@ -445,7 +559,7 @@ const FormAgreement = ({
                     value={initialPeriod} />
                 </TextInputWrapper>
                 <InputSublabels>
-                  {isExtension
+                  {isLeaseExtension
                     ? <div>Min <b>{minTerm} day</b></div>
                     : <div>Min <b>{formatFixed(currentPolicy?.policyDetails?.initialTerm || 0, 2)} day{currentPolicy?.policyDetails?.initialTerm === 1 ? '' : 's'}</b></div>
                   }
@@ -460,7 +574,7 @@ const FormAgreement = ({
                 <TextInputWrapper rightLabel="SWAY / day">
                   <DisabledUncontrolledTextInput
                     disabled
-                    value={formatFixed((currentPolicy?.policyDetails?.rate || 0) * 24)} />
+                    value={formatFixed(displayedRatePerDay)} />
                 </TextInputWrapper>
               </FormSection>
 
@@ -542,7 +656,14 @@ const FormAgreement = ({
                         <div>
                           {insufficientAssets
                             ? <InsufficientAssets>Insufficient Wallet Balance</InsufficientAssets>
-                            : <>Granted For: <b>{' '}{initialPeriod} days</b></>
+                            : (
+                              <>
+                                {isExpiredLeaseRenewal
+                                  ? <>Restored For: <b>{' '}{initialPeriod} days</b></>
+                                  : <>Granted For: <b>{' '}{initialPeriod} days</b></>
+                                }
+                              </>
+                            )
                           }
                         </div>
                         <div style={{ position: 'relative', top: 4 }}>
@@ -575,6 +696,7 @@ const FormAgreement = ({
         )}
 
         <ActionDialogStats
+          splitAt={isAuctionPurchase ? 2 : undefined}
           stage={stage}
           stats={stats}
         />

@@ -62,30 +62,70 @@ const usePolicyManager = (target, permission) => {
     );
   }, [currentPolicy?.allowlist, currentPolicy?.accountAllowlist, execute, meta, payload]);
 
+  const getPolicyUpdateParams = useCallback((newPolicyType, newPolicyDetails) => {
+    const params = {
+      ...payload,
+      // for prepaid...
+      rate: Math.floor(newPolicyDetails.rate * 1e6), // sway/mo --> msway/hr
+      initial_term: daysToSeconds(newPolicyDetails.initialTerm),
+      notice_period: daysToSeconds(newPolicyDetails.noticePeriod),
+      // for contract...
+      contract: newPolicyDetails.contract,
+    };
+
+    const currentPolicyConfig = Permission.POLICY_TYPES[currentPolicy?.policyType];
+    if (currentPolicyConfig?.removalSystem) {
+      params.remove = currentPolicyConfig?.removalSystem;
+    }
+    const newPolicyConfig = Permission.POLICY_TYPES[newPolicyType];
+    if (newPolicyConfig?.additionSystem) {
+      params.add = newPolicyConfig?.additionSystem;
+    }
+
+    return params;
+  }, [currentPolicy, payload]);
+
   const updatePolicy = useCallback(
     (newPolicyType, newPolicyDetails) => {
-      const params = {
-        ...payload,
-        // for prepaid...
-        rate: Math.floor(newPolicyDetails.rate * 1e6), // sway/mo --> msway/hr
-        initial_term: daysToSeconds(newPolicyDetails.initialTerm),
-        notice_period: daysToSeconds(newPolicyDetails.noticePeriod),
-        // for contract...
-        contract: newPolicyDetails.contract,
-      };
-
-      const currentPolicyConfig = Permission.POLICY_TYPES[currentPolicy?.policyType];
-      if (currentPolicyConfig?.removalSystem) {
-        params.remove = currentPolicyConfig?.removalSystem;
-      }
-      const newPolicyConfig = Permission.POLICY_TYPES[newPolicyType];
-      if (newPolicyConfig?.additionSystem) {
-        params.add = newPolicyConfig?.additionSystem;
-      }
-
+      const params = getPolicyUpdateParams(newPolicyType, newPolicyDetails);
       execute('UpdatePolicy', params, meta);
     },
-    [currentPolicy, execute, meta, payload]
+    [execute, getPolicyUpdateParams, meta]
+  );
+
+  const updateAuctionSettings = useCallback(
+    ({ mode, gracePeriod }) => {
+      execute(
+        'ConfigurePrepaidAuction',
+        {
+          asteroid: { id: target?.id, label: Entity.IDS.ASTEROID },
+          mode,
+          grace_period: daysToSeconds(gracePeriod || 0),
+          caller_crew: { id: crew?.id, label: Entity.IDS.CREW },
+        },
+        meta
+      );
+    },
+    [crew?.id, execute, meta, target?.id]
+  );
+
+  const updatePolicyAndAuctionSettings = useCallback(
+    (newPolicyType, newPolicyDetails, auctionDetails) => {
+      execute(
+        'UpdatePolicyAndAuctionSettings',
+        {
+          ...getPolicyUpdateParams(newPolicyType, newPolicyDetails),
+          auctionSettings: {
+            asteroid: { id: target?.id, label: Entity.IDS.ASTEROID },
+            mode: auctionDetails.mode,
+            grace_period: daysToSeconds(auctionDetails.gracePeriod || 0),
+            caller_crew: { id: crew?.id, label: Entity.IDS.CREW },
+          }
+        },
+        meta
+      );
+    },
+    [crew?.id, execute, getPolicyUpdateParams, meta, target?.id]
   );
 
   const allowlistChangePending = useMemo(
@@ -93,16 +133,31 @@ const usePolicyManager = (target, permission) => {
     [payload, getStatus]
   );
   const policyChangePending = useMemo(
-    () => (getStatus ? getStatus('UpdatePolicy', { ...payload }) : 'ready') === 'pending',
+    () => getStatus
+      ? (
+        getStatus('UpdatePolicy', { ...payload }) === 'pending' ||
+        getStatus('UpdatePolicyAndAuctionSettings', { ...payload }) === 'pending'
+      )
+      : false,
     [payload, getStatus]
+  );
+  const auctionSettingsChangePending = useMemo(
+    () => (getStatus ? getStatus('ConfigurePrepaidAuction', {
+      asteroid: { id: target?.id, label: Entity.IDS.ASTEROID },
+      caller_crew: { id: crew?.id, label: Entity.IDS.CREW },
+    }) : 'ready') === 'pending',
+    [crew?.id, getStatus, target?.id]
   );
 
   return {
     currentPolicy,
     updateAllowlists,
     updatePolicy,
+    updateAuctionSettings,
+    updatePolicyAndAuctionSettings,
 
     allowlistChangePending,
+    auctionSettingsChangePending,
     policyChangePending
   };
 };

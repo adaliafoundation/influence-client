@@ -479,6 +479,7 @@ const StatRow = styled.div`
     white-space: nowrap;
     &:after {
       content: "${p => {
+        if (p.direction === undefined || p.direction === null) return '';
         if (!p.direction) return ' —';
         if ((p.isTimeStat ? -1 : 1) * p.direction > 0) return ' ▲';
         return ' ▼';
@@ -5323,7 +5324,7 @@ const ActionDialogStat = ({ stat: { isTimeStat, label, value, direction, tooltip
   );
 };
 
-export const ActionDialogStats = ({ stage, stats: rawStats, wide }) => {
+export const ActionDialogStats = ({ splitAt, stage, stats: rawStats, wide }) => {
   const [open, setOpen] = useState();
 
   useEffect(() => {
@@ -5332,6 +5333,7 @@ export const ActionDialogStats = ({ stage, stats: rawStats, wide }) => {
 
   // remove any conditionally omitted stats
   const stats = useMemo(() => rawStats.filter((s) => !!s), [rawStats]);
+  const columnSplit = splitAt || Math.ceil(stats.length / 2);
 
   if (!stats?.length) return null;
   return (
@@ -5346,8 +5348,8 @@ export const ActionDialogStats = ({ stage, stats: rawStats, wide }) => {
         {[0, 1].map((statGroup) => (
           <div key={statGroup}>
             {(statGroup === 0
-              ? stats.slice(0, Math.ceil(stats.length / 2))
-              : stats.slice(Math.ceil(stats.length / 2))
+              ? stats.slice(0, columnSplit)
+              : stats.slice(columnSplit)
             ).map((stat) => <ActionDialogStat key={stat.label} stat={stat} />)}
           </div>
         ))}

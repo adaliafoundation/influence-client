@@ -40,15 +40,33 @@ const customConfigs = {
   },
   AcceptPrepaidAgreement: {
     equalityTest: ['target.id', 'target.label', 'permission'],
-    getTransferConfig: ({ recipient, permission, permitted, target, termPrice }) => ({
-      amount: safeBigInt(termPrice),
-      recipient,
-      memo: [
-        Entity.packEntity(target),
-        permission,
-        Entity.packEntity(permitted),
-      ]
-    })
+    getTransferConfig: ({ auctionPayment, recipient, permission, permitted, target, termPrice }) => {
+      const transfers = [];
+
+      if (auctionPayment?.toController > 0n && auctionPayment?.controllerRecipient && auctionPayment?.previousTenant) {
+        transfers.push({
+          amount: safeBigInt(auctionPayment.toController),
+          recipient: auctionPayment.controllerRecipient,
+          memo: Permission.getAuctionControllerMemo(target, permission, auctionPayment.previousTenant)
+        });
+      }
+
+      if (auctionPayment?.toBuildingController > 0n && auctionPayment?.buildingControllerRecipient && auctionPayment?.previousTenant) {
+        transfers.push({
+          amount: safeBigInt(auctionPayment.toBuildingController),
+          recipient: auctionPayment.buildingControllerRecipient,
+          memo: Permission.getAuctionBuildingMemo(target, permission, auctionPayment.previousTenant)
+        });
+      }
+
+      transfers.push({
+        amount: safeBigInt(termPrice),
+        recipient,
+        memo: Permission.getPrepaidAgreementMemo(target, permission, permitted)
+      });
+
+      return transfers;
+    }
   },
   AnnotateEvent: {
     equalityTest: ['transaction_hash', 'log_index'],
@@ -69,11 +87,7 @@ const customConfigs = {
     getTransferConfig: ({ recipient, permission, permitted, target, termPrice }) => ({
       amount: safeBigInt(termPrice),
       recipient,
-      memo: [
-        Entity.packEntity(target),
-        permission,
-        Entity.packEntity(permitted),
-      ]
+      memo: Permission.getPrepaidAgreementMemo(target, permission, permitted)
     })
   },
   TransferPrepaidAgreement: {
@@ -86,6 +100,7 @@ const customConfigs = {
 
   ChangeName: { equalityTest: ['entity.id', 'entity.label'] },
   ConfigureExchange: { equalityTest: ['exchange.id'] },
+  ConfigurePrepaidAuction: { equalityTest: ['asteroid.id'] },
 
   ConstructionAbandon: { equalityTest: ['building.id'] },
   ConstructionDeconstruct: { equalityTest: ['building.id'] },
@@ -177,6 +192,8 @@ const customConfigs = {
   StationCrew: {
     equalityTest: ['caller_crew.id']
   },
+  StartPrepaidAgreementAuction: { equalityTest: ['lot.id'] },
+  CancelPrepaidAgreementAuction: { equalityTest: ['lot.id'] },
   DockShip: {
     equalityTest: ['caller_crew.id']
   },
@@ -229,6 +246,14 @@ const customConfigs = {
   InitializeAndClaimPrepareForLaunchReward: {
     multisystemCalls: ['InitializeAsteroid', 'ClaimPrepareForLaunchReward'],
     equalityTest: ['asteroid.id'],
+    isVirtual: true
+  },
+  RepossessBuildingAndCancelAuction: {
+    multisystemCalls: ({ lot, ...vars }) => [
+      { system: 'CancelPrepaidAgreementAuction', vars: { lot, caller_crew: vars.caller_crew } },
+      { system: 'RepossessBuilding', vars }
+    ],
+    equalityTest: ['building.id'],
     isVirtual: true
   },
   LeaseAndProcessProductsStart: {
@@ -410,6 +435,15 @@ const customConfigs = {
   },
   UpdatePolicy: {
     multisystemCalls: ({ add, remove }) => [remove, add].filter((c) => !!c),
+    equalityTest: ['target.label', 'target.id', 'permission'],
+    isVirtual: true
+  },
+  UpdatePolicyAndAuctionSettings: {
+    multisystemCalls: ({ add, auctionSettings, remove }) => [
+      remove,
+      add,
+      { system: 'ConfigurePrepaidAuction', vars: auctionSettings }
+    ].filter((c) => !!c),
     equalityTest: ['target.label', 'target.id', 'permission'],
     isVirtual: true
   },
