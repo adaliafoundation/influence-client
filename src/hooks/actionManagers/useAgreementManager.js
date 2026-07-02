@@ -13,17 +13,19 @@ const useAgreementManager = (target, permission, agreementPath) => {
   const { execute, getPendingTx } = useContext(ChainTransactionContext);
   const { currentPolicy } = usePolicyManager(target, permission);
 
-  const currentAgreement = useMemo(() => {
-    const agreement = (currentPolicy?.agreements || []).find((a) => {
+  const currentAgreementRaw = useMemo(() => {
+    return (currentPolicy?.agreements || []).find((a) => {
       if (agreementPath) return getAgreementPath(target, permission, a.permitted) === agreementPath;
       return (
         ((a.permitted?.id === crew?.id) || (crew?.Crew?.delegatedTo && a.permitted === crew?.Crew?.delegatedTo))
         && a.permission === Number(permission)
       );
     });
+  }, [agreementPath, crew?.Crew?.delegatedTo, crew?.id, currentPolicy, target, permission]);
 
-    if (agreement) {
-      const agg = cloneDeep(agreement);
+  const currentAgreement = useMemo(() => {
+    if (currentAgreementRaw) {
+      const agg = cloneDeep(currentAgreementRaw);
       if (agg?.rate) {
         agg.rate_swayPerSec = agg.rate / TOKEN_SCALE[TOKEN.SWAY] / 3600; // (need this precision to avoid rounding issues)
         agg.rate = agg.rate / TOKEN_SCALE[TOKEN.SWAY] * 24;  // stored in microsway per hour, UI in sway/day
@@ -34,7 +36,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
       return agg;
     }
     return null;
-  }, [agreementPath, crew?.id, currentPolicy, target, permission]);
+  }, [currentAgreementRaw]);
 
   const payload = useMemo(() => ({
     target: { id: target?.id, label: target?.label },
@@ -104,6 +106,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
 
   return {
     currentAgreement,
+    currentAgreementRaw,
     currentPolicy,
 
     enterAgreement,

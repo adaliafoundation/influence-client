@@ -71,11 +71,11 @@ const isLoginCancelledError = (error) => {
   );
 };
 
-const createManualConnectCancellation = (connectorId) => {
+const createManualConnectCancellation = (connectorId, { cancelOnFocus = true } = {}) => {
   let cleanup = () => {};
   const promise = new Promise((_, reject) => {
     const startTime = Date.now();
-    const focusCancels = ['argentX', 'braavos'].includes(connectorId);
+    const focusCancels = cancelOnFocus && ['argentX', 'braavos'].includes(connectorId);
     let lostFocus = false;
     let sawControllerOpen = false;
     let focusTimer;
@@ -123,8 +123,8 @@ const createManualConnectCancellation = (connectorId) => {
   return { cleanup, promise };
 };
 
-const withManualWalletCancellation = async (walletPromise, connectorId) => {
-  const cancellation = createManualConnectCancellation(connectorId);
+const withManualWalletCancellation = async (walletPromise, connectorId, options) => {
+  const cancellation = createManualConnectCancellation(connectorId, options);
   try {
     return await Promise.race([walletPromise, cancellation.promise]);
   } finally {
@@ -253,7 +253,7 @@ export function SessionProvider({ children }) {
     const connectPromise = connector.connect({ onlyQRCode: true });
     const connectorData = auto
       ? await connectPromise
-      : await withManualWalletCancellation(connectPromise, connectorId);
+      : await withManualWalletCancellation(connectPromise, connectorId, { cancelOnFocus: false });
 
     return {
       connectorData,

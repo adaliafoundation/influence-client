@@ -37,6 +37,7 @@ import {
   MarketSellIcon,
   CancelLimitOrderIcon,
   BecomeAdminIcon,
+  AgreementIcon,
   PermissionIcon,
   KeysIcon,
   EjectMyCrewIcon,
@@ -860,7 +861,8 @@ const formatAsTx = (item) => {
       break;
     }
 
-    case 'UpdatePolicy': {
+    case 'UpdatePolicy':
+    case 'UpdatePolicyAndAuctionSettings': {
       formatted.icon = <PermissionIcon />;
       formatted.label = 'Update Permissions';
       formatted.asteroidId = Lot.toPosition(item.meta?.lotId)?.asteroidId;
@@ -869,6 +871,29 @@ const formatAsTx = (item) => {
       // formatted.onClick = () => {};
       break;
     }
+
+    case 'ConfigurePrepaidAuction': {
+      formatted.icon = <PermissionIcon />;
+      formatted.label = 'Lease Auction Settings';
+      break;
+    }
+
+    case 'StartPrepaidAgreementAuction': {
+      formatted.icon = <AgreementIcon />;
+      formatted.label = 'Start Lease Auction';
+      formatted.asteroidId = Lot.toPosition(item.meta?.lotId)?.asteroidId;
+      formatted.lotId = item.meta?.lotId;
+      break;
+    }
+
+    case 'CancelPrepaidAgreementAuction': {
+      formatted.icon = <AgreementIcon />;
+      formatted.label = 'Cancel Lease Auction';
+      formatted.asteroidId = Lot.toPosition(item.meta?.lotId)?.asteroidId;
+      formatted.lotId = item.meta?.lotId;
+      break;
+    }
+
     case 'AcceptContractAgreement': {
       formatted.icon = <PermissionIcon />;
       formatted.label = 'Contract Agreement';
@@ -976,7 +1001,8 @@ const formatAsTx = (item) => {
       break;
     }
 
-    case 'RepossessBuilding': {
+    case 'RepossessBuilding':
+    case 'RepossessBuildingAndCancelAuction': {
       const { asteroidId } = Lot.toPosition(item.meta?.lotId) || {};
       formatted.icon = <KeysIcon />;
       formatted.label = `Repossess Building`;
