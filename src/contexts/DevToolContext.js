@@ -4,7 +4,7 @@ import useStore from '~/hooks/useStore';
 
 const DevToolContext = React.createContext();
 
-export function DevToolProvider({ children }) {
+export function DevToolProvider({ children, onShowVersionUpdateDebug }) {
   const showDevTools = useStore(s => s.graphics.showDevTools);
 
   const [assetType, setAssetType] = useState();
@@ -122,7 +122,8 @@ export function DevToolProvider({ children }) {
     setStarStrength,
     setToneMapping,
     setToneMappingExposure,
-    setTrackCamera
+    setTrackCamera,
+    onShowVersionUpdateDebug
   }), [
     assetType,
     modelUrl,
@@ -151,7 +152,8 @@ export function DevToolProvider({ children }) {
     starStrength,
     toneMapping,
     toneMappingExposure,
-    trackCamera
+    trackCamera,
+    onShowVersionUpdateDebug
   ]);
 
   return (
