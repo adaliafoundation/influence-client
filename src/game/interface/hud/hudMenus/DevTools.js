@@ -208,6 +208,14 @@ const DevTools = () => {
   if (!appConfig.get('App.enableDevTools') || resetting) return null;
   return (
     <Scrollable>
+      <HudMenuCollapsibleSection titleText="App">
+        <InnerSection>
+          <Button onClick={setters.onShowVersionUpdateDebug}>
+            Show Update Modal
+          </Button>
+        </InnerSection>
+      </HudMenuCollapsibleSection>
+
       <HudMenuCollapsibleSection titleText="Viewer">
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
           <Button

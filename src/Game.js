@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ThemeProvider, createGlobalStyle } from 'styled-components';
 import { BrowserRouter as Router, Switch, Route, useHistory, useLocation } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { getGPUTier } from 'detect-gpu';
 
 import { appConfig } from '~/appConfig';
 import FullpageInterstitial from '~/components/FullpageInterstitial';
+import VersionUpdateDialog from '~/components/VersionUpdateDialog';
 import { ActionItemProvider } from '~/contexts/ActionItemContext';
 import { ActivitiesProvider } from '~/contexts/ActivitiesContext';
 import { CoachmarkProvider } from '~/contexts/CoachmarkContext';
@@ -127,6 +128,7 @@ const LauncherRedirect = () => {
 const Game = () => {
   const [ gpuInfo, setGpuInfo ] = useState();
   const { isInstalling, updateNeeded, onUpdateVersion } = useServiceWorker();
+  const [debugUpdateNeeded, setDebugUpdateNeeded] = useState(false);
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const dispatchGpuInfo = useStore(s => s.dispatchGpuInfo);
@@ -134,6 +136,7 @@ const Game = () => {
   const graphics = useStore(s => s.graphics);
   const [ showScene, setShowScene ] = useState(false);
   const [ loadingMessage, setLoadingMessage ] = useState('Initializing');
+  const handleShowVersionUpdateDebug = useCallback(() => setDebugUpdateNeeded(true), []);
 
   // Initialize tag manager
   useEffect(() => {
@@ -190,17 +193,13 @@ const Game = () => {
     }
   }, [ gpuInfo, createAlert, dispatchGpuInfo, autodetectNeedsInit ]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
+  const handleUpdateVersion = useCallback(() => {
     if (updateNeeded) {
-      createAlert({
-        type: 'App_Updated',
-        level: 'warning',
-        duration: 0,
-        hideCloseIcon: true,
-        onRemoval: onUpdateVersion
-      });
+      onUpdateVersion();
+    } else {
+      window.location.reload();
     }
-  }, [createAlert, updateNeeded, onUpdateVersion]);
+  }, [updateNeeded, onUpdateVersion]);
 
   useEffect(() => {
     if (isInstalling) {
@@ -237,7 +236,7 @@ const Game = () => {
 
       {isInstalling && !updateNeeded && <FullpageInterstitial message={`${loadingMessage}...`} />}
       {(!isInstalling || updateNeeded) && (
-        <SessionProvider>{/* global contexts (i.e. needed by interface and scene) */}
+        <SessionProvider>
           <CrewProvider>
             <WebsocketProvider>
               <ChatListener />
@@ -260,7 +259,7 @@ const Game = () => {
 
                     {/* main app wrapper */}
                     <StyledMain>
-                      <DevToolProvider>
+                      <DevToolProvider onShowVersionUpdateDebug={handleShowVersionUpdateDebug}>
 
                         {/* all ui-specific context providers wrapping interface and new-user flow */}
                         <ActivitiesProvider>
@@ -272,6 +271,9 @@ const Game = () => {
                                     <CoachmarkProvider>
                                       <ScreensizeWarning />
                                       <Interface />
+                                      {(updateNeeded || debugUpdateNeeded) && (
+                                        <VersionUpdateDialog onReload={handleUpdateVersion} />
+                                      )}
                                     </CoachmarkProvider>
                                   </ScreensizeProvider>
                                 </ThemeProvider>
