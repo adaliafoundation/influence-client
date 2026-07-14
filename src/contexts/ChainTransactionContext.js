@@ -74,6 +74,9 @@ const customConfigs = {
   DirectMessage: {
     equalityTest: ['recipient'],
   },
+  DelegateCrew: {
+    equalityTest: ['caller_crew.id'],
+  },
   CancelPrepaidAgreement: {
     equalityTest: ['target.id', 'target.label', 'permission'],
     getTransferConfig: ({ agreementPath, refundAmount, recipient }) => ({
@@ -561,7 +564,7 @@ export function ChainTransactionProvider({ children }) {
     walletAccount
   } = useSession();
   const activities = useActivitiesContext();
-  const { crew, pendingTransactions } = useCrewContext();
+  const { crew } = useCrewContext();
   const { data: walletSource } = useWalletPurchasableBalances();
   const { data: swayBalanceSource } = useSwayBalance();
   const { data: usdcPerEth } = useUsdcPerEth();
@@ -577,6 +580,7 @@ export function ChainTransactionProvider({ children }) {
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const gameplay = useStore(s => s.gameplay);
+  const pendingTransactions = useStore(s => s.pendingTransactions);
   const dispatchFailedTransaction = useStore(s => s.dispatchFailedTransaction);
   const dispatchPendingTransaction = useStore(s => s.dispatchPendingTransaction);
   const dispatchPendingTransactionComplete = useStore(s => s.dispatchPendingTransactionComplete);

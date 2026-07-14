@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { appConfig } from '~/appConfig';
 
+import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 import useStore from '~/hooks/useStore';
 import useWebsocket from '~/hooks/useWebsocket';
 
@@ -51,7 +51,7 @@ const ChatListener = () => {
   }, [disconnected]);
 
   const handleWSMessage = useCallback((message) => {
-    if (appConfig.get('App.verboseLogs')) console.log('onWSMessage (chat)', message);
+    if (areWebsocketLogsEnabled()) console.log('onWSMessage (chat)', message);
 
     const { type, body, message: errorMessage } = message;
     if (type === 'chat-message-received') {

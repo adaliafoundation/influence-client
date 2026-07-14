@@ -18,6 +18,7 @@ import {
   BlockIcon,
   CheckIcon,
   CloseIcon,
+  CopyIcon,
   EditIcon,
   MyAssetIcon,
   PlusIcon
@@ -27,6 +28,7 @@ import TextInput from '~/components/TextInput';
 import useSession from '~/hooks/useSession';
 import useChangeName from '~/hooks/actionManagers/useChangeName';
 import useConstants from '~/hooks/useConstants';
+import useCrewDelegationManager from '~/hooks/actionManagers/useCrewDelegationManager';
 import useCrewContext from '~/hooks/useCrewContext';
 import useEarliestActivity from '~/hooks/useEarliestActivity';
 import useHydratedCrew from '~/hooks/useHydratedCrew';
@@ -34,6 +36,7 @@ import useHydratedLocation from '~/hooks/useHydratedLocation';
 import useInboxPublicKey from '~/hooks/useInboxPublicKey';
 import useNameAvailability from '~/hooks/useNameAvailability';
 import useStore from '~/hooks/useStore';
+import { copyTextToClipboard } from '~/lib/clipboard';
 import formatters from '~/lib/formatters';
 import { nativeBool, reactBool } from '~/lib/utils';
 import theme from '~/theme';
@@ -148,6 +151,34 @@ const Stat = styled.div`
     opacity: 0.7;
   }
 `;
+const CopyableAddress = styled.button`
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: white;
+  cursor: ${p => p.theme.cursors.active};
+  display: flex;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+
+  & > svg {
+    color: ${p => p.theme.colors.main};
+    font-size: 14px;
+    margin-left: 6px;
+    opacity: 0.75;
+  }
+
+  &:hover > svg {
+    opacity: 1;
+  }
+`;
+const ActionStack = styled.div`
+  & > button {
+    margin-bottom: 8px;
+    width: 225px;
+  }
+`;
 
 const NameWrapper = styled.div`
   align-items: center;
@@ -249,6 +280,20 @@ const PopperWrapper = (props) => {
   return props.children(refEl, props.disableRefSetter ? noop : setRefEl);
 }
 
+const normalizeStarknetAddress = (address) => {
+  try {
+    return Address.toStandard(address, 'starknet');
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatCompactAddress = (address) => {
+  const formatted = normalizeStarknetAddress(address);
+  if (!formatted) return '';
+  return `${formatted.slice(0, 6)}...${formatted.slice(-4)}`;
+};
+
 const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, selectCrew }) => {
   const { accountAddress } = useSession();
   const history = useHistory();
@@ -260,6 +305,7 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
   const isNameValid = useNameAvailability(crew);
   const { data: earliestActivity, isLoading: earliestLoading } = useEarliestActivity({ id: crewId, label: Entity.IDS.CREW });
   const { changeName, changingName } = useChangeName({ id: crewId, label: Entity.IDS.CREW });
+  const { delegateCrew, getDelegationStatus } = useCrewDelegationManager(crewId);
 
   const { data: TIME_ACCELERATION } = useConstants('TIME_ACCELERATION');
 
@@ -268,6 +314,7 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
   const [composing, setComposing] = useState();
   const [editing, setEditing] = useState();
   const [hovered, setHovered] = useState();
+  const [promptingDelegation, setPromptingDelegation] = useState();
   const [newName, setNewName] = useState(crew.Name?.name || '');
 
   const viewingAs = useMemo(() => ({ id: crewId, label: Entity.IDS.CREW }), [crewId]);
@@ -276,6 +323,17 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
   }, [accountAddress, crew._crewmates]);
 
   const { data: inboxPublicKey, isLoading: inboxPublicKeyLoading } = useInboxPublicKey(crew?.Crew?.delegatedTo);
+  const normalizedOwnerAddress = useMemo(() => (
+    normalizeStarknetAddress(crew?.Nft?.owner)
+  ), [crew?.Nft?.owner]);
+  const normalizedDelegatedAddress = useMemo(() => (
+    normalizeStarknetAddress(crew?.Crew?.delegatedTo)
+  ), [crew?.Crew?.delegatedTo]);
+  const retractionStatus = getDelegationStatus(normalizedOwnerAddress);
+  const hasDelegation = !!normalizedDelegatedAddress
+    && (!normalizedOwnerAddress || !Address.areEqual(normalizedDelegatedAddress, normalizedOwnerAddress));
+  const isRetractionBusy = retractionStatus === 'pending'
+    || (!!promptingDelegation && !!normalizedOwnerAddress && Address.areEqual(promptingDelegation, normalizedOwnerAddress));
 
   // reset
   useEffect(() => {
@@ -291,6 +349,25 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
       changeName(newName);
     }
   }, [newName, crew?.id]);
+
+  const onClickRetractDelegation = useCallback(async () => {
+    if (!normalizedOwnerAddress) return;
+    setPromptingDelegation(normalizedOwnerAddress);
+    try {
+      await delegateCrew(normalizedOwnerAddress);
+    } finally {
+      setPromptingDelegation();
+    }
+  }, [delegateCrew, normalizedOwnerAddress]);
+
+  const onCopyDelegationAddress = useCallback(async () => {
+    const copied = await copyTextToClipboard(crew?.Crew?.delegatedTo);
+    createAlert({
+      type: 'ClipboardAlert',
+      data: { content: copied ? 'Delegated address copied to clipboard.' : 'Unable to copy delegated address.' },
+      duration: 3000
+    });
+  }, [createAlert, crew?.Crew?.delegatedTo]);
 
   const onClickCrewmate = useCallback((crewmate) => () => {
     history.push(`/crewmate/${crewmate.id}`);
@@ -485,34 +562,51 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
 
           </CrewDetailsContainer>
           <ManagementContainer>
+            {isDelegatedCrew && !isOwnedCrew && <MyCrewStatement><MyAssetIcon /> This crew is delegated to me.</MyCrewStatement>}
             {isOwnedCrew && <MyCrewStatement><MyAssetIcon /> This crew is owned by me.</MyCrewStatement>}
             <Stat label="Crew ID">{crewId || 0}</Stat>
             <Stat label="Formed">{formationDate}</Stat>
-            {isMyCrew && (
-              <div style={{ paddingTop: 15 }}>
-                <Button onClick={() => onSetAction('MANAGE_CREW')}>Manage Crew</Button>
-                {crew.Crew?.roster?.length >= 2 && <Button onClick={() => onSetAction('MANAGE_CREW', { exchangeCrewId: 0 })}>Split Crew</Button>}
-                <Button disabled={nativeBool(crew.Crew?.roster?.length >= 5) || !crew._ready} onClick={onClickRecruit}>Recruit to Crew</Button>
-              </div>
+            {isOwnedCrew && hasDelegation && (
+              <Stat label="Delegated to">
+                <CopyableAddress onClick={onCopyDelegationAddress} type="button">
+                  {formatCompactAddress(crew.Crew.delegatedTo)}
+                  <CopyIcon />
+                </CopyableAddress>
+              </Stat>
             )}
-            {!isDelegatedCrew && crew?.Crew?.delegatedTo && (
-              <div style={{ marginTop: 35 }}
+            {(isMyCrew || isOwnedCrew || (!isMyCrew && (isDelegatedCrew || hasMyCrewmates > 0)) || (!isDelegatedCrew && hasDelegation)) && (
+              <ActionStack
                 data-tooltip-id="detailsTooltip"
-                data-tooltip-content={inboxPublicKey ? '' : 'Crew has not yet enabled direct messaging'}>
-                <Button
-                  disabled={nativeBool(userIsLoading || inboxPublicKeyLoading || !inboxPublicKey)}
-                  onClick={handleDirectMessage}>Direct Message</Button>
-              </div>
-            )}
-            {!isMyCrew && isDelegatedCrew && (
-              <div style={{ paddingTop: 15 }}>
-                <Button onClick={() => selectCrew(crewId)}>Switch to Crew</Button>
-              </div>
-            )}
-            {!isMyCrew && hasMyCrewmates > 0 && (
-              <div style={{ paddingTop: 15 }}>
-                <Button onClick={() => onSetAction('MANAGE_CREW', { crewId })}>Recover Crewmate{hasMyCrewmates === 1 ? '' : 's'}</Button>
-              </div>
+                data-tooltip-content={(!isDelegatedCrew && hasDelegation && !inboxPublicKey) ? 'Crew has not yet enabled direct messaging' : ''}>
+                {isMyCrew && (
+                  <>
+                    <Button onClick={() => onSetAction('MANAGE_CREW')}>Manage Crew</Button>
+                    {crew.Crew?.roster?.length >= 2 && <Button onClick={() => onSetAction('MANAGE_CREW', { exchangeCrewId: 0 })}>Split Crew</Button>}
+                    <Button disabled={nativeBool(crew.Crew?.roster?.length >= 5) || !crew._ready} onClick={onClickRecruit}>Recruit to Crew</Button>
+                  </>
+                )}
+                {isOwnedCrew && !hasDelegation && (
+                  <Button onClick={() => onSetAction('DELEGATE_CREW', { crew, crewId })}>Delegate Crew</Button>
+                )}
+                {isOwnedCrew && hasDelegation && (
+                  <Button
+                    disabled={nativeBool(isRetractionBusy)}
+                    onClick={onClickRetractDelegation}>
+                    {isRetractionBusy ? <LoadingAnimation color="white" size="1em" /> : 'Retract Delegation'}
+                  </Button>
+                )}
+                {!isMyCrew && isDelegatedCrew && (
+                  <Button onClick={() => selectCrew(crewId)}>Switch to Crew</Button>
+                )}
+                {!isMyCrew && hasMyCrewmates > 0 && (
+                  <Button onClick={() => onSetAction('MANAGE_CREW', { crewId })}>Recover Crewmate{hasMyCrewmates === 1 ? '' : 's'}</Button>
+                )}
+                {!isDelegatedCrew && hasDelegation && (
+                  <Button
+                    disabled={nativeBool(userIsLoading || inboxPublicKeyLoading || !inboxPublicKey)}
+                    onClick={handleDirectMessage}>Direct Message</Button>
+                )}
+              </ActionStack>
             )}
           </ManagementContainer>
         </AboveFold>

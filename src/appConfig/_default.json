@@ -22,6 +22,7 @@
       "gtm": "",
       "layerswap": "",
       "ramp": "",
+      "walletConnect": "",
       "stripe": ""
     }
   },
@@ -29,9 +30,21 @@
     "cid": "QmdD7MriPcqzJSC3vyUjq2Sifj5s2pEWLnfv4UxMJSRTjt"
   },
   "Ethereum": {
+    "chainId": "",
+    "provider": "",
     "Address": {
+      "arvadCrewmateSale": "",
+      "asteroidBridge": "",
       "asteroidToken": "",
-      "crewmateToken": ""
+      "crewBridge": "",
+      "crewmateBridge": "",
+      "crewmateFeatures": "",
+      "crewmateToken": "",
+      "crewToken": "",
+      "shipBridge": "",
+      "shipToken": "",
+      "swayBridge": "",
+      "swayToken": ""
     }
   },
   "Starknet": {
@@ -43,6 +56,7 @@
       "ethToken": "",
       "usdcToken": "",
       "asteroidToken": "",
+      "crewToken": "",
       "crewmateToken": "",
       "dispatcher": "",
       "escrow": "",

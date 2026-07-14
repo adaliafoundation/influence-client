@@ -27,6 +27,7 @@ import useWebsocket from '~/hooks/useWebsocket';
 import useWebWorker from '~/hooks/useWebWorker';
 import useMappedAsteroidLots from '~/hooks/useMappedAsteroidLots';
 import constants from '~/lib/constants';
+import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 import { WorkerQueuePriority } from '~/lib/workerQueue';
 import useConstants from '~/hooks/useConstants';
 import { getLotGeometryHeightMaps, getLotGeometryHeightMapResolution } from './helpers/LotGeometry';
@@ -289,7 +290,7 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   }, [lotResultMap, lastLotUpdate, positionsReady]);
 
   const handleWSMessage = useCallback((message) => {
-    if (appConfig.get('App.verboseLogs')) console.log('onWSMessage (lots)', message);
+    if (areWebsocketLogsEnabled()) console.log('onWSMessage (lots)', message);
     const { type: eventType, body } = message;
 
     // pass the event to useMappedAsteroidLots hook to update scene

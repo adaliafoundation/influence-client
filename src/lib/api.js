@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
+import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
 import esb from 'elastic-builder';
 import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
 
@@ -47,7 +47,7 @@ const formatESEntityData = (responseData) => {
 }
 
 const buildQuery = (queryObj) => {
-  return Object.keys(queryObj || {}).map((key) => {
+  return Object.keys(queryObj || {}).filter((key) => queryObj[key] != null).map((key) => {
     return `${encodeURIComponent(key)}=${encodeURIComponent(queryObj[key])}`;
   }).join('&');
 };
@@ -80,6 +80,17 @@ const getEntities = async ({ ids, match, label, components }) => {
 
   const response = await instance.get(`/${apiVersion}/entities?${buildQuery(query)}`);
   return response.data;
+};
+
+const getBridgeWalletAssets = async ({ address, chain, label }) => {
+  if (!address || !chain || !label) return [];
+  const ownerKey = chain === 'ethereum'
+    ? 'Nft.owners.ethereum'
+    : 'Nft.owners.starknet';
+  const owner = chain === 'ethereum'
+    ? address.toLowerCase()
+    : Address.toStandard(address);
+  return getEntities({ match: { [ownerKey]: owner }, label });
 };
 
 const api = {
@@ -741,6 +752,23 @@ const api = {
 
   getEntities,
   getEntityById,
+
+  getBridgeWalletAssets,
+
+  getBridgeCrossings: async (query = {}) => {
+    const response = await instance.get(`/${apiVersion}/crossings?${buildQuery(query)}`);
+    return response.data;
+  },
+
+  getSwayCrossings: async (query = {}) => {
+    const response = await instance.get(`/${apiVersion}/swaycrossings?${buildQuery(query)}`);
+    return response.data;
+  },
+
+  getL1AcceptedBlock: async () => {
+    const response = await instance.get(`/${apiVersion}/chain`);
+    return response.data?.l1AcceptedBlock;
+  },
 
   getNameUse: async (label, name) => {
     return getEntities({ match: { 'Name.name': name }, label, components: [] });

@@ -3698,7 +3698,7 @@ export const Mouseoverable = ({ children, tooltip, style = {}, themeColor }) => 
 // COMPONENTS
 //
 
-const ActionDialogActionBar = ({ location, onClose, overrideColor, stage }) => (
+const ActionDialogActionBar = ({ actionBarTitle, location, onClose, overrideColor, stage }) => (
   <ActionBar {...theming[stage]} overrideColor={overrideColor}>
     {(stage === actionStage.STARTING || stage === actionStage.COMPLETING) && (
       <BarLoadingContainer>
@@ -3706,7 +3706,7 @@ const ActionDialogActionBar = ({ location, onClose, overrideColor, stage }) => (
       </BarLoadingContainer>
     )}
     <ActionLocation {...theming[stage]} overrideColor={overrideColor}>
-      <b>{formatters.asteroidName(location?.asteroid)}</b>
+      <b>{actionBarTitle || formatters.asteroidName(location?.asteroid)}</b>
       <span>{location?.lot ? `> ${formatters.lotName(location.lot.id)}` : ''}</span>
       <span>{location?.ship && !location?.lot ? `> ${formatShipStatus(location.ship)}` : ''}</span>
     </ActionLocation>
@@ -3814,11 +3814,12 @@ const PillTime = styled(Monospace)`
   font-size: 85%;
   line-height: 18px;
 `;
-export const ActionDialogHeader = ({ action, actionCrew, crewAvailableTime, delayUntil, location, onClose, overrideColor, stage, taskCompleteTime, wide }) => {
+export const ActionDialogHeader = ({ action, actionBarTitle, actionCrew, crewAvailableTime, delayUntil, location, onClose, overrideColor, stage, taskCompleteTime, wide }) => {
   const simulationEnabled = useSimulationEnabled();
   return (
     <>
       <ActionDialogActionBar
+        actionBarTitle={actionBarTitle}
         location={location}
         onClose={onClose}
         overrideColor={overrideColor}

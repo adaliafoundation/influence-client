@@ -38,6 +38,7 @@ import Store from './launcher/Store';
 import Help from './launcher/Help';
 import Inbox from './launcher/Inbox';
 import Rewards from './launcher/Rewards';
+import Bridge from './launcher/Bridge';
 
 const DISABLE_LAUNCH_TRAILER = appConfig.get('App.disableLaunchTrailer');
 
@@ -497,10 +498,6 @@ const Launcher = (props) => {
     window.open(appConfig.get('Url.help'), '_blank', 'noopener');
   }, []);
 
-  const openAssetsPortal = useCallback(() => {
-    window.open(appConfig.get('Url.bridge'), '_blank', 'noopener');
-  }, []);
-
   const openWebWalletDashboard = useCallback(() => {
     window.open(`${appConfig.get('Api.argentWebWallet')}`, '_blank', 'noopener');
   }, []);
@@ -550,11 +547,11 @@ const Launcher = (props) => {
 
             <NavItem isRule />
 
-            {appConfig.get('Url.bridge') && (
-              <NavItem onClick={openAssetsPortal} isExternal>
-                <AssetPortalIcon /> Assets Portal
-              </NavItem>
-            )}
+            <NavItem
+              onClick={() => dispatchLauncherPage('bridge')}
+              selected={launcherPage === 'bridge'}>
+              <AssetPortalIcon /> Asset Portal
+            </NavItem>
 
             {walletId === 'argentWebWallet' && (
               <NavItem onClick={openWebWalletDashboard} isExternal>
@@ -590,6 +587,7 @@ const Launcher = (props) => {
           {launcherPage === 'rewards' && <Rewards />}
           {launcherPage === 'settings' && <Settings />}
           {launcherPage === 'inbox' && <Inbox />}
+          {launcherPage === 'bridge' && <Bridge />}
         </MainContent>
 
         {launcherPage === 'play' && (

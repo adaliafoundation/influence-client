@@ -13,6 +13,7 @@ import DevToolContext from '~/contexts/DevToolContext';
 import theme from '~/theme';
 import { HudMenuCollapsibleSection, Scrollable } from './components/components';
 import { getShipModel } from '~/lib/assetUtils';
+import { setWebsocketLogsEnabled, WEBSOCKET_LOGS_KEY } from '~/lib/debugFlags';
 import { nativeBool } from '~/lib/utils';
 import TextInput from '~/components/TextInput';
 import visualConfigs, { toneMaps } from '~/lib/visuals';
@@ -100,6 +101,13 @@ const DevTools = () => {
   const [isLoading, setIsLoading] = useState();
   const [modelSelection, setModelSelection] = useState();
   const [modelOverride, setModelOverride] = useState();
+  const [websocketLogs, setWebsocketLogs] = useState(() => {
+    try {
+      return window.localStorage.getItem(WEBSOCKET_LOGS_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  });
 
   const assets = useMemo(() => {
     if (assetType === 'ship') return Object.keys(Ship.TYPES).map((i) => ({ ...Ship.TYPES[i], modelUrl: getShipModel(i) }));
@@ -189,6 +197,13 @@ const DevTools = () => {
     setter((s) => !s);
   }, []);
 
+  const toggleWebsocketLogs = useCallback(() => {
+    setWebsocketLogs((enabled) => {
+      setWebsocketLogsEnabled(!enabled);
+      return !enabled;
+    });
+  }, []);
+
   const onChangeToneMapping = useCallback((selection) => {
     setters.setToneMapping(selection?.value);
     // if (selection?.value === NoToneMapping) {
@@ -213,6 +228,10 @@ const DevTools = () => {
           <Button onClick={setters.onShowVersionUpdateDebug}>
             Show Update Modal
           </Button>
+          <CheckboxRow onClick={toggleWebsocketLogs}>
+            {websocketLogs ? <CheckedIcon /> : <UncheckedIcon />}
+            <label>Websocket Logs</label>
+          </CheckboxRow>
         </InnerSection>
       </HudMenuCollapsibleSection>
 
