@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { injected } from '@wagmi/core';
 import { mainnet, sepolia } from 'wagmi/chains';
 
 import { appConfig } from '~/appConfig';
