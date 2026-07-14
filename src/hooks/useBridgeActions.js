@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { num } from 'starknet';
-import { readContract, writeContract } from '@wagmi/core';
+import { readContract, writeContract } from 'wagmi/actions';
 import { formatUnits, parseUnits } from 'viem';
 import { useAccount, useChainId, useConfig, usePublicClient, useSwitchChain } from 'wagmi';
 import { ethereumContracts } from '@influenceth/sdk';
