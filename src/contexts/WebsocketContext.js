@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 
 import { appConfig } from '~/appConfig';
 import useSession from '~/hooks/useSession';
+import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 
 const WebsocketContext = createContext();
 
@@ -39,7 +40,7 @@ export function WebsocketProvider({ children }) {
     const roomKey = (room || '').includes('::') ? room : DEFAULT_ROOM;
     Object.values(messageHandlers.current).forEach((handler) => {
       if (handler.room === roomKey) {
-        if (appConfig.get('App.verboseLogs')) console.log('handleMessage', roomKey, { type, body, ...others });
+        if (areWebsocketLogsEnabled()) console.log('handleMessage', roomKey, { type, body, ...others });
         handler.callback({ type, body, ...others });
       }
     });

@@ -48,6 +48,52 @@ const simulationStateDefault = {
   actionItems: [],
 }
 
+const getBridgeTransferValue = (transfer, key) => {
+  try {
+    return transfer?.[key];
+  } catch (e) {
+    return undefined;
+  }
+};
+
+const toPlainArray = (value) => {
+  try {
+    if (!Array.isArray(value)) return undefined;
+    return value.map((item) => {
+      if (typeof item === 'bigint') return item.toString();
+      return item;
+    });
+  } catch (e) {
+    return undefined;
+  }
+};
+
+const normalizeBridgeTransferRecord = (transfer) => Object.fromEntries(Object.entries({
+  amount: getBridgeTransferValue(transfer, 'amount'),
+  assetIds: toPlainArray(getBridgeTransferValue(transfer, 'assetIds')),
+  assetType: getBridgeTransferValue(transfer, 'assetType'),
+  createdAt: getBridgeTransferValue(transfer, 'createdAt'),
+  direction: getBridgeTransferValue(transfer, 'direction'),
+  displayChain: getBridgeTransferValue(transfer, 'displayChain'),
+  error: getBridgeTransferValue(transfer, 'error'),
+  fromAddress: getBridgeTransferValue(transfer, 'fromAddress'),
+  id: getBridgeTransferValue(transfer, 'id'),
+  layer: getBridgeTransferValue(transfer, 'layer'),
+  originChain: getBridgeTransferValue(transfer, 'originChain'),
+  status: getBridgeTransferValue(transfer, 'status'),
+  toAddress: getBridgeTransferValue(transfer, 'toAddress'),
+  txHash: getBridgeTransferValue(transfer, 'txHash'),
+  updatedAt: getBridgeTransferValue(transfer, 'updatedAt'),
+  waitingStatus: getBridgeTransferValue(transfer, 'waitingStatus'),
+}).filter(([, value]) => value !== undefined));
+
+const mergeBridgeTransferRecords = (...records) => (
+  records.reduce((acc, record) => ({
+    ...acc,
+    ...normalizeBridgeTransferRecord(record),
+  }), {})
+);
+
 const useStore = create(
   subscribeWithSelector(
     persist((set, get) => ({
@@ -119,6 +165,7 @@ const useStore = create(
         cameraNeedsReorientation: false,
 
         chatHistory: [],
+        bridgeTransfers: {},
 
         hasSeenIntroVideo: false,
         hiddenActionItems: [],
@@ -227,7 +274,7 @@ const useStore = create(
         })),
 
         dispatchLauncherPage: (page, subpage) => set(produce(state => {
-          if (['play', 'store', 'help', 'rewards', 'settings', 'inbox'].includes(page)) {
+          if (['play', 'store', 'help', 'rewards', 'settings', 'inbox', 'bridge'].includes(page)) {
             state.launcherPage = page;
             state.launcherSubpage = subpage;
           }
@@ -472,6 +519,25 @@ const useStore = create(
         dispatchCrewAssignmentRestart: (crewId, crewmateId) => set(produce(state => {
           const crewKey = `${crewId}_${crewmateId}`;
           state.crewAssignments[crewKey] = {};
+        })),
+
+        dispatchBridgeTransferLogged: (transfer) => set(produce(state => {
+          if (!state.bridgeTransfers) state.bridgeTransfers = {};
+          const id = getBridgeTransferValue(transfer, 'id');
+          if (!id) return;
+          state.bridgeTransfers[id] = mergeBridgeTransferRecords(
+            { createdAt: Date.now(), status: 'submitted' },
+            transfer
+          );
+        })),
+
+        dispatchBridgeTransferUpdated: (id, update) => set(produce(state => {
+          if (!state.bridgeTransfers?.[id]) return;
+          state.bridgeTransfers[id] = mergeBridgeTransferRecords(
+            state.bridgeTransfers[id],
+            { updatedAt: Date.now() },
+            update
+          );
         })),
 
         dispatchTimeOverride: (anchor, speed) => set((produce(state => {

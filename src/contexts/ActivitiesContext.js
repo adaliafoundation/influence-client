@@ -12,6 +12,7 @@ import { hydrateActivities } from '~/lib/activities';
 import api from '~/lib/api';
 import useSimulationState from '~/hooks/useSimulationState';
 import { appConfig } from '~/appConfig';
+import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 import { TOKEN } from '~/lib/priceUtils';
 
 // TODO (enhancement): rather than invalidating, make optimistic updates to cache value directly
@@ -53,7 +54,7 @@ export function ActivitiesProvider({ children }) {
     setIsBlockMissing,
     token,
   } = useSession();
-  const { crew, pendingTransactions, refreshReadyAt } = useCrewContext();
+  const { crew, refreshReadyAt } = useCrewContext();
   const simulation = useSimulationState();
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
@@ -66,6 +67,7 @@ export function ActivitiesProvider({ children }) {
   } = useWebsocket();
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
+  const pendingTransactions = useStore(s => s.pendingTransactions);
 
   const [ activities, setActivities ] = useState([]);
 
@@ -360,7 +362,7 @@ export function ActivitiesProvider({ children }) {
   }, [disconnected]);
 
   const onWSMessage = useCallback((message) => {
-    if (appConfig.get('App.verboseLogs')) console.log('onWSMessage (activities)', message);
+    if (areWebsocketLogsEnabled()) console.log('onWSMessage (activities)', message);
     const { type, body } = message;
     if (ignoreEventTypes.includes(type)) return;
     if (type === 'CURRENT_STARKNET_BLOCK_NUMBER') {

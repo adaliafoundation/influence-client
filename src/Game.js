@@ -16,6 +16,7 @@ import { DevToolProvider } from '~/contexts/DevToolContext';
 import { ScreensizeProvider } from '~/contexts/ScreensizeContext';
 import { SessionProvider } from '~/contexts/SessionContext';
 import { SyncedTimeProvider } from '~/contexts/SyncedTimeContext';
+import WagmiContextProvider from '~/contexts/WagmiContext';
 import { WebsocketProvider } from '~/contexts/WebsocketContext';
 import Audio from '~/game/Audio';
 import ChatListener from '~/game/ChatListener';
@@ -236,9 +237,10 @@ const Game = () => {
 
       {isInstalling && !updateNeeded && <FullpageInterstitial message={`${loadingMessage}...`} />}
       {(!isInstalling || updateNeeded) && (
-        <SessionProvider>
-          <CrewProvider>
-            <WebsocketProvider>
+        <WagmiContextProvider>
+          <SessionProvider>
+            <CrewProvider>
+              <WebsocketProvider>
               <ChatListener />
               <StripeListener />
               <Router>
@@ -293,9 +295,10 @@ const Game = () => {
                   </Route>
                 </Switch>
               </Router>
-            </WebsocketProvider>
-          </CrewProvider>
-        </SessionProvider>
+              </WebsocketProvider>
+            </CrewProvider>
+          </SessionProvider>
+        </WagmiContextProvider>
       )}
     </>
   );

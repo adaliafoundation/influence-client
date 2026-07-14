@@ -1075,6 +1075,15 @@ const formatAsTx = (item) => {
       }
       break;
     }
+
+    case 'DelegateCrew': {
+      formatted.icon = <CrewIcon />;
+      formatted.label = `Update Crew Delegation`;
+      formatted.onClick = ({ history }) => {
+        history.push(`/crew/${item.vars.caller_crew.id}`);
+      }
+      break;
+    }
     
     case 'RekeyInbox': {
       formatted.icon = <InboxIcon />;

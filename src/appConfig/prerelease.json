@@ -11,9 +11,20 @@
     "ramp": "https://app.demo.ramp.network"
   },
   "Ethereum": {
+    "chainId": "11155111",
     "Address": {
+      "arvadCrewmateSale": "0x4E928EB49d83E84dB40cFDb226ca6ff1B2bEA767",
+      "asteroidBridge": "0x314c597ca57A82fF200735dCC1DC9479AcF2cB27",
       "asteroidToken": "0xA986C6D24222700f78c617ed49E0D78983D0f9AF",
-      "crewmateToken": "0xE5700883cf429bB63B69424447C7F86C8fdD1786"
+      "crewBridge": "0xCFa7Ea1A515b3882e7a071C2E45e0aD75F5A633C",
+      "crewmateBridge": "0x28e0328067cB9994FDf9d18f319C126f3716736E",
+      "crewmateFeatures": "0xDA2d1Ab6958512edC787C76F410FF1bdB05936E0",
+      "crewmateToken": "0xE5700883cf429bB63B69424447C7F86C8fdD1786",
+      "crewToken": "0x99Fd93A9Fd6dB25eCC490c20712827F118Ee0395",
+      "shipBridge": "0xEf4Cd543b98552f7F37cCf76716CFBEa93FA05E2",
+      "shipToken": "0x3f2e6aEeBa3F509294DD49fecD1b0388463cF1BC",
+      "swayBridge": "0xe4A4a70b9793220746e414ECf54CF9fbbF16ebFb",
+      "swayToken": "0xE88210749F561CCB7839593E99b00414699a80DF"
     }
   },
   "Starknet": {
@@ -24,6 +35,7 @@
       "strkToken": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
       "usdcToken": "0x053b40a647cedfca6ca84f542a0fe36736031905a9639a7f19a3c1e66bfd5080",
       "asteroidToken": "0x0680710b95255a852ed9ead04d4c1ffcf4f0695e29fb5c327abe2b8cb305ba25",
+      "crewToken": "0x560387d35b9b8df47a1973b7208e52b2df4f6dda579c7902678f9c1f2625215",
       "crewmateToken": "0x026b26dc1cd021d7a1e78615cdf9f8f7d19ddbec73a4187e37af1d57f9bcfdc6",
       "dispatcher": "0x0517567ac7026ce129c950e6e113e437aa3c83716cd61481c6bb8c5057e6923e",
       "escrow": "0x04541d894b5c0476d620e62c3a9be4719ba2dc652df84148be382a89619864e2",

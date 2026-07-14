@@ -68,7 +68,9 @@
     "starknetkit": "^3.4.3",
     "styled-components": "^5.3.0",
     "three": "^0.183.2",
+    "viem": "^2.31.7",
     "victory": "^36.6.8",
+    "wagmi": "^2.18.1",
     "web-vitals": "^1.1.2",
     "webpack-cli": "^4.9.1",
     "zustand": "^3.5.7"

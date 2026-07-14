@@ -37,10 +37,10 @@ const Dialog = styled.div`
   position: relative;
 `;
 const PaneWrapper = styled.div`
-  border-left: 1px solid ${borderColor};
+  border-left: ${p => p.singlePane ? 0 : `1px solid ${borderColor}`};
   height: calc(100vh - 250px);
-  overflow: hidden auto;
-  width: 1075px;
+  overflow: ${p => p.overflow || 'hidden auto'};
+  width: ${p => p.singlePane ? 1375 : 1075}px;
 `;
 
 const TabWrapper = styled.div`
@@ -129,7 +129,7 @@ const CloseButton = styled(IconButton)`
 
 const BottomLeft = styled.div``;
 
-const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu }) => {
+const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu, paneOverflow }) => {
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
 
   const [selected, setSelected] = useState();
@@ -189,7 +189,7 @@ const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu }) =
               )}
             </TabWrapper>
           )}
-          <PaneWrapper singlePane={!!reactBool(singlePane)}>
+          <PaneWrapper overflow={paneOverflow} singlePane={!!reactBool(singlePane)}>
             {singlePane || selected?.pane || null}
           </PaneWrapper>
           <ClipCorner dimension={30} color={borderColor} />

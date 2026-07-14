@@ -26,6 +26,7 @@ import FeedCrew from './actionDialogs/FeedCrew';
 import FormAgreement from './actionDialogs/FormAgreement';
 import NewCoreSample from './actionDialogs/NewCoreSample';
 import Deconstruct from './actionDialogs/Deconstruct';
+import DelegateCrew from './actionDialogs/DelegateCrew';
 import ImproveCoreSample from './actionDialogs/ImproveCoreSample';
 import JettisonCargo from './actionDialogs/JettisonCargo';
 import LandShip from './actionDialogs/LandShip';
@@ -244,6 +245,7 @@ const ActionDialog = ({ type, params }) => {
         {type === 'UNPLAN_BUILDING' && <UnplanBuilding {...allProps} />}
         {type === 'CONSTRUCT' && <Construct {...allProps} />}
         {type === 'DECONSTRUCT' && <Deconstruct {...allProps} />}
+        {type === 'DELEGATE_CREW' && <DelegateCrew {...allProps} />}
         {type === 'EJECT_CREW' && <EjectCrew {...allProps} />}
         {type === 'EJECT_GUEST_CREW' && <EjectCrew {...allProps} guests />}
         {type === 'EMERGENCY_MODE_COLLECT' && <EmergencyModeCollect {...allProps} />}

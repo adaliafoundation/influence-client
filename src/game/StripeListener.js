@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
-import { appConfig } from '~/appConfig';
 import useSession from '~/hooks/useSession';
 
+import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 import useStore from '~/hooks/useStore';
 import useWebsocket from '~/hooks/useWebsocket';
 
@@ -16,7 +16,7 @@ const StripeListener = () => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
   const handleWSMessage = useCallback((message) => {
-    if (appConfig.get('App.verboseLogs')) console.log('onWSMessage (stripe)', message);
+    if (areWebsocketLogsEnabled()) console.log('onWSMessage (stripe)', message);
 
     const { type, body } = message;
     if (type === 'STRIPE_PAYMENT_SUCCESS') {
