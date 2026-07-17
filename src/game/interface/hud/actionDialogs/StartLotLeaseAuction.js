@@ -54,6 +54,7 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
     return {
       gracePeriodDays: settings.gracePeriod / 86400,
       auctionDays: Permission.AUCTION_DESCENDING_PERIOD / 86400,
+      arrearsCapMonths: 12 * Permission.MAX_AUCTION_LEASE_LAPSE_SECONDS / Permission.MAX_LEASE_LAPSE_SECONDS,
       startPrice: toSway(Permission.getAuctionPriceAtStep(0)),
       endPrice: toSway(Permission.getAuctionPriceAtStep(Permission.AUCTION_STEPS - 1)),
     };
@@ -68,6 +69,11 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
     {
       label: 'Auction Duration',
       value: `${formatFixed(auctionDetails.auctionDays, 0)} days`,
+      direction: 0
+    },
+    {
+      label: 'Arrears Cap',
+      value: `${formatFixed(auctionDetails.arrearsCapMonths, 0)} months`,
       direction: 0
     },
     {
@@ -112,6 +118,7 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
             </DescTitle>
             <Desc>
               You have <b>asteroid control</b> and may start a repossession auction.
+              The asteroid controller receives up to six months of lapsed lease payments, rounded up to the nearest hour, from the auction payment; any remainder goes to the building controller.
             </Desc>
           </FlexSectionInputBlock>
         </FlexSection>

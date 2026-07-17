@@ -235,6 +235,20 @@ const FormAgreement = ({
   const remainingPeriod = useMemo(() => currentAgreement?.endTime - blockTime, [blockTime, currentAgreement?.endTime]);
   const refundablePeriod = useMemo(() => Math.max(0, remainingPeriod - monthsToSeconds(currentAgreement?.noticePeriod)), [currentAgreement?.noticePeriod, remainingPeriod]);
   const refundableAmount = useMemo(() => refundablePeriod * (currentAgreement?.rate_swayPerSec || 0), [currentAgreement?.rate_swayPerSec, refundablePeriod]);
+  const auctionPayment = useMemo(() => {
+    if (!isAuctionPurchase || !auctionStatus?.isAuctionAvailable) return null;
+    const split = Permission.getAuctionPaymentSplit({
+      auctionAmount: auctionStatus.auctionPrice,
+      auctionLeaseLapseAmount: auctionStatus.auctionLeaseLapseAmount,
+      hasBuildingController: !!entity?.building?.Control?.controller?.id
+    });
+    return {
+      ...split,
+      buildingControllerRecipient: buildingController?.Crew?.delegatedTo,
+      controllerRecipient: controller?.Crew?.delegatedTo,
+      previousTenant: getEntityCrew(auctionStatus.expiredAgreement?.permitted?.id),
+    };
+  }, [auctionStatus, buildingController?.Crew?.delegatedTo, controller?.Crew?.delegatedTo, entity?.building?.Control?.controller?.id, isAuctionPurchase]);
 
   const stats = useMemo(() => {
     if (isTermination) {
@@ -274,17 +288,19 @@ const FormAgreement = ({
           value: auctionDetails?.isAuctionComplete ? '-' : formatTimer(auctionDetails?.descendingRemaining || 0, 2),
           isTimeStat: true,
         }, {
-          label: 'Auction Premium',
+          label: 'Auction Payment',
           value: `${formatFixed(toSway(auctionStatus.auctionPrice), 2)} SWAY`,
-        }] : []),
-        ...(isExpiredLeaseRenewal && auctionStatus?.leaseLapseAmount > 0n ? [{
-          label: 'Lapsed Lease',
-          value: `${formatFixed(toSway(auctionStatus.leaseLapseAmount), 2)} SWAY`,
+        }, {
+          label: 'Asteroid Arrears',
+          value: `${formatFixed(toSway(auctionPayment?.toController || 0n), 2)} SWAY`,
+        }, {
+          label: 'Building Premium',
+          value: `${formatFixed(toSway(auctionPayment?.toBuildingController || 0n), 2)} SWAY`,
         }] : []),
       ];
     }
     return [];
-  }, [auctionDetails, auctionStatus, crew, currentPolicy, initialPeriod, isAuctionPurchase, isExpiredLeaseRenewal, isLeaseExtension, isTermination, paymentAgreement, remainingPeriod]);
+  }, [auctionDetails, auctionPayment, auctionStatus, crew, currentPolicy, initialPeriod, isAuctionPurchase, isLeaseExtension, isTermination, paymentAgreement, remainingPeriod]);
 
   const term = useMemo(() => Math.round(daysToSeconds(initialPeriod || 0)), [initialPeriod]);
   const termPrice = useMemo(() => {
@@ -304,20 +320,6 @@ const FormAgreement = ({
       ? toSway(paymentAgreement.rate) * 24
       : (currentPolicy?.policyDetails?.rate || 0) * 24
   ), [currentPolicy?.policyDetails?.rate, isLeaseExtension, paymentAgreement?.rate]);
-  const auctionPayment = useMemo(() => {
-    if (!isAuctionPurchase || !auctionStatus?.isAuctionAvailable) return null;
-    const split = Permission.getAuctionPaymentSplit({
-      auctionAmount: auctionStatus.auctionPrice,
-      leaseLapseAmount: auctionStatus.leaseLapseAmount,
-      hasBuildingController: !!entity?.building?.Control?.controller?.id
-    });
-    return {
-      ...split,
-      buildingControllerRecipient: buildingController?.Crew?.delegatedTo,
-      controllerRecipient: controller?.Crew?.delegatedTo,
-      previousTenant: getEntityCrew(auctionStatus.expiredAgreement?.permitted?.id),
-    };
-  }, [auctionStatus, buildingController?.Crew?.delegatedTo, controller?.Crew?.delegatedTo, entity?.building?.Control?.controller?.id, isAuctionPurchase]);
   const auctionCost = useMemo(() => (
     auctionPayment
       ? safeBigInt(auctionPayment.toController) + safeBigInt(auctionPayment.toBuildingController)
