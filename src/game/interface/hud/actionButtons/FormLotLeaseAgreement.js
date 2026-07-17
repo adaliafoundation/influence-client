@@ -80,7 +80,7 @@ const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, lot, simul
           label: (
             <>
               Restore Expired Lease<br/>
-              (<SwayIcon />{leaseRate} / day + arrears)
+              (<SwayIcon />{leaseRate} / day)
             </>
           ),
           overrideColor: theme.colors.red

@@ -18,6 +18,7 @@ import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
 
 const RETRY_INTERVAL = 5e3; // 5 seconds
+const WALLET_RECONNECT_TIMEOUT = 30e3;
 const ChainTransactionContext = createContext();
 
 // TODO: equalityTest default of 'i' doesn't make sense anymore
@@ -556,12 +557,14 @@ export function ChainTransactionProvider({ children }) {
     blockTime,
     chainId,
     isDeployed,
+    login,
     logout,
     gasTokens,
     provider,
     starknetSession,
     upgradeInsecureSession,
-    walletAccount
+    walletAccount,
+    walletId
   } = useSession();
   const activities = useActivitiesContext();
   const { crew } = useCrewContext();
@@ -578,6 +581,11 @@ export function ChainTransactionProvider({ children }) {
   const swayRef = useRef();
   swayRef.current = swayBalanceSource;
 
+  const walletAccountRef = useRef();
+  walletAccountRef.current = walletAccount;
+
+  const walletConnectionWaiters = useRef([]);
+
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const gameplay = useStore(s => s.gameplay);
   const pendingTransactions = useStore(s => s.pendingTransactions);
@@ -588,6 +596,45 @@ export function ChainTransactionProvider({ children }) {
 
   const [promptingTransaction, setPromptingTransaction] = useState(false);
   const [nonce, setNonce] = useState();
+
+  useEffect(() => {
+    if (!walletAccount) return;
+
+    walletConnectionWaiters.current.forEach(({ resolve, timeout }) => {
+      clearTimeout(timeout);
+      resolve(walletAccount);
+    });
+    walletConnectionWaiters.current = [];
+  }, [walletAccount]);
+
+  useEffect(() => {
+    const waiters = walletConnectionWaiters;
+    return () => {
+      waiters.current.forEach(({ reject, timeout }) => {
+        clearTimeout(timeout);
+        reject(new Error('Wallet reconnect cancelled'));
+      });
+      waiters.current = [];
+    };
+  }, []);
+
+  const waitForWalletConnection = useCallback(async () => {
+    if (walletAccountRef.current) return walletAccountRef.current;
+
+    await login(walletId ? { [walletId]: true } : undefined);
+
+    if (walletAccountRef.current) return walletAccountRef.current;
+
+    return new Promise((resolve, reject) => {
+      const waiter = { resolve, reject };
+      waiter.timeout = setTimeout(() => {
+        walletConnectionWaiters.current = walletConnectionWaiters.current.filter((w) => w !== waiter);
+        reject(new Error('Wallet reconnect timed out'));
+      }, WALLET_RECONNECT_TIMEOUT);
+
+      walletConnectionWaiters.current.push(waiter);
+    });
+  }, [login, walletId]);
 
   // Sets the nonce initially to allow for some local management
   useEffect(() => {
@@ -615,6 +662,9 @@ export function ChainTransactionProvider({ children }) {
   );
 
   const executeWithAccount = useCallback(async (calls) => {
+    const account = walletAccountRef.current;
+    if (!account) throw new Error('Account is disconnected');
+
     // Format calls for proper stringification
     const formattedCalls = calls.map((call) => {
       return { ...call, calldata: call.calldata.map(a => num.toHex(a)) };
@@ -635,7 +685,7 @@ export function ChainTransactionProvider({ children }) {
           // NOTE: if stark sponsoring fees, should allow zero balance in relevant token
           if (gasTokenBalance > 0n) {
             const feeMode = { mode: 'default', gasToken };
-            const fees = await walletAccount.estimatePaymasterTransactionFee(formattedCalls, { feeMode });
+            const fees = await account.estimatePaymasterTransactionFee(formattedCalls, { feeMode });
             if (gasTokenBalance >= fees.suggested_max_fee_in_gas_token) {
               paymasterToken = gasToken;
               break;
@@ -649,9 +699,9 @@ export function ChainTransactionProvider({ children }) {
 
     console.log('paymasterToken', paymasterToken, gasTokens);
     if (paymasterToken) {
-      return await walletAccount.executePaymasterTransaction(formattedCalls, { feeMode: { mode: 'default', gasToken: paymasterToken } });
+      return await account.executePaymasterTransaction(formattedCalls, { feeMode: { mode: 'default', gasToken: paymasterToken } });
     } else {
-      return await walletAccount.execute(formattedCalls, {});
+      return await account.execute(formattedCalls, {});
     }
   }, [
     accountAddress,
@@ -661,8 +711,7 @@ export function ChainTransactionProvider({ children }) {
     gasTokens,
     isDeployed,
     nonce,
-    starknetSession,
-    walletAccount
+    starknetSession
   ]);
 
   const contracts = useMemo(() => {
@@ -932,6 +981,9 @@ export function ChainTransactionProvider({ children }) {
     usdcPerEth
   ]);
 
+  const contractsRef = useRef();
+  contractsRef.current = contracts;
+
   const getTxEvent = useCallback((txHash) => {
     const txHashBInt = safeBigInt(txHash);
     return (activities || []).find((a) => a.event?.transactionHash && safeBigInt(a.event?.transactionHash) === txHashBInt)?.event;
@@ -1065,10 +1117,12 @@ export function ChainTransactionProvider({ children }) {
     }
   }, [blockNumber]);
 
-  const isAccountLocked = useCallback(async () => {
+  const isAccountLocked = useCallback(async (account = walletAccountRef.current) => {
+    if (!account) return true;
+
     // Check that the account isn't locked, and prompt to unlock if it is
     try {
-      await walletAccount.walletProvider.request({
+      await account.walletProvider.request({
         type: 'wallet_requestAccounts',
         params: { silent_mode: false }
       });
@@ -1077,7 +1131,7 @@ export function ChainTransactionProvider({ children }) {
     } catch (e) {
       return true;
     }
-  }, [walletAccount]);
+  }, []);
 
 
   const handleExecutionExeption = useCallback((e, executeCalls, txDetails = {}) => {
@@ -1148,10 +1202,26 @@ export function ChainTransactionProvider({ children }) {
 
   // Allows for multiple explicit / manual calls to be executed in a single transaction
   const executeCalls = useCallback(async (calls) => {
-    if (!walletAccount) {
+    let activeWalletAccount = walletAccountRef.current;
+    if (!activeWalletAccount) {
+      setPromptingTransaction(true);
+      try {
+        activeWalletAccount = await waitForWalletConnection();
+      } catch (e) {
+        setPromptingTransaction(false);
+        createAlert({
+          type: 'GenericAlert',
+          data: { content: 'Reconnect your wallet to continue.' },
+          level: 'warning',
+        });
+        return;
+      }
+    }
+
+    if (!activeWalletAccount) {
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'Account is disconnected.' },
+        data: { content: 'Reconnect your wallet to continue.' },
         level: 'warning',
       });
 
@@ -1166,7 +1236,7 @@ export function ChainTransactionProvider({ children }) {
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isAccountLocked()) {
+    if (await isAccountLocked(activeWalletAccount)) {
       createAlert({
         type: 'GenericAlert',
         data: { content: 'Account is unavailable.' },
@@ -1198,7 +1268,7 @@ export function ChainTransactionProvider({ children }) {
       handleExecutionExeption(e, executeCalls);
       throw e;  // rethrow
     }
-  }, [createAlert, executeWithAccount, handleExecutionExeption, isAccountLocked, isDeployed, upgradeInsecureSession, walletAccount])
+  }, [createAlert, executeWithAccount, handleExecutionExeption, isAccountLocked, isDeployed, upgradeInsecureSession, waitForWalletConnection])
 
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}) => {
@@ -1215,19 +1285,39 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
-    if (!walletAccount || !contracts || !contracts[key]) {
+    let activeWalletAccount = walletAccountRef.current;
+    let activeContracts = contractsRef.current;
+
+    if (!activeWalletAccount) {
+      setPromptingTransaction(true);
+      try {
+        activeWalletAccount = await waitForWalletConnection();
+        activeContracts = contractsRef.current;
+      } catch (e) {
+        setPromptingTransaction(false);
+        createAlert({
+          type: 'GenericAlert',
+          data: { content: 'Reconnect your wallet to continue.' },
+          level: 'warning',
+        });
+        return;
+      }
+    }
+
+    if (!activeWalletAccount || !activeContracts || !activeContracts[key]) {
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'Account is disconnected or contract is invalid.' },
+        data: { content: activeWalletAccount ? 'Contract is invalid.' : 'Reconnect your wallet to continue.' },
         level: 'warning',
       });
+      setPromptingTransaction(false);
       return;
     }
 
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isAccountLocked()) {
+    if (await isAccountLocked(activeWalletAccount)) {
       createAlert({
         type: 'GenericAlert',
         data: { content: 'Account is unavailable.' },
@@ -1238,7 +1328,7 @@ export function ChainTransactionProvider({ children }) {
     }
 
     // execute
-    const { execute: contractExecute, onTransactionError } = contracts[key];
+    const { execute: contractExecute, onTransactionError } = activeContracts[key];
     try {
       const tx = await contractExecute(vars);
       dispatchPendingTransaction({
@@ -1260,7 +1350,7 @@ export function ChainTransactionProvider({ children }) {
     }
 
     setPromptingTransaction(false);
-  }, [blockTime, contracts, handleExecutionExeption, walletAccount, simulationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blockTime, createAlert, handleExecutionExeption, isAccountLocked, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPendingTx = useCallback((key, vars) => {
     // simulation will only ever have one concurrent?
