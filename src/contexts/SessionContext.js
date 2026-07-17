@@ -136,9 +136,8 @@ const hasWalletConnection = ({ connectorData, wallet } = {}) => {
   return !!(wallet && connectorData?.account);
 };
 
-const clearSilentReconnect = (dispatchSessionSuspended) => {
-  localStorage.removeItem('starknetLastConnectedWallet');
-  dispatchSessionSuspended();
+const hasValidSession = (session) => {
+  return !!session?.token && !isExpired(session.token);
 };
 
 const normalizeConnectorId = (id) => connectorAliases[id] || id;
@@ -208,7 +207,8 @@ export function SessionProvider({ children }) {
   const [isBlockMissing, setIsBlockMissing] = useState(false);
   const [error, setError] = useState();
 
-  const authenticated = useMemo(() => status === STATUSES.AUTHENTICATED, [status]);
+  const authenticated = useMemo(() => status === STATUSES.AUTHENTICATED || hasValidSession(currentSession), [currentSession, status]);
+  const walletConnected = useMemo(() => !!walletAccount, [walletAccount]);
   const provider = useMemo(() => {
     let nodeUrl = appConfig.get('Starknet.provider');
 
@@ -345,8 +345,10 @@ export function SessionProvider({ children }) {
         localStorage.setItem('starknetLastConnectedWallet', walletId);
         setStatus(STATUSES.CONNECTED);
       } else if (auto) {
-        clearSilentReconnect(dispatchSessionSuspended);
-        setStatus(STATUSES.DISCONNECTED);
+        setStatus(hasValidSession(currentSession)
+          ? STATUSES.AUTHENTICATED
+          : STATUSES.DISCONNECTED
+        );
       } else {
         console.error('No connected wallet or missing address');
       }
@@ -357,12 +359,24 @@ export function SessionProvider({ children }) {
       }
 
       else if (auto && isConnectorNotFoundError(e)) {
-        clearSilentReconnect(dispatchSessionSuspended);
-        setStatus(STATUSES.DISCONNECTED);
+        setStatus(hasValidSession(currentSession)
+          ? STATUSES.AUTHENTICATED
+          : STATUSES.DISCONNECTED
+        );
+      }
+
+      else if (auto && isLoginCancelledError(e)) {
+        setStatus(hasValidSession(currentSession)
+          ? STATUSES.AUTHENTICATED
+          : STATUSES.DISCONNECTED
+        );
       }
 
       else if (isLoginCancelledError(e)) {
-        setStatus(STATUSES.DISCONNECTED);
+        setStatus(hasValidSession(currentSession)
+          ? STATUSES.AUTHENTICATED
+          : STATUSES.DISCONNECTED
+        );
       }
 
       else if (e.message !== 'User rejected request') {
@@ -371,24 +385,46 @@ export function SessionProvider({ children }) {
     }
 
     setConnecting(false);
-  }, [connectConnector, currentSession, dispatchSessionSuspended, getConnectors, provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connectConnector, currentSession, getConnectors, provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearWalletConnection = useCallback(() => {
+    setConnectedAccount();
+    setConnectedChainId();
+    setConnectedWalletId();
+    setWalletAccount();
+  }, []);
 
   // Disconnect from the wallet provider and suspend session (don't fully logout)
   const disconnect = useCallback(() => {
     dispatchSessionSuspended();
     setStatus(STATUSES.DISCONNECTED);
-  }, [dispatchSessionSuspended]);
+    clearWalletConnection();
+  }, [clearWalletConnection, dispatchSessionSuspended]);
 
   // End / delete session, disconnect wallet and forget last wallet provider (full reset)
   const logout = useCallback(() => {
     dispatchSessionEnded();
     setStatus(STATUSES.DISCONNECTED);
+    clearWalletConnection();
     if (window.starknet) starknetDisconnect({ clearLastWallet: true });
-  }, [ dispatchSessionEnded ]);
+  }, [ clearWalletConnection, dispatchSessionEnded ]);
+
+  const disconnectWalletOnly = useCallback(() => {
+    clearWalletConnection();
+    setStatus(hasValidSession(currentSession)
+      ? STATUSES.AUTHENTICATED
+      : STATUSES.DISCONNECTED
+    );
+  }, [clearWalletConnection, currentSession]);
 
   // While connecting or connected, listen for network changes from extension
   useEffect(() => {
     const onAccountsChanged = (e) => {
+      if (!e || (Array.isArray(e) && !e[0])) {
+        disconnectWalletOnly();
+        return;
+      }
+
       const eventAccount = Address.toStandard(Array.isArray(e) ? e[0] : e);
 
       if (currentSession?.accountAddress === eventAccount && status === STATUSES.AUTHENTICATED) {
@@ -406,7 +442,7 @@ export function SessionProvider({ children }) {
     const onNetworkChanged = (e) => {
       const eventNetwork = Array.isArray(e) ? e[0] : e;
       const correctChain = isAllowedChain(eventNetwork);
-      if (!correctChain) disconnect();
+      if (!correctChain) disconnectWalletOnly();
     };
 
     const startListening = () => {
@@ -437,7 +473,7 @@ export function SessionProvider({ children }) {
 
     if (walletAccount) startListening();
     return stopListening;
-  }, [ currentSession, sessions, status, walletAccount ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ currentSession, disconnectWalletOnly, sessions, status, walletAccount ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Checks the account contract do determine if it's deployed on-chain yet
   const checkDeployed = useCallback(async () => {
@@ -547,7 +583,10 @@ export function SessionProvider({ children }) {
   useEffect(() => {
     // console.log(Object.keys(STATUSES).find(key => STATUSES[key] === status));
     if (status === STATUSES.DISCONNECTED) {
-      if (currentSession?.walletId) {
+      if (hasValidSession(currentSession)) {
+        setStatus(STATUSES.AUTHENTICATED);
+        setReadyForChildren(true);
+      } else if (currentSession?.walletId) {
         connect(true).finally(() => setReadyForChildren(true));
       } else {
         setReadyForChildren(true);
@@ -573,9 +612,13 @@ export function SessionProvider({ children }) {
       });
 
       setError(null);
-      logout(); // Disconnect and reset to prevent further issues
+      if (hasValidSession(currentSession)) {
+        disconnectWalletOnly();
+      } else {
+        logout(); // Disconnect and reset to prevent further issues
+      }
     }
-  }, [error, createAlert, logout]);
+  }, [currentSession, disconnectWalletOnly, error, createAlert, logout]);
 
   const gasTokens = useMemo(() => {
     if (gameplay.feeTokens?.length > 0 && paymasterTokens?.length > 0) {
@@ -623,15 +666,18 @@ export function SessionProvider({ children }) {
 
   const [promptLogin, setPromptLogin] = useState();
   const login = useCallback(async (enabledConnectors) => {
-    if ([STATUSES.AUTHENTICATING, STATUSES.AUTHENTICATED].includes(status)) return;
+    if (status === STATUSES.AUTHENTICATING || (status === STATUSES.AUTHENTICATED && walletConnected)) return;
 
     if (enabledConnectors) {
-      connect(false, enabledConnectors);
-      return;
+      return connect(false, enabledConnectors);
+    }
+
+    if (currentSession?.walletId && !walletConnected) {
+      return connect(false, { [currentSession.walletId]: true });
     }
 
     setPromptLogin(true);
-  }, [connect, status]);
+  }, [connect, currentSession?.walletId, status, walletConnected]);
 
   const handleLoginPrompt = useCallback((choice) => {
     if (choice) {
@@ -680,6 +726,7 @@ export function SessionProvider({ children }) {
       token: authenticated ? currentSession?.token : null,
       upgradeInsecureSession,
       walletAccount,
+      walletConnected,
       walletId: authenticated ? currentSession?.walletId : null,
 
       // NOTE:
