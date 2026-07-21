@@ -77,11 +77,15 @@ const useServiceWorker = () => {
     updateNeeded,
     onUpdateVersion: useCallback(() => {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then((registration) => {
-          if (registration && registration.waiting) {
-            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-        });
+        navigator.serviceWorker.getRegistration()
+          .then((registration) => {
+            if (registration && registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+          })
+          .finally(() => window.location.reload());
+      } else {
+        window.location.reload();
       }
     }, [])
   }
