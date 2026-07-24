@@ -22,8 +22,13 @@ function flattenObject(obj, parentKey = '', result = {}) {
   }, result);
 }
 
+const runtimeConfig =
+  typeof window !== 'undefined'
+    ? (window.APP_CONFIG || {})
+    : process.env;
+
 // override default config with environment specific config
-const configSelection = process.env.REACT_APP_CONFIG_ENV || process.env.NODE_ENV;
+const configSelection = runtimeConfig.REACT_APP_CONFIG_ENV || process.env.NODE_ENV;
 const rawConfig = {
   ...flattenObject(defaultConfig),
   ...flattenObject(configSelection === 'production' ? productionConfig : prereleaseConfig),
@@ -34,8 +39,8 @@ const appConfigData = reduce(
   rawConfig,
   (res, v, key) => {
     const overrideKey = `REACT_APP_${key.replace(/\./g, '_').toUpperCase()}`;
-    if (process.env.hasOwnProperty(overrideKey)) {
-      res[key] = process.env[overrideKey];
+    if (runtimeConfig.hasOwnProperty(overrideKey)) {
+      res[key] = runtimeConfig[overrideKey];
     }
     return res;
   },
