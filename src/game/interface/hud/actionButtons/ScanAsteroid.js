@@ -100,4 +100,6 @@ const ScanAsteroid = ({ asteroid, _disabled }) => {
   );
 };
 
-export default { Component: ScanAsteroid, isVisible };
+const actionDefinition = { Component: ScanAsteroid, isVisible };
+
+export default actionDefinition;

@@ -1,18 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import styled from 'styled-components';
-import BrightButton from '~/components/BrightButton';
 import { PuffLoader } from 'react-spinners';
 
 import Button from '~/components/ButtonAlt';
 import { SwayIcon } from '~/components/Icons';
-import PurchaseButtonInner from '~/components/PurchaseButtonInner';
 import useFaucetInfo from '~/hooks/useFaucetInfo';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import api from '~/lib/api';
-import { nativeBool, reactBool } from '~/lib/utils';
-import theme from '~/theme';
+import { nativeBool } from '~/lib/utils';
 
 const SwayFaucetButton = ({ noLabel }) => {
   const queryClient = useQueryClient();
@@ -61,7 +57,7 @@ const SwayFaucetButton = ({ noLabel }) => {
   }, [accountAddress, login, provider]);
 
   return (
-    <BrightButton
+    <Button
       onClick={requestSway}
       disabled={nativeBool((accountAddress && !swayEnabled) || requestingSway || faucetInfoLoading)}>
       {!noLabel && <label>SWAY Faucet (Daily)</label>}
@@ -74,7 +70,7 @@ const SwayFaucetButton = ({ noLabel }) => {
             </span>
           )}
       </span>
-    </BrightButton>
+    </Button>
   );
 }
 

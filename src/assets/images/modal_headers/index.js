@@ -16,7 +16,7 @@ import SurfaceTransfer from './SurfaceTransfer.png';
 import Travel from './Travel.png';
 
 
-export default {
+const modalHeaders = {
   Agreements,
   Construction,
   ConstructionPlan,
@@ -33,4 +33,6 @@ export default {
   Production_6,
   SurfaceTransfer,
   Travel,
-}
+};
+
+export default modalHeaders;

@@ -1,6 +1,6 @@
 import { useHistory, useParams } from 'react-router-dom';
 
-import { Entity, Lot } from '@influenceth/sdk';
+import { Entity } from '@influenceth/sdk';
 import { useLotLink } from '~/components/LotLink';
 import { useShipLink } from '~/components/ShipLink';
 import useEntity from '~/hooks/useEntity';

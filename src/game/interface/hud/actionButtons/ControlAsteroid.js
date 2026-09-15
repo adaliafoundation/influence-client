@@ -41,4 +41,6 @@ const ControlAsteroid = ({ asteroid, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: ControlAsteroid, isVisible };
+const actionDefinition = { Component: ControlAsteroid, isVisible };
+
+export default actionDefinition;

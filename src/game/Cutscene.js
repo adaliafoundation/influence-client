@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ReactPlayer from 'react-player/lazy';
 import styled from 'styled-components';
 import BrightButton from '~/components/BrightButton';

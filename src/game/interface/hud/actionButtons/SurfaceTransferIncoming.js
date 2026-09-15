@@ -157,4 +157,6 @@ const SurfaceTransferIncoming = ({ asteroid, blockTime, crew, lot, ship, onSetAc
   );
 };
 
-export default { Component: SurfaceTransferIncoming, isVisible };
+const actionDefinition = { Component: SurfaceTransferIncoming, isVisible };
+
+export default actionDefinition;

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Entity, Lot, Ship } from '@influenceth/sdk';
+import { Entity, Ship } from '@influenceth/sdk';
 
 import { MyAssetIcon, SwayIcon } from '~/components/Icons';
 import useSession from '~/hooks/useSession';

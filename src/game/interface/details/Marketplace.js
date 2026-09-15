@@ -97,7 +97,7 @@ const OpenOrdersButton = styled(OnClickLink)`
   }
 `;
 
-const pageSize = 25;
+
 
 const Marketplace = () => {
   const history = useHistory();

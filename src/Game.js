@@ -1,3 +1,4 @@
+import { features } from '~/appConfig/features';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ThemeProvider, createGlobalStyle } from 'styled-components';
@@ -13,6 +14,7 @@ import { CoachmarkProvider } from '~/contexts/CoachmarkContext';
 import { CrewProvider } from './contexts/CrewContext';
 import { ChainTransactionProvider } from '~/contexts/ChainTransactionContext';
 import { DevToolProvider } from '~/contexts/DevToolContext';
+import { PrivyWalletProvider } from '~/contexts/PrivyWalletContext';
 import { ScreensizeProvider } from '~/contexts/ScreensizeContext';
 import { SessionProvider } from '~/contexts/SessionContext';
 import { SyncedTimeProvider } from '~/contexts/SyncedTimeContext';
@@ -20,15 +22,16 @@ import WagmiContextProvider from '~/contexts/WagmiContext';
 import { WebsocketProvider } from '~/contexts/WebsocketContext';
 import Audio from '~/game/Audio';
 import ChatListener from '~/game/ChatListener';
+import FundingIntentMonitor from '~/game/FundingIntentMonitor';
 import Interface from '~/game/Interface';
 import LandingPage from '~/game/Landing';
 import Referral from '~/game/Referral';
 import Scene from '~/game/Scene';
-import StripeListener from '~/game/StripeListener';
 import useSession from '~/hooks/useSession';
 import useServiceWorker from '~/hooks/useServiceWorker';
 import useStore from '~/hooks/useStore';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
+import { STARTER_PACK_CHECKOUT_PARAM } from '~/lib/starterPacks';
 import ScreensizeWarning from '~/ScreensizeWarning';
 import theme from '~/theme';
 
@@ -97,6 +100,15 @@ const LauncherRedirect = () => {
 
   // redirect to launcher if initial load and trying to link to /launcher/*
   useEffect(() => {
+    const checkoutSessionId = new URLSearchParams(history.location.search).get(STARTER_PACK_CHECKOUT_PARAM);
+    if (checkoutSessionId && features.stripe) {
+      dispatchLauncherPage('store', 'packs');
+      if (history.location.pathname !== '/') {
+        history.replace({ pathname: '/', search: history.location.search });
+      }
+      return;
+    }
+
     const parts = history.location.pathname.split('/').slice(1);
     const deeplink = parts[0] === 'launcher';
     if (deeplink || !DISABLE_LAUNCHER_LANDING) {
@@ -238,14 +250,15 @@ const Game = () => {
       {isInstalling && !updateNeeded && <FullpageInterstitial message={`${loadingMessage}...`} />}
       {(!isInstalling || updateNeeded) && (
         <WagmiContextProvider>
-          <SessionProvider>
-            <CrewProvider>
+          <PrivyWalletProvider>
+            <SessionProvider>
+              <CrewProvider>
               <WebsocketProvider>
               <ChatListener />
-              <StripeListener />
               <Router>
                 <Referral />
                 <CrewSwitcher />
+                <FundingIntentMonitor />
                 <Switch>
 
                   {/* for socialmedia links that need to pull opengraph tags (will redirect to discord or main app) */}
@@ -296,8 +309,9 @@ const Game = () => {
                 </Switch>
               </Router>
               </WebsocketProvider>
-            </CrewProvider>
-          </SessionProvider>
+              </CrewProvider>
+            </SessionProvider>
+          </PrivyWalletProvider>
         </WagmiContextProvider>
       )}
     </>

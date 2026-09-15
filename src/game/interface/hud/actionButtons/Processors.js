@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { Permission, Processor } from '@influenceth/sdk';
+import { useCallback, useMemo } from 'react';
+import { Permission } from '@influenceth/sdk';
 
 import { getProcessorLeaseConfig, getProcessorProps } from '~/lib/utils';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
@@ -69,4 +69,6 @@ const Processors = (props) => {
   ));
 };
 
-export default { Component: Processors, isVisible };
+const actionDefinition = { Component: Processors, isVisible };
+
+export default actionDefinition;

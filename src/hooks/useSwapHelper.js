@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef } from 'react';
 import { quoteToCalls } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
-import useStore from '~/hooks/useStore';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import { TOKEN } from '~/lib/priceUtils';
 import usePriceHelper from '~/hooks/usePriceHelper';
@@ -16,7 +15,6 @@ const useSwapHelper = () => {
   const { data: walletSource } = useWalletPurchasableBalances();
   
   const priceHelper = usePriceHelper();
-  const preferredUiCurrency = useStore(s => s.getPreferredUiCurrency());
 
   // using a ref since execute is often called from a callback from funding (and
   // it may not reliably get re-memoized with updated wallet values within callback)
@@ -25,7 +23,7 @@ const useSwapHelper = () => {
 
   const buildMultiswapFromSellAmount = useCallback(async (sellAmountUSDC, targetToken, allowableSlippage = 0.1) => {
     const swappableTokens = Object.keys(walletRef.current?.tokenBalances).filter((t) => !!t && t !== targetToken);
-    swappableTokens.sort((a) => a === preferredUiCurrency ? -1 : 1);
+    swappableTokens.sort((a) => a === TOKEN.USDC ? -1 : 1);
     
     const calls = [];
     const initialTargetUSDC = (sellAmountUSDC || 0);

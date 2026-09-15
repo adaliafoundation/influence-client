@@ -36,4 +36,6 @@ const PurchaseEntity = ({ ship, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: PurchaseEntity, isVisible };
+const actionDefinition = { Component: PurchaseEntity, isVisible };
+
+export default actionDefinition;

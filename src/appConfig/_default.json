@@ -7,27 +7,30 @@
     "defaultMuted": false,
     "disableScreensizeWarning": false,
     "enableDevTools": false,
-    "feeRewardsForAllWallets": false,
     "hideSocial": true,
     "verboseLogs": false
   },
   "Api": {
-    "argent": "",
-    "argentWebWallet": "",
     "avnu": "",
+    "banxa": "",
+    "ipfs": "",
     "influence": "",
-    "ramp": "",
     "ClientId": {
       "google": "",
       "gtm": "",
       "layerswap": "",
-      "ramp": "",
-      "walletConnect": "",
       "stripe": ""
     }
   },
   "ClientMedia": {
     "cid": "QmdD7MriPcqzJSC3vyUjq2Sifj5s2pEWLnfv4UxMJSRTjt"
+  },
+  "Privy": {
+    "appId": "",
+    "clientId": ""
+  },
+  "Banxa": {
+    "minFiat": 11
   },
   "Ethereum": {
     "chainId": "",
@@ -52,6 +55,7 @@
     "provider": "",
     "providerBackup": "",
     "paymaster": "",
+    "paymasterProxy": "",
     "Address": {
       "ethToken": "",
       "usdcToken": "",
@@ -61,11 +65,11 @@
       "dispatcher": "",
       "escrow": "",
       "shipToken": "",
-      "swayToken": ""
+      "swayToken": "",
+      "strkToken": ""
     }
   },
   "Url": {
-    "bridge": "",
     "bugReport": "https://discord.gg/influenceth",
     "colonizationMissions": "",
     "communityMissions": "https://influence.wendash.com/",

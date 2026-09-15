@@ -40,4 +40,6 @@ const ExtendAgreement = ({ entity, permission, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: ExtendAgreement, isVisible };
+const actionDefinition = { Component: ExtendAgreement, isVisible };
+
+export default actionDefinition;

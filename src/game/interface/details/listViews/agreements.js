@@ -9,7 +9,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 import { LocationLink } from './components';
 import formatters from '~/lib/formatters';
 
-import { formatFixed, formatTimer, getTerminatedAgreementStatus, locationsArrToObj, monthsToSeconds, secondsToDays, secondsToMonths } from '~/lib/utils';
+import { formatFixed, formatTimer, getTerminatedAgreementStatus, locationsArrToObj, monthsToSeconds, secondsToDays } from '~/lib/utils';
 import useBlockTime from '~/hooks/useBlockTime';
 import actionButtons from '../../hud/actionButtons';
 import useActionButtons from '~/hooks/useActionButtons';

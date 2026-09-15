@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'rea
 import styled from 'styled-components';
 import { AxesHelper, Color, Float32BufferAttribute, Vector3 } from 'three';
 import { useThrottleCallback } from '@react-hook/throttle';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Html, useTexture } from '@react-three/drei';
 import gsap from 'gsap';
 import { cloneDeep } from 'lodash';
@@ -25,7 +25,7 @@ import TravelSolution from './asteroids/TravelSolution';
 import highlighters from './asteroids/highlighters';
 import vert from './asteroids/asteroids.vert';
 import frag from './asteroids/asteroids.frag';
-import { ZOOM_IN_ANIMATION_TIME, ZOOM_OUT_ANIMATION_TIME } from './Asteroid';
+import { asteroidZoomVisual, getZoomPointOpacity } from './asteroid/helpers/AsteroidZoom';
 import { formatBeltDistance } from '../interface/hud/actionDialogs/components';
 import formatters from '~/lib/formatters';
 import theme from '~/theme';
@@ -286,33 +286,13 @@ const Asteroids = () => {
   }, [getAsteroidColors, getPointOpacities, updatePointOpacityAttribute]);
 
   useEffect(() => {
-    const targetOpacity = (
-      zoomStatus === 'in' ||
-      zoomStatus === 'zooming-in'
-    ) ? 0 : 1;
+    if (zoomStatus === 'in' || zoomStatus === 'out') asteroidZoomVisual.completed = false;
+  }, [zoomStatus]);
 
-    const duration = (
-      zoomStatus === 'zooming-in'
-        ? ZOOM_IN_ANIMATION_TIME
-        : zoomStatus === 'zooming-out'
-          ? ZOOM_OUT_ANIMATION_TIME
-          : 0
-    ) / 1e3;
-
-    if (duration === 0) {
-      setOriginPointOpacity(targetOpacity);
-      return;
-    }
-
-    const tween = gsap.to(originPointOpacity, {
-      current: targetOpacity,
-      duration,
-      ease: zoomStatus === 'zooming-in' ? 'power4.out' : 'power4.in',
-      onUpdate: () => setOriginPointOpacity(originPointOpacity.current),
-    });
-
-    return () => tween.kill();
-  }, [setOriginPointOpacity, zoomStatus]);
+  useFrame(() => {
+    const opacity = getZoomPointOpacity(zoomStatus, originId, asteroidZoomVisual);
+    if (Math.abs(originPointOpacity.current - opacity) > 0.001) setOriginPointOpacity(opacity);
+  });
 
   // Update asteroid positions whenever the time changes in-game or mapped asteroids are updated
   // TODO: would probably have much smoother motion (at very fast-forwarded speeds) by

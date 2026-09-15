@@ -15,6 +15,7 @@ import MockTransactionManager from '~/simulation/MockTransactionManager';
 import theme from '~/theme';
 import TutorialMessage, { messageWidth, useCrewmateTutorialImageUrl } from './TutorialMessage';
 import { fireTrackingEvent } from '~/lib/utils';
+import { getPrimaryNewPlayerLoginOptions } from '~/lib/wallets';
 
 const BUBBLE_WIDTH = 60;
 
@@ -129,8 +130,8 @@ const WelcomeSimulation = () => {
 
   const handleSkip = useCallback(() => {
     fireTrackingEvent('simulation', { step: 'skip-to-login' });
-    login({ webWallet: true });
-  }, []);
+    login(getPrimaryNewPlayerLoginOptions());
+  }, [login]);
 
   if (!currentStep) return null;
   return createPortal(

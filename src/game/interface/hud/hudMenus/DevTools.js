@@ -1,3 +1,4 @@
+import { features } from '~/appConfig/features';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { NoToneMapping } from 'three';
@@ -16,6 +17,7 @@ import { getShipModel } from '~/lib/assetUtils';
 import { setWebsocketLogsEnabled, WEBSOCKET_LOGS_KEY } from '~/lib/debugFlags';
 import { nativeBool } from '~/lib/utils';
 import TextInput from '~/components/TextInput';
+import useStore from '~/hooks/useStore';
 import visualConfigs, { toneMaps } from '~/lib/visuals';
 
 const InnerSection = styled.div`
@@ -79,7 +81,7 @@ const reader = new FileReader();
 const DevTools = () => {
   const { assetType, overrides, ...setters } = useContext(DevToolContext);
 
-  const [defaultSettings, settings] = useMemo(() => {
+  const [, settings] = useMemo(() => {
     if (!assetType) return [{}, {}];
 
     const defaults = assetType === 'scene' ? visualConfigs.scene : visualConfigs.modelViewer[assetType];
@@ -108,6 +110,9 @@ const DevTools = () => {
       return false;
     }
   });
+  const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
+  const dispatchSimulationReset = useStore(s => s.dispatchSimulationReset);
+  const dispatchStarterPackStateReset = useStore(s => s.dispatchStarterPackStateReset);
 
   const assets = useMemo(() => {
     if (assetType === 'ship') return Object.keys(Ship.TYPES).map((i) => ({ ...Ship.TYPES[i], modelUrl: getShipModel(i) }));
@@ -234,6 +239,20 @@ const DevTools = () => {
           </CheckboxRow>
         </InnerSection>
       </HudMenuCollapsibleSection>
+
+      {features.stripe && <HudMenuCollapsibleSection titleText="Starter Packs">
+        <InnerSection>
+          <Button onClick={() => dispatchLauncherPage('store', 'packs')}>
+            Open Starter Pack Store
+          </Button>
+          <Button onClick={dispatchStarterPackStateReset}>
+            Reset Starter Pack State
+          </Button>
+          <Button onClick={() => dispatchSimulationReset(true)}>
+            Restart Training
+          </Button>
+        </InnerSection>
+      </HudMenuCollapsibleSection>}
 
       <HudMenuCollapsibleSection titleText="Viewer">
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>

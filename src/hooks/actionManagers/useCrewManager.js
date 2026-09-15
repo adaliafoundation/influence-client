@@ -29,7 +29,19 @@ const useCrewManager = () => {
       }]
     });
 
-    return execute('BulkPurchaseAdalians', { collection: Crewmate.COLLECTION_IDS.ADALIAN, tally });
+    return execute(
+      'BulkPurchaseAdalians',
+      { collection: Crewmate.COLLECTION_IDS.ADALIAN, tally },
+      {},
+      {
+        usePaymaster: false,
+        requireExplicitSignature: true,
+        authorization: {
+          action: 'Purchase crewmate credits',
+          details: `Purchase ${tally} crewmate credit${tally === 1 ? '' : 's'} for $${tally * 5}.00.`
+        }
+      }
+    );
   }, [accountAddress, execute]);
 
   const getPendingCreditPurchase = useCallback(() => {
@@ -60,21 +72,35 @@ const useCrewManager = () => {
         });
 
         const appearance = Crewmate.unpackAppearance(crewmate.Crewmate.appearance);
-        execute('RecruitAdalian', {
-          crewmate: { id: crewmate.id, label: Entity.IDS.CREWMATE },
-          class: crewmate.Crewmate.class,
-          impactful: crewmate.Crewmate.impactful,
-          cosmetic: crewmate.Crewmate.cosmetic,
-          gender: appearance.gender,
-          body: appearance.body,
-          face: appearance.face,
-          hair: appearance.hair,
-          hair_color: appearance.hairColor,
-          clothes: appearance.clothes,
-          station: crewmate.Location,
-          caller_crew: crewmate.Control.controller,
-          name: crewmate.Name.name
-        });
+        execute(
+          'RecruitAdalian',
+          {
+            crewmate: { id: crewmate.id, label: Entity.IDS.CREWMATE },
+            class: crewmate.Crewmate.class,
+            impactful: crewmate.Crewmate.impactful,
+            cosmetic: crewmate.Crewmate.cosmetic,
+            gender: appearance.gender,
+            body: appearance.body,
+            face: appearance.face,
+            hair: appearance.hair,
+            hair_color: appearance.hairColor,
+            clothes: appearance.clothes,
+            station: crewmate.Location,
+            caller_crew: crewmate.Control.controller,
+            name: crewmate.Name.name
+          },
+          {},
+          crewmate?.id > 0
+            ? {}
+            : {
+              usePaymaster: false,
+              requireExplicitSignature: true,
+              authorization: {
+                action: 'Recruit crewmate',
+                details: `Purchase and recruit ${crewmate.Name.name}.`
+              }
+            }
+        );
       }
     },
     [accountAddress, execute]

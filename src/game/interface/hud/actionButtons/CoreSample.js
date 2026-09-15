@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Asteroid, Building, Deposit, Lot, Product } from '@influenceth/sdk';
 
 import { NewCoreSampleIcon, ImproveCoreSampleIcon } from '~/components/Icons';
@@ -118,4 +118,6 @@ const NewCoreSample = ({ asteroid, crew, lot, onSetAction, overrideResourceId, i
   );
 };
 
-export default { Component: NewCoreSample, isVisible };
+const actionDefinition = { Component: NewCoreSample, isVisible };
+
+export default actionDefinition;

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Inventory, Order, Permission } from '@influenceth/sdk';
 
 import { TransferFromIcon } from '~/components/Icons';
@@ -122,4 +122,6 @@ const SurfaceTransferOutgoing = ({ asteroid, blockTime, crew, lot, ship, onSetAc
   );
 };
 
-export default { Component: SurfaceTransferOutgoing, isVisible };
+const actionDefinition = { Component: SurfaceTransferOutgoing, isVisible };
+
+export default actionDefinition;

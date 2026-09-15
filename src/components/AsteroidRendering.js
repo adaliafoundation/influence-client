@@ -102,7 +102,7 @@ const RenderedAsteroidInCanvas = ({ onReady, ...props }) => {
   const style = useMemo(() => ({ width: '100%', height: '100%', ...(props.style || {}) }), [props.style]);
 
   return imageSrc
-    ? <img src={imageSrc} style={style} />
+    ? <img src={imageSrc} style={style} alt="Asteroid" />
     : (
       <Canvas
         ref={canvas}

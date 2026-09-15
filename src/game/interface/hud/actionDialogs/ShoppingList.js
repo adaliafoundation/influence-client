@@ -1,6 +1,6 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Building, Crew, Crewmate, Entity, Inventory, Lot, Permission, Process, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Building, Crewmate, Entity, Inventory, Lot, Permission, Process, Product, Time } from '@influenceth/sdk';
 
 import {
   CheckedIcon,
@@ -14,7 +14,7 @@ import {
   WarningOutlineIcon
 } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
-import theme, { hexToRGB } from '~/theme';
+import theme from '~/theme';
 import { reactBool, formatTimer, formatFixed, formatPrice, locationsArrToObj, getCrewAbilityBonuses, ordersToFills } from '~/lib/utils';
 
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';

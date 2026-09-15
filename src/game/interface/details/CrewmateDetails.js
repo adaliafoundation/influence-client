@@ -472,7 +472,7 @@ const Wrapper = () => {
   }, [crewmateLoading, crewmate, i]);
 
   const loading = myCrewLoading || crewmateLoading;
-  {/* TODO: onClose, should maybe just go "back", but possibly should go to "crew" page */}
+  // TODO: onClose, should maybe just go "back", but possibly should go to "crew" page
   return (
     <Details
       edgeToEdge

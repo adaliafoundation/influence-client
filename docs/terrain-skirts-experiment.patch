@@ -1,0 +1,541 @@
+diff --git a/src/game/scene/Asteroid.js b/src/game/scene/Asteroid.js
+--- a/src/game/scene/Asteroid.js
++++ b/src/game/scene/Asteroid.js
+@@ -374,6 +374,7 @@
+       if (geometry.current) disposeGeometry();
+       geometry.current = new QuadtreeTerrainCube(origin, c, textureSize, webWorkerPool);
+       geometry.current.builder.maxConcurrent = 1;
++      geometry.current.builder.skirtsEnabled = true;
+       setTerrainInitialized(false);
+       group.current.position.set(...position.current);
+       geometry.current.groups.forEach((g) => {
+@@ -424,6 +425,7 @@
+ 
+       geometry.current = new QuadtreeTerrainCube(origin, config, textureSize, webWorkerPool);
+       geometry.current.builder.maxConcurrent = 1;
++      geometry.current.builder.skirtsEnabled = true;
+       setTerrainInitialized(false);
+       group.current.position.set(...position.current);
+       geometry.current.groups.forEach((g) => {
+diff --git a/src/game/scene/asteroid/helpers/TerrainChunk.js b/src/game/scene/asteroid/helpers/TerrainChunk.js
+--- a/src/game/scene/asteroid/helpers/TerrainChunk.js
++++ b/src/game/scene/asteroid/helpers/TerrainChunk.js
+@@ -14,6 +14,7 @@
+ } from 'three';
+ 
+ import constants from '~/lib/constants';
++import { addSkirtVertices, getSkirtLayout } from './TerrainSkirts';
+ import {
+   applyDisplacementToGeometry,
+   getCachedGeometryAttributes,
+@@ -22,21 +23,9 @@
+ 
+ const { SHADOWLESS_NORMAL_SCALE } = constants;
+ 
+-// TODO: remove debug
+-// let first = true;
+-// let taskTotal = 0;
+-// let taskTally = 0;
+-// setInterval(() => {
+-//   if (taskTally > 0) {
+-//     console.log(
+-//       `avg execution time (over ${taskTally}): ${Math.round(taskTotal / taskTally)}ms`,
+-//     );
+-//   }
+-//   first = true;
+-// }, 5000);
+-
+ class TerrainChunk {
+-  constructor(params, config, { materialOverrides, shadowsEnabled, resolution }) {
++  constructor(params, config, { materialOverrides, shadowsEnabled, resolution, skirtsEnabled = false }) {
++    this._skirtsEnabled = skirtsEnabled;
+     this._params = params;
+     this._config = config;
+     this._materialOverrides = materialOverrides;
+@@ -155,10 +144,13 @@
+ 
+   getOnBeforeCompile(material, updateVNormal = true) {
+     const uniforms = this._terrainUniforms;
++    const skirtsEnabled = this._skirtsEnabled;
+     return function (shader) {
+       shader.uniforms.uRadius = uniforms.uRadius;
+       shader.uniforms.uStretch = uniforms.uStretch;
++      if (skirtsEnabled) shader.uniforms.uSkirtDepth = uniforms.uSkirtDepth;
+       shader.vertexShader = `
++        ${skirtsEnabled ? 'attribute float skirt; uniform float uSkirtDepth;' : ''}
+         uniform float uRadius;
+         uniform vec3 uStretch;
+         ${shader.vertexShader.replace(
+@@ -168,6 +160,7 @@
+             float disp = (disp16.x * 255.0 + disp16.y) / 256.0;
+             // set height along normal (which is set to spherical position)
+             transformed = normalize(objectNormal) * (uRadius + disp * displacementScale + displacementBias);
++            ${skirtsEnabled ? 'transformed -= normalize(objectNormal) * skirt * uSkirtDepth;' : ''}
+             // stretch according to config
+             transformed *= uStretch;
+             // re-init pre-normalmap normal to match stretched position (b/f application of normalmap)
+@@ -183,7 +176,9 @@
+     this._material.onBeforeCompile = this.getOnBeforeCompile(
+       this._material
+     );
++    this._material.customProgramCacheKey = () => `${this._material.onBeforeCompile.toString()}:skirts=${this._skirtsEnabled}`;
+     if (this._plane.customDepthMaterial) {
++      this._plane.customDepthMaterial.customProgramCacheKey = () => `${this._plane.customDepthMaterial.onBeforeCompile.toString()}:skirts=${this._skirtsEnabled}`;
+       this._plane.customDepthMaterial.onBeforeCompile = this.getOnBeforeCompile(
+         this._plane.customDepthMaterial,
+         false
+@@ -209,6 +204,10 @@
+     if (!this._terrainUniforms) {
+       this._terrainUniforms = { uRadius: { value: 0 }, uStretch: { value: null } };
+     }
++    if (this._skirtsEnabled) {
++      if (!this._terrainUniforms.uSkirtDepth) this._terrainUniforms.uSkirtDepth = { value: 0 };
++      this._terrainUniforms.uSkirtDepth.value = Math.min(this._config.radius * 0.25, this._params.width * 0.1);
++    }
+     this._terrainUniforms.uRadius.value = this._config.radius;
+     this._terrainUniforms.uStretch.value = this._stretch;
+   }
+@@ -253,13 +252,23 @@
+ 
+   initGeometry() {
+     // update geometry
+-    const attr = getCachedGeometryAttributes(this._resolution);
++    let attr = getCachedGeometryAttributes(this._resolution);
++    if (this._skirtsEnabled) {
++      this._skirtLayout = getSkirtLayout(this._resolution, attr);
++      attr = this._skirtLayout;
++      this._geometry.setAttribute('skirt', new BufferAttribute(attr.skirt, 1));
++    }
+     this._geometry.setIndex(new BufferAttribute(attr.indices, 1));
+     this._geometry.setAttribute('uv', new Float32BufferAttribute(attr.uvs, 2));
+     this._geometry.attributes.uv.needsUpdate = true;
+   }
+ 
+   updateGeometry(positions, normals) {
++    if (this._skirtsEnabled) {
++      ({ positions, normals } = addSkirtVertices(
++        positions, normals, this._skirtLayout, this._terrainUniforms.uSkirtDepth.value, this._stretch
++      ));
++    }
+ 
+     // update positions (these are already stretched so not culled inappropriately)
+     this._geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+diff --git a/src/game/scene/asteroid/helpers/TerrainChunkManager.js b/src/game/scene/asteroid/helpers/TerrainChunkManager.js
+--- a/src/game/scene/asteroid/helpers/TerrainChunkManager.js
++++ b/src/game/scene/asteroid/helpers/TerrainChunkManager.js
+@@ -14,17 +14,6 @@
+   TERRAIN_CHUNK_POOL_SIZE_MIN,
+   TERRAIN_CHUNK_POOL_SIZE_LOOKBACK
+ } = constants;
+-
+-// // TODO: remove
+-// let taskTotal = 0;
+-// let taskTally = 0;
+-// setInterval(() => {
+-//   if (taskTally > 0) {
+-//     console.log(
+-//       `avg new chunk time (over ${taskTally}): ${Math.round(taskTotal / taskTally)}ms`,
+-//     );
+-//   }
+-// }, 5000);
+ 
+ class TerrainChunkManager {
+   constructor(i, config, textureSize, workerPool, materialOverrides = {}) {
+@@ -69,7 +58,7 @@
+     let chunk;
+     while(chunk = this.pool.pop()) chunk.dispose(); // eslint-disable-line no-cond-assign
+     while(chunk = this.emissivePool.pop()) chunk.dispose(); // eslint-disable-line no-cond-assign
+-    this.reset(); // (not sure if this is necessary)
++    this.reset();
+   }
+ 
+   disposeMaps(maps) {
+@@ -88,8 +77,6 @@
+   }
+ 
+   isWaitingOnMaps() {
+-    // TODO (enhancement): ">=" should be "===" but occasionally on initial asteroid load, extra 6 (initial sides) get put in _new
+-    //  (should track down at some point)
+     return this.waitingOn > 0 && (this._new.length < this.waitingOn);
+   }
+ 
+@@ -139,9 +126,9 @@
+     const startedAt = terrainPerformance.start();
+     const poolToUse = !!params.emissiveParams?.color ? this.emissivePool : this.pool;
+     let chunk = poolToUse.pop();
+-    if (chunk) { // console.log('reuse', this.pool.length);
++    if (chunk) {
+       chunk.reconfigure(params);
+-    } else { // console.log('create', this.pool.length);
++    } else {
+       chunk = new TerrainChunk(
+         params,
+         this.config,
+@@ -149,6 +136,7 @@
+           materialOverrides: this.materialOverrides,
+           resolution: this.textureSize,
+           shadowsEnabled: this.shadowsEnabled,
++          skirtsEnabled: this.skirtsEnabled,
+         },
+         this.workerPool
+       );
+@@ -161,7 +149,6 @@
+     chunk.attachToGroup();
+ 
+     // trigger geometry and map updates (will queue for display when complete)
+-    const scope = this;
+     const buildState = {
+       chunk,
+       geometryReady: false,
+@@ -175,7 +162,7 @@
+     const queueIfReady = () => {
+       if (buildState.geometryReady && buildState.mapsReady) {
+         buildState.readyAt = terrainPerformance.start();
+-        scope._queued.push(buildState);
++        this._queued.push(buildState);
+       }
+     };
+ 
+@@ -272,13 +259,11 @@
+     if (this.recentAddAtOnceAmounts.length >= TERRAIN_CHUNK_POOL_SIZE_LOOKBACK) {
+       this.recentAddAtOnceAmounts = this.recentAddAtOnceAmounts.slice(this.recentAddAtOnceAmounts.length - TERRAIN_CHUNK_POOL_SIZE_LOOKBACK);
+       this.targetPoolSize = this.recentAddAtOnceAmounts.reduce((a, b) => Math.max(a, b), TERRAIN_CHUNK_POOL_SIZE_MIN);
+-      // console.log(`targetPoolSize: ${this.targetPoolSize}`);
+     }
+   }
+ 
+   queueForRecycling(chunks) {
+-    // this._old = [...chunks];
+-    this._old = chunks; // doesn't seem like this needs clone, so not wasting resources
++    this._old = chunks;
+   }
+ 
+   finishPreparation(chunk, renderer, camera, scene) {
+@@ -358,8 +343,6 @@
+ 
+   update() {
+     if (this.isBusy()) return;
+-    // console.log(`adding ${this._new.length} chunks, removing ${this._old.length} chunks`);
+-    // console.log(`update: add ${this._new.length}, remove ${this._old.length}, pool ${this.pool.length}, emissivePool ${this.emissivePool.length}, waitingOn ${this.waitingOn}, queued ${this._queued.length}`);
+ 
+     this.trackSwapWait(false);
+     const swapStartedAt = terrainPerformance.start();
+@@ -369,11 +352,9 @@
+     while (chunk = this._old.pop()) { // eslint-disable-line
+       const poolToUse = !!chunk._params.emissiveParams?.color ? this.emissivePool : this.pool;
+       if (ENABLE_TERRAIN_CHUNK_RESOURCE_POOL && chunk.isReusable() && poolToUse.length < this.targetPoolSize) {
+-        // console.log('REUSE');
+         chunk.detachFromGroup();
+         poolToUse.push(chunk);
+       } else {
+-        // console.log('TRASH');
+         chunk.dispose();
+       }
+     }
+diff --git a/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.js b/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.js
+--- a/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.js
++++ b/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.js
+@@ -15,47 +15,6 @@
+ const STITCHING_DIRECTIONS = ['N', 'S', 'E', 'W'];
+ 
+ const sortQueuedChanges = (changes) => changes.sort((a, b) => a._distance - b._distance);
+-
+-const mergeQueuedChanges = (changes) => {
+-  const addByRenderSig = {};
+-  const removeByKey = new Set();
+-  let distance = Infinity;
+-
+-  changes.forEach((change) => {
+-    distance = Math.min(distance, change._distance ?? Infinity);
+-    (change.add || []).forEach((node) => {
+-      addByRenderSig[node.renderSig] = node;
+-    });
+-    (change.removeByKey || []).forEach((key) => {
+-      removeByKey.add(key);
+-    });
+-  });
+-
+-  return {
+-    _distance: distance === Infinity ? 0 : distance,
+-    add: Object.values(addByRenderSig).sort((a, b) => a.distanceToCamera - b.distanceToCamera),
+-    removeByKey: Array.from(removeByKey)
+-  };
+-};
+-
+-// TODO: remove
+-// let taskTotal = 0;
+-// let taskTally = 0;
+-// setInterval(() => {
+-//   if (taskTally > 0) {
+-//     console.log(
+-//       `avg children time (over ${taskTally}): ${Math.round(1000 * taskTotal / taskTally) / 1000}ms`,
+-//     );
+-//   }
+-// }, 5000);
+-// let active = false;
+-// const debug = (start) => {
+-//   if (active) {
+-//     taskTally++;
+-//     taskTotal += performance.now() - start;
+-//   }
+-// };
+-// setTimeout(() => active = true, 5000);
+ 
+ class QuadtreeTerrainCube {
+   constructor(i, config, textureSize, workerPool, materialOverrides = {}) {
+@@ -106,8 +65,6 @@
+       this.groups[sideIndex].matrix = transform.clone();
+       this.groups[sideIndex].matrixAutoUpdate = false;
+ 
+-      // TODO: remove debug
+-      // if (this.sides.length === 5) break;
+     }
+   }
+ 
+@@ -118,7 +75,6 @@
+ 
+   // preprocess geometry from high-res texture
+   prerenderCoarseGeometry(sideTransform, resolution, config) {
+-    // const s = Date.now();
+     const heightMap = generateHeightMap(
+       sideTransform,
+       1,
+@@ -129,7 +85,6 @@
+       config,
+       'texture'
+     );
+-    // console.log('time for coarse', Date.now() - s);
+ 
+     const heightSamples = [];
+     for (let y = 0; y < resolution; y++) {
+@@ -177,7 +132,6 @@
+ 
+     // create a list of changes to make, sorted by closest to farthest
+     const queuedChangesObj = {};
+-    let hasStitchingTransition = false;
+ 
+     const updatedChunks = {};
+     this.sides.forEach((side) => {
+@@ -214,16 +168,12 @@
+         if (updatedChunks[chunk.key]) {
+ 
+           // calculate "renderSig"... if not same as old chunk, needs rebuild
+-          // TODO: since this group can get big, might be good to break up by side before swap
+           if (updatedChunks[chunk.key].renderSig !== renderSig) {
+-            if (updatedChunks[chunk.key].stitchingSig !== chunk.stitchingSig) {
+-              hasStitchingTransition = true;
+-            }
+-            if (!queuedChangesObj.rebuild) {
+-              queuedChangesObj.rebuild = { add: [], removeByKey: [] };
+-            }
+-            queuedChangesObj.rebuild.add.push(updatedChunks[chunk.key]);
+-            queuedChangesObj.rebuild.removeByKey.push(renderSig);
++            queuedChangesObj[`rebuild:${chunk.key}`] = {
++              _distance: updatedChunks[chunk.key].distanceToCamera,
++              add: [updatedChunks[chunk.key]],
++              removeByKey: [renderSig]
++            };
+           }
+ 
+         // else, this existing chunk is gone (either splitting into smaller or collapsing into larger)
+@@ -261,21 +211,13 @@
+         }
+       });
+ 
+-      if (queuedChangesObj.rebuild) {
+-        queuedChangesObj.rebuild._distance = queuedChangesObj.rebuild.add.reduce((acc, cur) => Math.min(acc, cur.distanceToCamera), Infinity);
+-      }
+-    }
+-
+-    const queuedChanges = sortQueuedChanges(Object.values(queuedChangesObj));
+-    // Stitching changes must land in the same visible swap as the LOD changes that caused them.
+-    // If they are spread across frames, neighboring chunks can briefly disagree about their edge
+-    // stride and expose a thin background crack.
+-    this.queuedChanges = hasStitchingTransition
+-      ? [mergeQueuedChanges(queuedChanges)]
+-      : queuedChanges;
++    }
++
++    // Skirts cover temporary neighbor mismatches; only replacements covering
++    // the same parent region need to become visible together.
++    this.queuedChanges = sortQueuedChanges(Object.values(queuedChangesObj));
+ 
+     terrainPerformance.finish('quadtree recalculation CPU', startedAt);
+-    // debug(x);
+     // ^^^
+   }
+ 
+diff --git a/src/game/scene/asteroid/helpers/TerrainChunk.spec.js b/src/game/scene/asteroid/helpers/TerrainChunk.spec.js
+--- a/src/game/scene/asteroid/helpers/TerrainChunk.spec.js
++++ b/src/game/scene/asteroid/helpers/TerrainChunk.spec.js
+@@ -18,3 +18,19 @@
+   });
+   expect(shaders[0].uniforms.uStretch).toBe(shaders[1].uniforms.uStretch);
+ });
++
++it('subtracts skirt depth after height displacement in both surface and shadow shaders', () => {
++  const chunk = Object.create(TerrainChunk.prototype);
++  chunk._skirtsEnabled = true;
++  chunk._config = { radius: 100, stretch: [1, 1, 1] };
++  chunk._params = { side: 0, width: 50 };
++  chunk.updateDerived();
++  [true, false].forEach((surface) => {
++    const shader = { uniforms: {}, vertexShader: '#include <displacementmap_vertex>' };
++    chunk.getOnBeforeCompile({ userData: {} }, surface)(shader);
++    expect(shader.vertexShader).toContain('transformed -= normalize(objectNormal) * skirt * uSkirtDepth;');
++    expect(shader.uniforms.uSkirtDepth.value).toBe(5);
++  });
++  chunk.reconfigure({ side: 1, width: 100 });
++  expect(chunk._terrainUniforms.uSkirtDepth.value).toBe(10);
++});
+diff --git a/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.spec.js b/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.spec.js
+--- a/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.spec.js
++++ b/src/game/scene/asteroid/helpers/QuadtreeTerrainCube.spec.js
+@@ -91,3 +91,20 @@
+   expect(cube.builder.allocateChunk).not.toHaveBeenCalled();
+   expect(cube.pendingChange).toHaveLength(1);
+ });
++
++it('schedules neighboring edge rebuilds independently', () => {
++  const cube = Object.create(QuadtreeTerrainCube.prototype);
++  const nodes = Object.fromEntries(['a', 'b'].map((key) => [key, {
++    ...node(key), distanceToCamera: key === 'a' ? 1 : 2,
++    neighbors: { N: { size: new Vector3(200, 200, 0) } }
++  }]));
++  cube.builder = {};
++  cube.chunks = Object.fromEntries(['a', 'b'].map((key) => [`${key} [1111] []`, { key, stitchingSig: '1111' }]));
++  cube.sides = [{ quadtree: {
++    setCameraPosition: jest.fn(), populateEdges: jest.fn(), populateNonsideNeighbors: jest.fn(),
++    getChildren: () => nodes
++  } }];
++  cube.setCameraPosition(new Vector3());
++  expect(cube.queuedChanges).toHaveLength(2);
++  expect(cube.queuedChanges[0].add).toHaveLength(1);
++});
+diff --git a/src/game/scene/asteroid/helpers/TerrainSkirts.js b/src/game/scene/asteroid/helpers/TerrainSkirts.js
+--- /dev/null
++++ b/src/game/scene/asteroid/helpers/TerrainSkirts.js
+@@ -0,0 +1,48 @@
++const layouts = new Map();
++
++export function getSkirtLayout(resolution, attributes) {
++  if (layouts.has(resolution)) return layouts.get(resolution);
++  const stride = resolution + 1;
++  const surfaceVertices = stride * stride;
++  const edge = [];
++  for (let x = 0; x < resolution; x++) edge.push(x * stride);
++  for (let y = 0; y < resolution; y++) edge.push(resolution * stride + y);
++  for (let x = resolution; x > 0; x--) edge.push(x * stride + resolution);
++  for (let y = resolution; y > 0; y--) edge.push(y);
++
++  const skirt = new Float32Array(surfaceVertices + edge.length);
++  skirt.fill(1, surfaceVertices);
++  const uvs = new Float32Array(skirt.length * 2);
++  uvs.set(attributes.uvs);
++  const indices = new Uint32Array(attributes.indices.length + edge.length * 6);
++  indices.set(attributes.indices);
++  edge.forEach((vertex, i) => {
++    uvs.set(attributes.uvs.subarray(vertex * 2, vertex * 2 + 2), (surfaceVertices + i) * 2);
++    const next = (i + 1) % edge.length;
++    indices.set([
++      vertex, surfaceVertices + i, edge[next],
++      edge[next], surfaceVertices + i, surfaceVertices + next
++    ], attributes.indices.length + i * 6);
++  });
++  const layout = { edge, surfaceVertices, skirt, uvs, indices };
++  layouts.set(resolution, layout);
++  return layout;
++}
++
++export function addSkirtVertices(positions, normals, layout, depth, stretch) {
++  const nextPositions = new Float32Array(layout.skirt.length * 3);
++  const nextNormals = new Float32Array(nextPositions.length);
++  nextPositions.set(positions);
++  nextNormals.set(normals);
++  layout.edge.forEach((vertex, i) => {
++    const source = vertex * 3;
++    const target = (layout.surfaceVertices + i) * 3;
++    const length = Math.hypot(normals[source], normals[source + 1], normals[source + 2]);
++    for (let axis = 0; axis < 3; axis++) {
++      nextNormals[target + axis] = normals[source + axis];
++      nextPositions[target + axis] = positions[source + axis]
++        - normals[source + axis] / length * depth * stretch.getComponent(axis);
++    }
++  });
++  return { positions: nextPositions, normals: nextNormals };
++}
+diff --git a/src/game/scene/asteroid/helpers/TerrainSkirts.spec.js b/src/game/scene/asteroid/helpers/TerrainSkirts.spec.js
+--- /dev/null
++++ b/src/game/scene/asteroid/helpers/TerrainSkirts.spec.js
+@@ -0,0 +1,31 @@
++import { Vector3 } from 'three';
++import { getSkirtLayout, addSkirtVertices } from './TerrainSkirts';
++
++it('adds a closed perimeter with matching UVs and valid triangles', () => {
++  const resolution = 2;
++  const uvs = Float32Array.from({ length: 18 }, (_, i) => i);
++  const base = new Uint32Array([0, 4, 1]);
++  const layout = getSkirtLayout(resolution, { indices: base, uvs });
++  expect(layout.edge).toHaveLength(8);
++  expect(new Set(layout.edge).size).toBe(8);
++  expect(layout.skirt.length).toBe(17);
++  expect(layout.indices.length).toBe(base.length + 48);
++  expect(Math.max(...layout.indices)).toBeLessThan(17);
++  layout.edge.forEach((vertex, i) => {
++    expect(Array.from(layout.uvs.slice((9 + i) * 2, (10 + i) * 2)))
++      .toEqual(Array.from(uvs.slice(vertex * 2, vertex * 2 + 2)));
++  });
++  expect(Array.from(layout.indices.slice(-6))).toEqual([layout.edge[7], 16, layout.edge[0], layout.edge[0], 16, 9]);
++});
++
++it('extends only perimeter vertices inward and preserves displacement directions', () => {
++  const layout = getSkirtLayout(1, { indices: new Uint32Array([0, 3, 1, 2, 3, 0]), uvs: new Float32Array(8) });
++  const normals = new Float32Array([0, 0, 10, 0, 0, 10, 0, 0, 10, 0, 0, 10]);
++  const positions = normals.map((v) => v * 2);
++  const result = addSkirtVertices(positions, normals, layout, 3, new Vector3(1, 1, 2));
++  expect(Array.from(result.positions.slice(0, 12))).toEqual(Array.from(positions));
++  for (let i = 4; i < 8; i++) {
++    expect(result.positions[i * 3 + 2]).toBe(14);
++    expect(result.normals[i * 3 + 2]).toBe(10);
++  }
++});
+diff --git a/docs/terrain-skirts-experiment.md b/docs/terrain-skirts-experiment.md
+--- /dev/null
++++ b/docs/terrain-skirts-experiment.md
+@@ -0,0 +1,36 @@
++# Terrain skirts
++
++The live asteroid uses skirts while thumbnails/exports retain the previous path.
++Skirts duplicate the perimeter vertices and extrude them inward after shader
++height displacement, before asteroid stretch. Initial depth is 10% of chunk
++width, capped at 25% of asteroid radius. Both surface and shadow shaders apply it.
++The depth is a practical coverage margin; grazing-angle and shadow checks remain
++useful when changing terrain displacement or LOD settings.
++
++Connected changes no longer merge into one global swap. Edge-only rebuilds swap
++individually. A parent is still replaced atomically by all its own required
++children; a collapse likewise replaces its descendants together. Large individual
++parent replacements can therefore still take time. Existing budgets, warmup,
++backpressure, and animation swap guards remain in effect.
++
++Test a distant lot jump, nearby navigation, low grazing views, the silhouette,
++cube-face boundaries, and shadows/resource overlays. Look for exposed vertical
++walls, stretched textures, seams, and changes in pop-in duration. Reset profiling
++before comparing batch sizes and allocation-to-visible timing.
++
++## Roll back
++
++The accepted implementation no longer has a runtime A/B switch or the global
++connected-region merge. The rollback patch retains the pre-skirt implementation.
++
++For an exact rollback of the skirts and their cleanup, from the repository root:
++
++```sh
++git apply --reverse --check docs/terrain-skirts-experiment.patch
++git apply --reverse docs/terrain-skirts-experiment.patch
++```
++
++The patch is relative to the working tree immediately before this experiment,
++including the earlier performance improvements. It does not revert to HEAD.
++If subsequent edits conflict, the check will fail; do not force it.
++The patch file itself remains after rollback as a record of the experiment.

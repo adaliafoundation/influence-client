@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Entity } from '@influenceth/sdk';
 
 import { LaunchShipIcon } from '~/components/Icons';
@@ -67,4 +67,6 @@ const LaunchShip = ({ asteroid, blockTime, lot, onSetAction, _disabled, simulati
   );
 };
 
-export default { Component: LaunchShip, isVisible };
+const actionDefinition = { Component: LaunchShip, isVisible };
+
+export default actionDefinition;

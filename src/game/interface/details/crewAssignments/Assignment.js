@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useHistory, useParams } from 'react-router-dom';
-import styled, { keyframes } from 'styled-components';
+import { useHistory } from 'react-router-dom';
+import styled from 'styled-components';
 
 import adalianImage from '~/assets/images/crew_collections/4.png'
 import useCrewContext from '~/hooks/useCrewContext';

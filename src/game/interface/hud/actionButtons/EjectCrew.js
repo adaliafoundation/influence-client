@@ -49,4 +49,6 @@ const EjectCrew = ({ crew, ship, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: EjectCrew, isVisible };
+const actionDefinition = { Component: EjectCrew, isVisible };
+
+export default actionDefinition;

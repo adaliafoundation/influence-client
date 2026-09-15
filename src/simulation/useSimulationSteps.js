@@ -4,7 +4,7 @@ import { useHistory } from 'react-router-dom';
 import { BiTransfer as TransferIcon } from 'react-icons/bi';
 
 import { appConfig } from '~/appConfig';
-import { ZOOM_IN_ANIMATION_TIME, ZOOM_OUT_ANIMATION_TIME, ZOOM_TO_PLOT_ANIMATION_MAX_TIME, ZOOM_TO_PLOT_ANIMATION_MIN_TIME } from '~/game/scene/Asteroid';
+import { ZOOM_IN_ANIMATION_TIME, ZOOM_OUT_ANIMATION_TIME } from '~/game/scene/Asteroid';
 import useCrewAgreements from '~/hooks/useCrewAgreements';
 import useCrewBuildings from '~/hooks/useCrewBuildings';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -25,6 +25,7 @@ import { fireTrackingEvent, formatPrice } from '~/lib/utils';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import useSession from '~/hooks/useSession';
 import { cutsceneHideTime } from '~/game/Cutscene';
+import { getPrimaryNewPlayerLoginOptions } from '~/lib/wallets';
 
 const DELAY_MESSAGE = 1000;
 
@@ -840,7 +841,7 @@ const useSimulationSteps = () => {
           dispatchSimulationLotState(warehouseLotId, {
             inventoryContents: {
               ...warehouseLot.inventoryContents,
-              [2]: {
+              2: {
                 ...warehouseLot.inventoryContents[2],
                 ...Process.TYPES[Process.IDS.LIGHT_TRANSPORT_INTEGRATION].inputs
               }
@@ -1051,7 +1052,7 @@ const useSimulationSteps = () => {
           disabled: connecting,
           onClick: () => {
             fireTrackingEvent('simulation', { step: 'login' });
-            login({ webWallet: true });
+            login(getPrimaryNewPlayerLoginOptions());
             // TODO: add on-logged-in url
           },
         }

@@ -1,14 +1,13 @@
 import { useMemo } from 'react';
 
-import { asteroidPrice } from '~/lib/priceUtils';
+import { asteroidPrice, TOKEN } from '~/lib/priceUtils';
 import usePriceConstants from '~/hooks/usePriceConstants';
 import usePriceHelper from '~/hooks/usePriceHelper';
-import useStore from '~/hooks/useStore';
 import { safeBigInt } from '~/lib/utils';
 
-const UserPrice = ({ price, priceToken, format }) => {
+const UserPrice = ({ price, priceToken, format, outputToken }) => {
   const priceHelper = usePriceHelper();
-  const preferredUiCurrency = useStore(s => s.getPreferredUiCurrency());
+  const displayToken = outputToken || TOKEN.USDC;
 
   if (!priceToken || priceToken === 'undefined') return <>-</>;
   return (
@@ -19,11 +18,15 @@ const UserPrice = ({ price, priceToken, format }) => {
             !price ? 0n : (typeof price === 'bigint' ? price : safeBigInt(price)),
             priceToken
           )
-          .to(preferredUiCurrency, format || true)
+          .to(displayToken, format || true)
       }
     </>
   );
 };
+
+export const UsdPrice = (props) => (
+  <UserPrice {...props} outputToken={TOKEN.USDC} />
+);
 
 export const AsteroidUserPrice = ({ lots = 0n, format = true }) => {
   const { data: priceConstants } = usePriceConstants();
@@ -33,7 +36,7 @@ export const AsteroidUserPrice = ({ lots = 0n, format = true }) => {
   }, [lots, priceConstants]);
 
   return (
-    <UserPrice
+    <UsdPrice
       price={price}
       priceToken={priceConstants.ASTEROID_PURCHASE_TOKEN}
       format={format}
@@ -44,7 +47,7 @@ export const AsteroidUserPrice = ({ lots = 0n, format = true }) => {
 export const CrewmateUserPrice = ({ format = true }) => {
   const { data: priceConstants } = usePriceConstants();
   return (
-    <UserPrice
+    <UsdPrice
       price={priceConstants.ADALIAN_PURCHASE_PRICE}
       priceToken={priceConstants.ADALIAN_PURCHASE_TOKEN}
       format={format}

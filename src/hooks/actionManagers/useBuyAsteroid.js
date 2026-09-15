@@ -24,6 +24,15 @@ const useBuyAsteroid = (id) => {
       {
         asteroid,
         caller_crew: crew || { id: 0, label: Entity.IDS.CREW }
+      },
+      {},
+      {
+        usePaymaster: false,
+        requireExplicitSignature: true,
+        authorization: {
+          action: 'Purchase asteroid',
+          details: `Purchase development rights for asteroid ${asteroid?.id}.`
+        }
       }
     );
   }, [execute, system, asteroid, crew]);

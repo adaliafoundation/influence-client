@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Permission } from '@influenceth/sdk';
 
 import { PlanBuildingIcon } from '~/components/Icons';
@@ -59,4 +59,6 @@ const PlanBuilding = ({ asteroid, blockTime, crew, lot, onSetAction, simulation,
   );
 };
 
-export default { Component: PlanBuilding, isVisible };
+const actionDefinition = { Component: PlanBuilding, isVisible };
+
+export default actionDefinition;

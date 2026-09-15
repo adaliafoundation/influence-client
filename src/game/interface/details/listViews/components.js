@@ -43,7 +43,7 @@ export const MarketplacePermissionsIcon = ({ permissions = {}, ...props }) => {
 };
 
 export const IconLink = ({ children, onClick, tooltip, ...props }) => {
-  const history = useHistory();
+  useHistory();
   return (
     <StyledIconLink
       data-tooltip-id="listViewTooltip"

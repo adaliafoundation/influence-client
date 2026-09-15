@@ -5,6 +5,7 @@ import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
+import { getApiAuthHeaders } from './apiAuth';
 import { entityToAgreements, esbLocationQuery, esbPermissionQuery, safeBigInt, safeEntityId } from './utils';
 import { TOKEN, TOKEN_SCALE } from './priceUtils';
 
@@ -13,14 +14,13 @@ const apiVersion = 'v2';
 
 // pass initial config to axios
 const config = { baseURL: appConfig.get('Api.influence'), headers: {} };
-const initialToken = useStore.getState().currentSession?.token;
-if (initialToken) config.headers = { Authorization: `Bearer ${initialToken}`};
+config.headers = getApiAuthHeaders();
 const instance = axios.create(config);
 
 // subscribe to changes relevant to the config
 useStore.subscribe(
   s => [s.currentSession.token],
-  ([newToken]) => instance.defaults.headers = { Authorization: `Bearer ${newToken}` }
+  ([newToken]) => { instance.defaults.headers = getApiAuthHeaders(newToken); }
 );
 
 const parseBlockHeader = (value) => {
@@ -958,18 +958,63 @@ const api = {
     return response.data;
   },
 
-  getStripePayments: async () => {
-    const response = await instance.get(`/${apiVersion}/stripe/payments`);
+  createBanxaCheckout: async (params) => {
+    const response = await instance.post(`/${apiVersion}/banxa/checkout`, params);
     return response.data;
   },
 
-  getStripeProducts: async () => {
-    const response = await instance.get(`/${apiVersion}/stripe`);
+  getBanxaOrder: async (orderId) => {
+    const response = await instance.get(`/${apiVersion}/banxa/orders/${orderId}`);
     return response.data;
   },
 
-  createStripePaymentIntent: async (sku) => {
-    const response = await instance.post(`/${apiVersion}/stripe/${sku}`);
+  getStarterPackProducts: async () => {
+    const response = await instance.get(`/${apiVersion}/starter-packs/products`);
+    return response.data;
+  },
+
+  createStarterPackCheckout: async (params) => {
+    const response = await instance.post(`/${apiVersion}/starter-packs/checkout`, params);
+    return response.data;
+  },
+
+  getPendingStarterPackPurchase: async () => {
+    const response = await instance.get(`/${apiVersion}/starter-packs/pending`);
+    return response.data;
+  },
+
+  getStarterPackCheckout: async (checkoutSessionId) => {
+    const response = await instance.get(`/${apiVersion}/starter-packs/checkout/${checkoutSessionId}`);
+    return response.data;
+  },
+
+  submitStarterPackCustomization: async (params) => {
+    const response = await instance.post(`/${apiVersion}/starter-packs/customization`, params);
+    return response.data;
+  },
+
+  getCrewmatePurchaseProducts: async () => {
+    const response = await instance.get(`/${apiVersion}/crewmate-purchases/products`);
+    return response.data;
+  },
+
+  createCrewmatePurchaseCheckout: async (params) => {
+    const response = await instance.post(`/${apiVersion}/crewmate-purchases/checkout`, params);
+    return response.data;
+  },
+
+  getPendingCrewmatePurchase: async () => {
+    const response = await instance.get(`/${apiVersion}/crewmate-purchases/pending`);
+    return response.data;
+  },
+
+  getCrewmatePurchaseCheckout: async (checkoutSessionId) => {
+    const response = await instance.get(`/${apiVersion}/crewmate-purchases/checkout/${checkoutSessionId}`);
+    return response.data;
+  },
+
+  submitCrewmatePurchaseCustomization: async (params) => {
+    const response = await instance.post(`/${apiVersion}/crewmate-purchases/customization`, params);
     return response.data;
   }
 };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Asteroid, Building, Entity, Lot, Process, Product, Ship, Time } from '@influenceth/sdk';
-import { camelCase, cloneDeep } from 'lodash';
+import { camelCase } from 'lodash';
 
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';

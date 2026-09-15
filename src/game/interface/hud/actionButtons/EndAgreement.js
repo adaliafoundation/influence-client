@@ -41,4 +41,6 @@ const EndAgreement = ({ blockTime, entity, permission, agreementPath, _disabled 
   );
 };
 
-export default { Component: EndAgreement, isVisible };
+const actionDefinition = { Component: EndAgreement, isVisible };
+
+export default actionDefinition;

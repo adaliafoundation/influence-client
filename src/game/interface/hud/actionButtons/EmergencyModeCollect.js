@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Crewmate, Inventory, Product, Ship, Time } from '@influenceth/sdk';
+import { Inventory, Product, Ship, Time } from '@influenceth/sdk';
 
 import { EmergencyModeCollectIcon } from '~/components/Icons';
 import useShip from '~/hooks/useShip';
@@ -80,4 +80,6 @@ const EmergencyModeCollect = ({ crew, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: EmergencyModeCollect, isVisible };
+const actionDefinition = { Component: EmergencyModeCollect, isVisible };
+
+export default actionDefinition;

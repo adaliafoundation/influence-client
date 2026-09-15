@@ -46,4 +46,6 @@ const UnplanBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: UnplanBuilding, isVisible };
+const actionDefinition = { Component: UnplanBuilding, isVisible };
+
+export default actionDefinition;

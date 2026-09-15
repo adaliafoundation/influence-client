@@ -19,6 +19,7 @@ import {
   CheckIcon,
   CloseIcon,
   CopyIcon,
+  CrewmateCreditIcon,
   EditIcon,
   MyAssetIcon,
   PlusIcon
@@ -65,7 +66,7 @@ const tabContainerCss = css`
 const foldOffset = 28;
 const belowFoldMin = 256;
 
-const CoverImage = styled.div`
+export const CoverImage = styled.div`
   height: calc(80% + ${foldOffset}px);
   left: 0;
   max-height: calc(100% - ${foldOffset}px - ${belowFoldMin}px);
@@ -94,7 +95,7 @@ const CoverImage = styled.div`
   }
 `;
 
-const MainContainer = styled.div`
+export const MainContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -106,17 +107,17 @@ const MainContainer = styled.div`
   z-index: 1;
 `;
 
-const AboveFold = styled.div`
+export const AboveFold = styled.div`
   align-items: stretch;
   display: flex;
   flex-direction: row;
   min-height: 375px;
 `;
-const CrewDetailsContainer = styled.div`
+export const CrewDetailsContainer = styled.div`
   flex: 1;
 `;
 
-const ManagementContainer = styled.div`
+export const ManagementContainer = styled.div`
   border-left: 1px solid #363636;
   flex: 0 0 280px;
   margin-left: 30px;
@@ -133,7 +134,7 @@ const ManagementContainer = styled.div`
     }
   }
 `;
-const MyCrewStatement = styled.div`
+export const MyCrewStatement = styled.div`
   align-items: center;
   color: ${p => p.theme.colors.main};
   display: flex;
@@ -143,12 +144,27 @@ const MyCrewStatement = styled.div`
     margin-right: 10px;
   }
 `;
-const Stat = styled.div`
+export const Stat = styled.div`
   color: white;
   &:before {
     content: "${p => p.label}:";
     display: block;
     opacity: 0.7;
+  }
+`;
+
+const CreditStat = styled(Stat)`
+  align-items: center;
+  display: flex;
+  gap: 8px;
+
+  &:before {
+    margin-right: 4px;
+  }
+
+  & > svg {
+    color: ${p => p.theme.colors.main};
+    font-size: 20px;
   }
 `;
 const CopyableAddress = styled.button`
@@ -173,7 +189,7 @@ const CopyableAddress = styled.button`
     opacity: 1;
   }
 `;
-const ActionStack = styled.div`
+export const ActionStack = styled.div`
   & > button {
     margin-bottom: 8px;
     width: 225px;
@@ -214,7 +230,7 @@ const NameAndStatus = styled.div`
 `;
 
 
-const CrewWrapper = styled.div`
+export const CrewWrapper = styled.div`
   display: flex;
   flex-direction: row;
   margin-left: 64px;
@@ -222,7 +238,7 @@ const CrewWrapper = styled.div`
   padding-bottom: 50px;
 `;
 
-const CrewInfoContainer = styled.div`
+export const CrewInfoContainer = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -235,7 +251,7 @@ const CrewInfoContainer = styled.div`
   }
 `;
 
-const TitleBar = styled.div`
+export const TitleBar = styled.div`
   ${CrewInfoContainer} & {
     align-items: center;
     background: rgba(0, 0, 0, 0.7);
@@ -254,7 +270,7 @@ const TitleBar = styled.div`
   }
 `;
 
-const Crewmates = styled.div`
+export const Crewmates = styled.div`
   align-items: flex-start;
   display: flex;
   flex-direction: row;
@@ -268,7 +284,7 @@ const Crewmates = styled.div`
   }
 `;
 
-const BelowFold = styled.div`
+export const BelowFold = styled.div`
   flex: 1;
   height: 0;
 `;
@@ -296,6 +312,7 @@ const formatCompactAddress = (address) => {
 
 const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, selectCrew }) => {
   const { accountAddress } = useSession();
+  const { adalianRecruits, arvadianRecruits } = useCrewContext();
   const history = useHistory();
   const { data: user, isLoading: userIsLoading } = useUser();
 
@@ -318,6 +335,10 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
   const [newName, setNewName] = useState(crew.Name?.name || '');
 
   const viewingAs = useMemo(() => ({ id: crewId, label: Entity.IDS.CREW }), [crewId]);
+  const totalRecruitCredits = useMemo(
+    () => (adalianRecruits?.length || 0) + (arvadianRecruits?.length || 0),
+    [adalianRecruits, arvadianRecruits]
+  );
   const hasMyCrewmates = useMemo(() => {
     return crew._crewmates.filter((c) => accountAddress && Address.areEqual(accountAddress, c.Nft?.owner))?.length;
   }, [accountAddress, crew._crewmates]);
@@ -566,6 +587,12 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
             {isOwnedCrew && <MyCrewStatement><MyAssetIcon /> This crew is owned by me.</MyCrewStatement>}
             <Stat label="Crew ID">{crewId || 0}</Stat>
             <Stat label="Formed">{formationDate}</Stat>
+            {totalRecruitCredits > 0 && (
+              <CreditStat label="Crewmate Credits">
+                <CrewmateCreditIcon />
+                <span>{totalRecruitCredits.toLocaleString()}</span>
+              </CreditStat>
+            )}
             {isOwnedCrew && hasDelegation && (
               <Stat label="Delegated to">
                 <CopyableAddress onClick={onCopyDelegationAddress} type="button">

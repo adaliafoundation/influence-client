@@ -42,4 +42,6 @@ const ControlShip = ({ crew, ship, onSetAction, _disabled, ...props }) => {
   );
 };
 
-export default { Component: ControlShip, isVisible };
+const actionDefinition = { Component: ControlShip, isVisible };
+
+export default actionDefinition;

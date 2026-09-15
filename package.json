@@ -9,17 +9,26 @@
   },
   "dependencies": {
     "@avnu/avnu-sdk": "^4.0.1",
+    "@cartridge/controller": "^0.13.16",
+    "@farcaster/mini-app-solana": "^1.1.3",
+    "@farcaster/miniapp-sdk": "^0.2.3",
     "@floating-ui/react": "^0.27.19",
     "@influenceth/astro": "^0.2.5",
     "@influenceth/sdk": "^2.4.4",
     "@popperjs/core": "^2.11.6",
-    "@ramp-network/ramp-instant-sdk": "^4.0.5",
+    "@privy-io/react-auth": "^3.38.0",
     "@react-hook/throttle": "^2.2.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@react-three/postprocessing": "^3.0.4",
-    "@stripe/react-stripe-js": "^5.6.1",
-    "@stripe/stripe-js": "^8.11.0",
+    "@solana-program/memo": "^0.8.0",
+    "@solana-program/system": "^0.8.1",
+    "@solana-program/token": "^0.6.0",
+    "@solana/kit": "^5.5.1",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@stripe/react-stripe-js": "^6.8.2",
+    "@stripe/stripe-js": "^9.14.0",
     "@tanstack/react-query": "^5.95.2",
     "@wagmi/core": "^2.22.1",
     "animate.css": "^4.1.1",
@@ -66,7 +75,6 @@
     "screenfull": "^5.1.0",
     "socket.io-client": "^4.7.5",
     "starknet": "^8.9.2",
-    "starknetkit": "^3.4.3",
     "styled-components": "^5.3.0",
     "three": "^0.183.2",
     "victory": "^36.6.8",
@@ -81,10 +89,12 @@
     "start": "react-app-rewired start",
     "build": "react-app-rewired build && npm run build-server",
     "build-server": "webpack --config server.webpack.config.js",
+    "test:runtime-config": "node --test runtime-config.test.cjs",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "heroku-prebuild": "node ./prebuild.js",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test:browser": "playwright test --config=playwright.config.cjs"
   },
   "eslintConfig": {
     "env": {
@@ -108,6 +118,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@svgr/webpack": "^6.5.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -124,7 +135,16 @@
     "worker-loader": "^3.0.8"
   },
   "overrides": {
-    "@svgr/webpack": "$@svgr/webpack"
+    "@svgr/webpack": "$@svgr/webpack",
+    "graphql-request": {
+      "form-data": "3.0.5"
+    },
+    "jsdom": {
+      "form-data": "3.0.5"
+    },
+    "shell-quote": "1.10.0",
+    "webpack": "5.110.3",
+    "websocket-driver": "0.7.5"
   },
   "target": "web"
 }

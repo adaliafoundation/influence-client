@@ -206,8 +206,8 @@ const Quest = ({ quest }) => {
 
 const RewardQuests = () => {
   const { isLaunched } = useCrewContext();
-  const [error, setError] = useState();
-  const [loading, setLoading] = useState();
+  const [error] = useState();
+  const [loading] = useState();
   return (
     <Wrapper>
       <RewardsTitle>Powered By <b>Starknet Quest</b></RewardsTitle>

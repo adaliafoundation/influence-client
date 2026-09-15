@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { ConstructIcon } from '~/components/Icons';
 import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
@@ -60,4 +60,6 @@ const Construct = ({ asteroid, crew, lot, onSetAction, simulation, simulationAct
   );
 };
 
-export default { Component: Construct, isVisible };
+const actionDefinition = { Component: Construct, isVisible };
+
+export default actionDefinition;

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { features } from '~/appConfig/features';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
 
@@ -186,13 +187,14 @@ const ButtonWrapper = styled.div`
 `;
 
 const AvatarMenu = () => {
-  const { authenticated } = useSession();
+  const { authenticated, walletCapabilities } = useSession();
   const { captain, crew, loading: crewIsLoading } = useCrewContext();
   const history = useHistory();
   const setCoachmarkRef = useCoachmarkRefSetter();
   const simulation = useSimulationState();
 
   const onSetAction = useStore(s => s.dispatchActionDialog);
+  const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
   const dispatchSimulationState = useStore(s => s.dispatchSimulationState);
   const asteroidId = useStore(s => s.asteroids.origin);
   const simulationActions = useStore(s => s.simulationActions);
@@ -225,8 +227,14 @@ const AvatarMenu = () => {
       }
       return history.push(`/crewmate/${crewmateId}`);
     }
-    return history.push('/crew');
-  }, [simulation, simulationActions]);
+
+    if (!crewmateId && !crew?._crewmates?.length && features.stripe && walletCapabilities?.preferredForStarterPacks) {
+      dispatchLauncherPage('store', 'packs', { menuCollapsed: true });
+      return;
+    }
+
+    return history.push(!crewmateId && !crew?._crewmates?.length ? '/recruit/0' : '/crew');
+  }, [crew?._crewmates?.length, dispatchLauncherPage, history, simulation, simulationActions, walletCapabilities?.preferredForStarterPacks]);
 
   useEffect(() => {
     const { canFastForward, crewReadyAt, taskReadyAt } = simulation || {};
@@ -326,7 +334,7 @@ const AvatarMenu = () => {
                       </>
                     )
                     : (
-                      <Instruction>Recruit a captain to begin</Instruction>
+                      <Instruction>Recruit your crew to begin</Instruction>
                     )
                   )
                 }

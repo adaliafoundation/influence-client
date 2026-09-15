@@ -69,4 +69,6 @@ const AssembleShip = ({ asteroid, blockTime, crew, lot, onSetAction, simulation,
   );
 };
 
-export default { Component: AssembleShip, isVisible };
+const actionDefinition = { Component: AssembleShip, isVisible };
+
+export default actionDefinition;

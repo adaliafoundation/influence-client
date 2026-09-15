@@ -414,7 +414,7 @@ const LotInventory = () => {
     };
   }, [crew?._inventoryBonuses, inventory]);
 
-  const toggleVolumeDisplay = useCallback(() => {
+  useCallback(() => {
     setDisplayVolumes((d) => !d);
   }, []);
 
@@ -427,7 +427,7 @@ const LotInventory = () => {
     });
   }, [inventory?.contentsObj, order]);
 
-  const isIncomingDelivery = useMemo(() => incomingDeliveries?.length > 0, [incomingDeliveries]);
+  useMemo(() => incomingDeliveries?.length > 0, [incomingDeliveries]);
 
   const handleSelected = useCallback((resourceId, newTotal) => {
     setSelectedItems((s) => {

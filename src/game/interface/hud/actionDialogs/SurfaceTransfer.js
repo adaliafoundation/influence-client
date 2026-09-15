@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 
 import { CheckIcon, CloseIcon, ForwardIcon, InventoryIcon, LocationIcon, RouteIcon, SurfaceTransferIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -7,7 +7,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
-import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, nativeBool } from '~/lib/utils';
+import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses } from '~/lib/utils';
 import {
   ItemSelectionSection,
   ActionDialogFooter,

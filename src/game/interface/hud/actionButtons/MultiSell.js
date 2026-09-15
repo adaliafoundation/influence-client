@@ -45,4 +45,6 @@ const MultiSell = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogPr
   );
 };
 
-export default { Component: MultiSell, isVisible };
+const actionDefinition = { Component: MultiSell, isVisible };
+
+export default actionDefinition;

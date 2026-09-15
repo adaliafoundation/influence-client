@@ -1,4 +1,4 @@
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import LoadingAnimation from 'react-spinners/BarLoader';
 
 import IconButton from '~/components/IconButton';
@@ -46,20 +46,20 @@ const CloseButton = styled(IconButton)`
   right: -7px;
 `;
 
-const loadingCss = css`
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 100%;
-`;
+const loadingStyle = {
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: '100%'
+};
 
 const StaticForm = (props) => {
   const { children, css, loading, onClose, title } = props;
 
   return (
     <StyledForm css={css}>
-      {loading && <LoadingAnimation height={2} color={theme.colors.main} css={loadingCss} />}
+      {loading && <LoadingAnimation height={2} color={theme.colors.main} cssOverride={loadingStyle} />}
       <Title>{title}</Title>
       {children}
       <CloseButton onClick={onClose} borderless>

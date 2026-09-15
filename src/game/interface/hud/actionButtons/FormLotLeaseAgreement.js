@@ -3,7 +3,8 @@ import { useCallback, useMemo } from 'react';
 import { FormLotAgreementIcon, SwayIcon } from '~/components/Icons';
 import useAgreementManager from '~/hooks/actionManagers/useAgreementManager';
 import useStore from '~/hooks/useStore';
-import { formatFixed } from '~/lib/utils';
+import { daysToSeconds, formatFixed } from '~/lib/utils';
+import { STARTER_LOT_LEASE_TERM, isStarterLotLeaseCandidate } from '~/lib/starterPacks';
 import {
   getLotLeaseAuctionStatus,
   isLeaseHolderOrBuildingController,
@@ -46,7 +47,7 @@ const isVisible = ({ accountCrewIds, asteroid, lot, blockTime, crew }) => {
   return visible;
 };
 
-const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, lot, simulation, simulationActions, _disabled }) => {
+const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, crew, lot, simulation, simulationActions, _disabled }) => {
   const { currentPolicy, pendingChange } = useAgreementManager(lot, Permission.IDS.USE_LOT);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -97,10 +98,18 @@ const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, lot, simul
       };
     }
 
+    if (
+      currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID
+      && daysToSeconds(currentPolicy?.policyDetails?.initialTerm || 0) <= STARTER_LOT_LEASE_TERM
+      && isStarterLotLeaseCandidate({ asteroid, crew, lot, permission: Permission.IDS.USE_LOT })
+    ) {
+      return { label: 'Use Starter Lot Lease' };
+    }
+
     return {
       label: <>Lease Lot (<SwayIcon />{leaseRate} / day)</>,
     };
-  }, [accountCrewIds, asteroid, blockTime, currentPolicy?.policyDetails?.rate, lot]);
+  }, [accountCrewIds, asteroid, blockTime, crew, currentPolicy?.policyDetails?.initialTerm, currentPolicy?.policyDetails?.rate, currentPolicy?.policyType, lot]);
 
   return (
     <ActionButton
@@ -117,4 +126,6 @@ const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, lot, simul
   );
 };
 
-export default { Component: FormLotLeaseAgreement, isVisible };
+const actionDefinition = { Component: FormLotLeaseAgreement, isVisible };
+
+export default actionDefinition;

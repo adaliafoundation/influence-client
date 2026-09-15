@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Asteroid } from '@influenceth/sdk';
 
 import { SetCourseIcon } from '~/components/Icons';
@@ -74,4 +74,6 @@ const SetCourse = ({ asteroid, crew, ship, onSetAction, simulation, simulationAc
   );
 };
 
-export default { Component: SetCourse, isVisible };
+const actionDefinition = { Component: SetCourse, isVisible };
+
+export default actionDefinition;

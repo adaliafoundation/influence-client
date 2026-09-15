@@ -14,6 +14,7 @@ import {
 } from 'three';
 
 import constants from '~/lib/constants';
+import { addSkirtVertices, getSkirtLayout } from './TerrainSkirts';
 import {
   applyDisplacementToGeometry,
   getCachedGeometryAttributes,
@@ -22,21 +23,9 @@ import {
 
 const { SHADOWLESS_NORMAL_SCALE } = constants;
 
-// TODO: remove debug
-// let first = true;
-// let taskTotal = 0;
-// let taskTally = 0;
-// setInterval(() => {
-//   if (taskTally > 0) {
-//     console.log(
-//       `avg execution time (over ${taskTally}): ${Math.round(taskTotal / taskTally)}ms`,
-//     );
-//   }
-//   first = true;
-// }, 5000);
-
 class TerrainChunk {
-  constructor(params, config, { materialOverrides, shadowsEnabled, resolution }) {
+  constructor(params, config, { materialOverrides, shadowsEnabled, resolution, skirtsEnabled = false }) {
+    this._skirtsEnabled = skirtsEnabled;
     this._params = params;
     this._config = config;
     this._materialOverrides = materialOverrides;
@@ -153,11 +142,15 @@ class TerrainChunk {
     return hadTexture !== !!nextTexture;
   }
 
-  getOnBeforeCompile(material, radius, stretch, updateVNormal = true) {
+  getOnBeforeCompile(material, updateVNormal = true) {
+    const uniforms = this._terrainUniforms;
+    const skirtsEnabled = this._skirtsEnabled;
     return function (shader) {
-      shader.uniforms.uRadius = { type: 'v3', value: radius };
-      shader.uniforms.uStretch = { type: 'v3', value: stretch };
+      shader.uniforms.uRadius = uniforms.uRadius;
+      shader.uniforms.uStretch = uniforms.uStretch;
+      if (skirtsEnabled) shader.uniforms.uSkirtDepth = uniforms.uSkirtDepth;
       shader.vertexShader = `
+        ${skirtsEnabled ? 'attribute float skirt; uniform float uSkirtDepth;' : ''}
         uniform float uRadius;
         uniform vec3 uStretch;
         ${shader.vertexShader.replace(
@@ -167,6 +160,7 @@ class TerrainChunk {
             float disp = (disp16.x * 255.0 + disp16.y) / 256.0;
             // set height along normal (which is set to spherical position)
             transformed = normalize(objectNormal) * (uRadius + disp * displacementScale + displacementBias);
+            ${skirtsEnabled ? 'transformed -= normalize(objectNormal) * skirt * uSkirtDepth;' : ''}
             // stretch according to config
             transformed *= uStretch;
             // re-init pre-normalmap normal to match stretched position (b/f application of normalmap)
@@ -180,15 +174,13 @@ class TerrainChunk {
 
   applyOnBeforeCompile() {
     this._material.onBeforeCompile = this.getOnBeforeCompile(
-      this._material,
-      this._config.radius,
-      this._stretch
+      this._material
     );
+    this._material.customProgramCacheKey = () => `${this._material.onBeforeCompile.toString()}:skirts=${this._skirtsEnabled}`;
     if (this._plane.customDepthMaterial) {
+      this._plane.customDepthMaterial.customProgramCacheKey = () => `${this._plane.customDepthMaterial.onBeforeCompile.toString()}:skirts=${this._skirtsEnabled}`;
       this._plane.customDepthMaterial.onBeforeCompile = this.getOnBeforeCompile(
         this._plane.customDepthMaterial,
-        this._config.radius,
-        this._stretch,
         false
       );
     }
@@ -207,16 +199,17 @@ class TerrainChunk {
   updateDerived() {
     this._stretch = transformStretch(this._config.stretch, this._params.side);
 
-    // according to https://threejs.org/docs/#manual/en/introduction/How-to-update-things,
-    // uniform values are sent to shader every frame automatically (so no need for needsUpdate)
-    if (this._material?.userData?.shader) {
-      this._material.userData.shader.uniforms.uRadius.value = this._config.radius;
-      this._material.userData.shader.uniforms.uStretch.value = this._stretch;
+    // Warmup can compile multiple output variants. Keep their uniforms shared
+    // so reusing a chunk updates every variant, including the depth material.
+    if (!this._terrainUniforms) {
+      this._terrainUniforms = { uRadius: { value: 0 }, uStretch: { value: null } };
     }
-    if (this._plane?.customDepthMaterial?.userData?.shader) {
-      this._plane.customDepthMaterial.userData.shader.uniforms.uRadius.value = this._config.radius;
-      this._plane.customDepthMaterial.userData.shader.uniforms.uStretch.value = this._stretch;
+    if (this._skirtsEnabled) {
+      if (!this._terrainUniforms.uSkirtDepth) this._terrainUniforms.uSkirtDepth = { value: 0 };
+      this._terrainUniforms.uSkirtDepth.value = Math.min(this._config.radius * 0.25, this._params.width * 0.1);
     }
+    this._terrainUniforms.uRadius.value = this._config.radius;
+    this._terrainUniforms.uStretch.value = this._stretch;
   }
 
   reconfigure(newParams) {
@@ -259,13 +252,23 @@ class TerrainChunk {
 
   initGeometry() {
     // update geometry
-    const attr = getCachedGeometryAttributes(this._resolution);
+    let attr = getCachedGeometryAttributes(this._resolution);
+    if (this._skirtsEnabled) {
+      this._skirtLayout = getSkirtLayout(this._resolution, attr);
+      attr = this._skirtLayout;
+      this._geometry.setAttribute('skirt', new BufferAttribute(attr.skirt, 1));
+    }
     this._geometry.setIndex(new BufferAttribute(attr.indices, 1));
     this._geometry.setAttribute('uv', new Float32BufferAttribute(attr.uvs, 2));
     this._geometry.attributes.uv.needsUpdate = true;
   }
 
   updateGeometry(positions, normals) {
+    if (this._skirtsEnabled) {
+      ({ positions, normals } = addSkirtVertices(
+        positions, normals, this._skirtLayout, this._terrainUniforms.uSkirtDepth.value, this._stretch
+      ));
+    }
 
     // update positions (these are already stretched so not culled inappropriately)
     this._geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
@@ -318,6 +321,16 @@ class TerrainChunk {
     if (materialNeedsUpdate) {
       this._material.needsUpdate = true;
     }
+  }
+
+  getMesh() {
+    return this._plane;
+  }
+
+  getTextures() {
+    return ['displacementMap', 'map', 'normalMap', 'emissiveMap']
+      .map((key) => this._material[key])
+      .filter(Boolean);
   }
 
   makeExportable() {

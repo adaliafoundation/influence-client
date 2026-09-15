@@ -1,41 +1,14 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Building, Crew, Crewmate, Entity, Inventory, Lot, Permission, Process, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
 
-import {
-  CheckedIcon,
-  ChevronRightIcon,
-  InventoryIcon,
-  MarketBuyIcon,
-  MarketplaceBuildingIcon,
-  MultiSellIcon,
-  SwayIcon,
-  UncheckedIcon,
-  WarningIcon,
-  WarningOutlineIcon
-} from '~/components/Icons';
+import { CheckedIcon, ChevronRightIcon, MarketplaceBuildingIcon, MultiSellIcon, SwayIcon, UncheckedIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
-import theme, { hexToRGB } from '~/theme';
+import theme from '~/theme';
 import { reactBool, formatTimer, formatFixed, formatPrice, locationsArrToObj, getCrewAbilityBonuses, ordersToFills } from '~/lib/utils';
 
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
-import {
-  ActionDialogFooter,
-  ActionDialogHeader,
-  FlexSection,
-  ActionDialogBody,
-  FlexSectionBlock,
-  MarketplaceAlert,
-  ShoppingListPriceField,
-  LiquidityWarning,
-  getRecipeRequirements,
-  ProcessSelectionBlock,
-  ProcessSelectionDialog,
-  SectionTitle,
-  Section,
-  EmptyResourceImage,
-  SectionTitleRight
-} from './components';
+import { ActionDialogFooter, ActionDialogHeader, FlexSection, ActionDialogBody, FlexSectionBlock, MarketplaceAlert, ShoppingListPriceField, LiquidityWarning, SectionTitle, Section } from './components';
 import actionStage from '~/lib/actionStages';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 import formatters from '~/lib/formatters';
@@ -329,9 +302,9 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
     }, {});
   }, [exchangesUpdatedAt])
   const { data: originLot } = useLot(locationsArrToObj(origin?.Location?.locations || []).lotId);
-  const originInventory = useMemo(() => origin?.Inventories.find((i) => i.slot === originSlot), [origin, originSlot]);
+  useMemo(() => origin?.Inventories.find((i) => i.slot === originSlot), [origin, originSlot]);
 
-  const [targets, setTargets] = useState(Object.keys(preselect?.selectedItems || {}).map((k) => ({ productId: k, amount: preselect.selectedItems[k] })));
+  const [targets] = useState(Object.keys(preselect?.selectedItems || {}).map((k) => ({ productId: k, amount: preselect.selectedItems[k] })));
 
   // derive shopping list from selected site
   const [sellingList, productIds] = useMemo(() => {
@@ -419,7 +392,7 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
     }, {});
   }, [asteroid?.id, crew?._timeAcceleration, crewBonuses, originLot?.id, selected, sellingList]);
 
-  const { totalPrice, totalMass, totalVolume, exchangeTally, allFills } = useMemo(() => {
+  const { totalPrice, exchangeTally, allFills } = useMemo(() => {
     return Object.keys(selectionSummary).reduce((acc, k) => {
       const s = selectionSummary[k];
       return {

@@ -33,7 +33,7 @@ const createWagmiConfig = () => {
     multiInjectedProviderDiscovery: true,
     transports: chains.reduce((acc, chain) => ({
       ...acc,
-      [chain.id]: http(appConfig.get('Ethereum.provider') || undefined)
+      [chain.id]: http(appConfig.get('Ethereum.provider'))
     }), {})
   });
 };

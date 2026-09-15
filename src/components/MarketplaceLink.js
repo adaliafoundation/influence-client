@@ -3,7 +3,7 @@ import { useCallback, useState, } from 'react';
 import { appConfig } from '~/appConfig';
 
 const MarketplaceLink = ({ assetType, chain, children, id }) => {
-  const [referenceEl, setReferenceEl] = useState();
+  const [, setReferenceEl] = useState();
 
   const handleMarketplaceClick = useCallback(() => {
     let url;

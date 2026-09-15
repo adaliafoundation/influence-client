@@ -39,7 +39,7 @@ const AsteroidDetails = () => {
   const history = useHistory();
   const { i, tab } = useParams();
   const { data: asteroid } = useAsteroid(Number(i));
-  const { accountCrewIds, crew } = useCrewContext();
+  const { accountCrewIds } = useCrewContext();
   const groupAbundances = useAsteroidAbundances(asteroid);
   const dispatchOriginSelected = useStore(s => s.dispatchOriginSelected);
 

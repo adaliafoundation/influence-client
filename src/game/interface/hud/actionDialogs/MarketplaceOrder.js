@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Asteroid, Crewmate, Inventory, Lot, Order, Permission, Product, Time } from '@influenceth/sdk';
 
-import { BanIcon, InventoryIcon, WarningIcon, SwayIcon, MarketBuyIcon, MarketSellIcon, LimitBuyIcon, LimitSellIcon, CancelLimitOrderIcon, LocationIcon, CloseIcon } from '~/components/Icons';
+import { InventoryIcon, SwayIcon, MarketBuyIcon, MarketSellIcon, LimitBuyIcon, LimitSellIcon, CancelLimitOrderIcon, LocationIcon, CloseIcon } from '~/components/Icons';
 import Button from '~/components/ButtonAlt';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
@@ -17,7 +17,7 @@ import useOrderList from '~/hooks/useOrderList';
 import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
 import formatters from '~/lib/formatters';
 import actionStages from '~/lib/actionStages';
-import { reactBool, formatFixed, formatTimer, getCrewAbilityBonuses, locationsArrToObj, formatPrice, ordersToFills, safeBigInt } from '~/lib/utils';
+import { reactBool, formatFixed, formatTimer, getCrewAbilityBonuses, locationsArrToObj, ordersToFills, safeBigInt } from '~/lib/utils';
 import theme, { hexToRGB } from '~/theme';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import {
@@ -213,8 +213,6 @@ const MarketplaceOrder = ({
     cancelSellOrder,
     fillBuyOrders,
     fillSellOrders,
-    pendingOrders,
-
     orderStatus,
     currentOrder = {}
   } = manager;
@@ -229,8 +227,7 @@ const MarketplaceOrder = ({
   const { data: orderCrew } = useHydratedCrew(preselect?.crew?.id);
 
   // TODO: ...
-  const currentDestinationLot = {};
-  const currentOriginLot = {};
+
   // const { data: destination } = useEntity(destinationSelection ? { id: destinationSelection.id, label: destinationSelection.label } : undefined);
   // const destinationLotId = useMemo(() => destination && locationsArrToObj(destination?.Location?.locations || []).lotId, [destination]);
   // const { data: destinationLot } = useLot(destinationLotId);
@@ -273,7 +270,7 @@ const MarketplaceOrder = ({
   const { data: storageLot } = useLot(storageLotId);
   const storageInventory = useMemo(() => (storage?.Inventories || []).find((i) => i.slot === storageSelection?.slot), [storage, storageSelection]);
 
-  const { totalTime: crewTravelTime, tripDetails } = useMemo(() => {
+  const { totalTime: crewTravelTime } = useMemo(() => {
     if (!asteroid?.id || !crew?._location?.lotId || !lot?.id) return {};
     return getTripDetails(asteroid.id, hopperTransportBonus, distBonus, crew?._location?.lotIndex, [
       { label: 'Travel to Marketplace', lotIndex: Lot.toIndex(lot.id) },
@@ -538,7 +535,7 @@ const MarketplaceOrder = ({
     lastStatus.current = orderStatus;
   }, [orderStatus]);
 
-  const [competingOrderTally, betterOrderTally, bestOrderPrice] = useMemo(() => {
+  const [, betterOrderTally, bestOrderPrice] = useMemo(() => {
     if (mode === 'buy') {
       return [
         buyOrders.length,
@@ -912,11 +909,11 @@ const MarketplaceOrder = ({
         taskCompleteTime={taskTimeRequirement}
         disabled={
           (isCancellation && orderCrew?.id !== crew?.id) ||
-          !isCancellation && (
+          (!isCancellation && (
             !storageSelection || !quantity || !total
             || exceedsOtherSide || insufficientAssets || insufficientCapacity
             || !isPermitted
-          )
+          ))
         }
         goLabel={goLabel}
         onGo={onSubmitOrder}

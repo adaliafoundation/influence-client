@@ -1,5 +1,5 @@
 import { lambert } from '@influenceth/astro';
-import { GM_ADALIA, Ship, Time } from '@influenceth/sdk';
+import { GM_ADALIA } from '@influenceth/sdk';
 
 const v3ToArray = (v3) => ([
   v3.x || v3[0],

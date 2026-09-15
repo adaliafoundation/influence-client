@@ -186,7 +186,7 @@ const MockDataManager = () => {
       const simulatedLots = [];
       const simulatedShips = [];
 
-      Object.keys(simulation.lots).map((stringLotId) => {
+      Object.keys(simulation.lots).forEach((stringLotId) => {
         const lotId = Number(stringLotId);
         const {
           buildingId,

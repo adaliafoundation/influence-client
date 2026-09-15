@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import styled from 'styled-components';
 
@@ -11,11 +11,11 @@ import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import useSwapHelper from '~/hooks/useSwapHelper';
 import { TOKEN, TOKEN_FORMAT, TOKEN_SCALE } from '~/lib/priceUtils';
-import { cleanseTxHash, fireTrackingEvent, nativeBool, reactBool, roundToPlaces } from '~/lib/utils';
-import { PurchaseForm, PurchaseFormRows } from './components/PurchaseForm';
+import { cleanseTxHash, fireTrackingEvent, reactBool, roundToPlaces } from '~/lib/utils';
+import { PurchaseForm } from './components/PurchaseForm';
 import SKUTitle from './components/SKUTitle';
 import Button from '~/components/ButtonPill';
-import UserPrice from '~/components/UserPrice';
+import { UsdPrice } from '~/components/UserPrice';
 import SKUButton from './components/SKUButton';
 import SKUHighlight from './components/SKUHighlight';
 import SKUInputRow from './components/SKUInputRow';
@@ -94,14 +94,12 @@ const SwaySKU = () => {
   const queryClient = useQueryClient();
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const preferredUiCurrency = useStore(s => s.getPreferredUiCurrency());
-
-  const [eth, setETH] = useState();
+  const [, setETH] = useState();
   const [sway, setSway] = useState();
   const [usdc, setUSDC] = useState();
   const [isProcessing, setIsProcessing] = useState();
 
-  const handleEthChange = useCallback((newValue) => {
+  useCallback((newValue) => {
     setETH(newValue);
 
     const value = priceHelper.from(newValue * TOKEN_SCALE[TOKEN.ETH], TOKEN.ETH);
@@ -130,11 +128,7 @@ const SwaySKU = () => {
   }, []);
 
   useEffect(() => {
-    if (preferredUiCurrency === TOKEN.ETH) {
-      handleEthChange(0.01);
-    } else {
-      handleUsdcChange(preselectableUSDC[0]);
-    }
+    handleUsdcChange(preselectableUSDC[0]);
   }, []);
 
   const onPurchase = useCallback(async () => {
@@ -158,7 +152,17 @@ const SwaySKU = () => {
           externalId: accountAddress, category: 'purchase', amount: Number(unscaledUSDC)
         });
 
-        const tx = await executeCalls(multiswapCalls);
+        const tx = await executeCalls(
+          multiswapCalls,
+          {
+            usePaymaster: false,
+            requireExplicitSignature: true,
+            authorization: {
+              action: 'Purchase SWAY',
+              details: `Swap $${Number(usdc || 0).toFixed(2)} USDC through AVNU for SWAY.`
+            }
+          }
+        );
 
         await provider.waitForTransaction(cleanseTxHash(tx), { retryInterval: 5e3 });
 
@@ -181,7 +185,6 @@ const SwaySKU = () => {
     accountAddress,
     buildMultiswapFromSellAmount,
     executeCalls,
-    preferredUiCurrency,
     priceHelper,
     queryClient,
     usdc
@@ -197,14 +200,14 @@ const SwaySKU = () => {
   return (
     <Wrapper>
       <div style={{ paddingRight: 20 }}>
-        <SKUTitle>Buy Sway</SKUTitle>
+        <SKUTitle>Get Sway</SKUTitle>
         <Description>
           <div>
             <SwayIcon />
           </div>
           <p>
-            The Standard Weighted Adalia Yield (SWAY) is the single currency used 
-            for transacting in Adalia. It is purchased on a decentralized exchange 
+            The Standard Weighted Adalia Yield (SWAY) is the single currency used
+            for transacting in Adalia. It is purchased on a decentralized exchange
             from the pool of community sellers.
           </p>
         </Description>
@@ -213,54 +216,34 @@ const SwaySKU = () => {
         <h3>Sway Packages</h3>
         <div style={{ padding: '0 10px' }}>
           <PreselectRow>
-            {preselectableUSDC.map((amount, i) => (
-              <Fragment key={amount}>
-                {/* for width, smallest package for ETH users is skipped */}
-                {!(preferredUiCurrency === TOKEN.ETH && i === 0) && (
-                  <Button
-                    active={amount === usdc}
-                    lessTransparent
-                    onClick={() => handlePreselect(amount)}>
-                    <UserPrice
-                      price={amount * TOKEN_SCALE[TOKEN.USDC]}
-                      priceToken={TOKEN.USDC}
-                      format={TOKEN_FORMAT.SHORT} />
-                  </Button>
-                )}
-              </Fragment>
+            {preselectableUSDC.map((amount) => (
+              <Button
+                key={amount}
+                active={amount === usdc}
+                lessTransparent
+                onClick={() => handlePreselect(amount)}>
+                <UsdPrice
+                  price={amount * TOKEN_SCALE[TOKEN.USDC]}
+                  priceToken={TOKEN.USDC}
+                  format={TOKEN_FORMAT.SHORT} />
+              </Button>
             ))}
           </PreselectRow>
 
           <SwayExchangeRows>
             <h4>or Specify Amount</h4>
 
-            {preferredUiCurrency === TOKEN.USDC && (
-              <SKUInputRow>
-                <TextInputWrapper rightLabel="USD">
-                  <UncontrolledTextInput
-                    min={0.01}
-                    disabled={reactBool(isProcessing)}
-                    onChange={(e) => handleUsdcChange(e.currentTarget.value)}
-                    step={0.01}
-                    type="number"
-                    value={usdc || ''} />
-                </TextInputWrapper>
-              </SKUInputRow>
-            )}
-
-            {preferredUiCurrency === TOKEN.ETH && (
-              <SKUInputRow>
-                <TextInputWrapper rightLabel="ETH">
-                  <UncontrolledTextInput
-                    min={0.00001}
-                    disabled={reactBool(isProcessing)}
-                    onChange={(e) => handleEthChange(e.currentTarget.value)}
-                    step={0.00001}
-                    type="number"
-                    value={eth || ''} />
-                </TextInputWrapper>
-              </SKUInputRow>
-            )}
+            <SKUInputRow>
+              <TextInputWrapper rightLabel="USD">
+                <UncontrolledTextInput
+                  min={0.01}
+                  disabled={reactBool(isProcessing)}
+                  onChange={(e) => handleUsdcChange(e.currentTarget.value)}
+                  step={0.01}
+                  type="number"
+                  value={usdc || ''} />
+              </TextInputWrapper>
+            </SKUInputRow>
 
             <SKUInputRow>
               <TextInputWrapper rightLabel="SWAY">
@@ -274,7 +257,7 @@ const SwaySKU = () => {
               </TextInputWrapper>
             </SKUInputRow>
 
-            <footer>Powered by <b>AVNU</b></footer>
+            <footer>Swap USDC for SWAY with <b>AVNU</b></footer>
           </SwayExchangeRows>
 
           <div style={{ paddingBottom: 10 }}>

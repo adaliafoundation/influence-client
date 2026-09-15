@@ -38,7 +38,7 @@ export function CrewProvider({ children }) {
   const selectedCrewId = useStore(s => s.selectedCrewId);
   const dispatchCrewSelected = useStore(s => s.dispatchCrewSelected);
 
-  const { data: constants, isLoading: constantsLoading } = useConstants(['CREW_SCHEDULE_BUFFER','TIME_ACCELERATION']);
+  const { data: constants } = useConstants(['CREW_SCHEDULE_BUFFER','TIME_ACCELERATION']);
   const [CREW_SCHEDULE_BUFFER, TIME_ACCELERATION] = useMemo(() => {
     if (!constants) return [];
     return [constants.CREW_SCHEDULE_BUFFER, constants.TIME_ACCELERATION];

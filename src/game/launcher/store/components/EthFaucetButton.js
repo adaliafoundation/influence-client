@@ -8,9 +8,9 @@ import { nativeBool } from '~/lib/utils';
 import UserPrice from '~/components/UserPrice';
 import api from '~/lib/api';
 import useFaucetInfo from '~/hooks/useFaucetInfo';
-import BrightButton from '~/components/BrightButton';
+import Button from '~/components/ButtonAlt';
 
-const EthFaucetButton = ({ onError, onProcessing, onSuccess, noLabel }) => {
+const EthFaucetButton = ({ buttonComponent: ButtonComponent = Button, icon, onError, onProcessing, onSuccess, noLabel }) => {
   const queryClient = useQueryClient();
   const { data: faucetInfo, isLoading: faucetInfoLoading } = useFaucetInfo();
   const { accountAddress, login, provider } = useSession();
@@ -52,10 +52,10 @@ const EthFaucetButton = ({ onError, onProcessing, onSuccess, noLabel }) => {
 
   const disabled = (accountAddress && !ethEnabled) || requestingEth || faucetInfoLoading;
   return (
-    <BrightButton
+    <ButtonComponent
       onClick={requestEth}
-      disabled={nativeBool(disabled)}
-      success>
+      disabled={nativeBool(disabled)}>
+      {icon}
       {!noLabel && <label>ETH Faucet (Daily)</label>}
       <span style={noLabel ? {} : { textAlign: 'right' }}>
         {(requestingEth || faucetInfoLoading)
@@ -66,7 +66,7 @@ const EthFaucetButton = ({ onError, onProcessing, onSuccess, noLabel }) => {
             </>
           )}
       </span>
-    </BrightButton>
+    </ButtonComponent>
   );
 }
 

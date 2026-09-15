@@ -141,7 +141,7 @@ const loadingCss = {
   transform: 'translateY(-50%)'
 };
 
-const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
+const AbstractCard = ({ imageLoading, imageUrl, onClick, overlay, ...props }) => {
   const [ imageFailed, setImageFailed ] = useState(false);
   const [ imageLoaded, setImageLoaded ] = useState(false);
 
@@ -174,13 +174,13 @@ const AbstractCard = ({ imageUrl, onClick, overlay, ...props }) => {
       hasOverlay={!!overlay}
       classLabel={props.crewmateClass ? Crewmate.getClass(props.crewmateClass)?.name : undefined}
       {...props}>
-      {imageLoaded ? null : <LoadingAnimation color={'white'} cssOverride={loadingCss} />}
-      <CardImage visible={imageLoaded} applyMask={!overlay && !props.hideMask}>
+      {(imageLoading || !imageLoaded) && <LoadingAnimation color={'white'} cssOverride={loadingCss} />}
+      <CardImage visible={imageLoaded || imageLoading} applyMask={!overlay && !props.hideMask}>
         {readyToLoadUrl && (
           <img
             ref={watchImageLoad}
             alt={props.crewmateName}
-            src={imageFailed ? silhouette : readyToLoadUrl}
+            src={imageLoading ? silhouette : (imageFailed ? silhouette : readyToLoadUrl)}
             onError={() => setImageFailed(true)} />
         )}
       </CardImage>
@@ -272,13 +272,16 @@ const CrewmateCard = ({ crewmate = {}, ...props }) => {
       ? getCrewmateSpriteKey(visualCrewmate)
       : null
   ), [visualCrewmate, spriteKey]);
-  const [imageUrl, setImageUrl] = useState();
+  const [imageUrl, setImageUrl] = useState(silhouette);
+  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
+    setImageLoading(true);
 
     if (!spriteKey && !compositorKey) {
       setImageUrl(silhouette);
+      setImageLoading(false);
       return () => {
         isMounted = false;
       };
@@ -287,11 +290,17 @@ const CrewmateCard = ({ crewmate = {}, ...props }) => {
     const getImageUrl = spriteKey ? getCrewmateSpriteImageUrl : getCrewmateCompositorImageUrl;
     getImageUrl(visualCrewmate)
       .then((url) => {
-        if (isMounted) setImageUrl(url || silhouette);
+        if (isMounted) {
+          setImageUrl(url || silhouette);
+          setImageLoading(false);
+        }
       })
       .catch((e) => {
         console.warn('Failed to compose local crewmate sprite', e);
-        if (isMounted) setImageUrl(silhouette);
+        if (isMounted) {
+          setImageUrl(silhouette);
+          setImageLoading(false);
+        }
       });
 
     return () => {
@@ -301,13 +310,13 @@ const CrewmateCard = ({ crewmate = {}, ...props }) => {
 
   return (
     <AbstractCard
+      imageLoading={imageLoading}
       imageUrl={imageUrl}
       crewmateColl={crewmate.Crewmate?.coll}
       crewmateClass={crewmate.Crewmate?.class}
       crewmateName={useName}
       crewmateTitle={crewmate.Crewmate?.title}
-      {...props}
-    />
+      {...props} />
   );
 };
 

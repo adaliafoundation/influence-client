@@ -2,37 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Crew, Crewmate, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 
-import { AddRationsIcon, ForwardIcon, InventoryIcon, RouteIcon, SwayIcon, WarningIcon, StopwatchIcon, FoodIcon } from '~/components/Icons';
+import { AddRationsIcon, ForwardIcon, InventoryIcon, RouteIcon, WarningIcon, StopwatchIcon, FoodIcon } from '~/components/Icons';
+import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
 import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed } from '~/lib/utils';
-import {
-  ItemSelectionSection,
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  formatMass,
-  formatVolume,
-  getBonusDirection,
-  TimeBonusTooltip,
-  FlexSectionSpacer,
-  ActionDialogBody,
-  FlexSection,
-  TransferSelectionDialog,
-  ProgressBarSection,
-  ActionDialogTabs,
-  InventoryChangeCharts,
-  TransferDistanceDetails,
-  FlexSectionBlock,
-  WarningAlert,
-  InventorySelectionDialog,
-  CrewInputBlock,
-  MiniBarChart,
-  formatResourceMass,
-  MultiSourceInputBlock,
-  OrderSelectionDialog,
-  formatTimeRequirements,
-} from './components';
+import { ItemSelectionSection, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, formatMass, formatVolume, getBonusDirection, TimeBonusTooltip, FlexSectionSpacer, ActionDialogBody, FlexSection, TransferSelectionDialog, ProgressBarSection, ActionDialogTabs, InventoryChangeCharts, TransferDistanceDetails, FlexSectionBlock, FlexSectionInputBlock, InventorySelectionDialog, CrewInputBlock, MiniBarChart, formatResourceMass, MultiSourceInputBlock, OrderSelectionDialog, formatTimeRequirements } from './components';
 import { ActionDialogInner } from '../ActionDialog';
 import actionStages from '~/lib/actionStages';
 import theme from '~/theme';
@@ -41,6 +16,7 @@ import useFeedCrewManager from '~/hooks/actionManagers/useFeedCrewManager';
 import useAsteroid from '~/hooks/useAsteroid';
 import useBlockTime from '~/hooks/useBlockTime';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
+import { hasStarterFoodSupplyEntitlement } from '~/lib/starterPacks';
 import useCrew from '~/hooks/useCrew';
 
 const UnderLabel = styled.span`
@@ -109,15 +85,14 @@ const FoodMiniBar = ({ currentFood, addingFood, barColor, deltaValue, maxFood, p
   />
 );
 
-const FeedCrew = ({
-  asteroid,
-  feedCrewManager,
-  stage,
-  ...props
-}) => {
+const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
   const { currentFeeding, feedCrew } = feedCrewManager;
   const { crew, crewCan } = useCrewContext();
   const blockTime = useBlockTime();
+  const hasFoodSupplyEntitlement = hasStarterFoodSupplyEntitlement(crew);
+  const usingFoodSupplyEntitlement = hasFoodSupplyEntitlement || !!(
+    currentFeeding && !currentFeeding.vars?.origin?.id
+  );
 
   const crewTravelBonus = useMemo(() => {
     if (!crew) return {};
@@ -177,6 +152,7 @@ const FeedCrew = ({
   }, []);
 
   const [transportDistance, transportTime] = useMemo(() => {
+    if (usingFoodSupplyEntitlement) return [0, 0];
     if (!asteroid?.id || !originLot?.id) return [0, 0];
     const originLotIndex = Lot.toIndex(originLot?.id);
     const destinationLotIndex = crew?._location?.lotIndex;
@@ -188,7 +164,7 @@ const FeedCrew = ({
       crew?._timeAcceleration
     );
     return [transportDistance, transportTime];
-  }, [asteroid?.id, originLot?.id, crewTravelBonus, crewDistBonus, crew?._location?.lotIndex, crew?._timeAcceleration]);
+  }, [asteroid?.id, originLot?.id, crewTravelBonus, crewDistBonus, crew?._location?.lotIndex, crew?._timeAcceleration, usingFoodSupplyEntitlement]);
 
   const { totalMass, totalVolume } = useMemo(() => {
     return Object.keys(selectedItems).reduce((acc, resourceId) => {
@@ -295,24 +271,31 @@ const FeedCrew = ({
     }
   }, [crew?._crewmates, crew?.Crew?.lastFed, crew?._timeAcceleration, blockTime, selectedItems]);
 
-  // select max food available
+  // Select the full reload supplied by the starter pack, or the maximum available inventory food.
   useEffect(() => {
-    if (originInventory) {
+    if (stage !== actionStages.NOT_STARTED) return;
+
+    if (hasFoodSupplyEntitlement) {
+      setSelectedItems({
+        [Product.IDS.FOOD]: Math.floor(Math.max(0, foodStats.maxFood - foodStats.currentFood))
+      });
+    } else if (originInventory) {
       const inferredAmount = Math.min(
         originInventory.contents.find((c) => c.product === Product.IDS.FOOD)?.amount || 0,
         foodStats.maxFood - foodStats.currentFood
       );
       setSelectedItems({ [Product.IDS.FOOD]: inferredAmount });
     }
-  }, [originInventory]);
+  }, [foodStats.currentFood, foodStats.maxFood, hasFoodSupplyEntitlement, originInventory, stage]);
 
   const disabled = useMemo(() => {
+    if (hasFoodSupplyEntitlement) return totalMass === 0;
     if (!origin) return true;
     if (totalMass === 0) return true;
     if (inventorySelection) return !crewCan(Permission.IDS.REMOVE_PRODUCTS, origin);
     if (exchangeSelection) return !crewCan(Permission.IDS.BUY, origin);
     return true;
-  }, [origin, totalMass, crewCan]);
+  }, [exchangeSelection, hasFoodSupplyEntitlement, inventorySelection, origin, totalMass, crewCan]);
 
   return (
     <>
@@ -320,7 +303,9 @@ const FeedCrew = ({
         action={{
           icon: <AddRationsIcon />,
           label: 'Resupply Food',
-          status: stage === actionStages.NOT_STARTED ? 'Send Items' : undefined,
+          status: stage === actionStages.NOT_STARTED
+            ? (hasFoodSupplyEntitlement ? 'Starter Pack' : 'Send Items')
+            : undefined,
         }}
         actionCrew={crew}
         location={{ asteroid, lot: originLot }}
@@ -340,24 +325,41 @@ const FeedCrew = ({
           ]} />
 
         <FlexSection>
-          <MultiSourceInputBlock
-            crew={crew}
-            disabled={stage !== actionStages.NOT_STARTED}
-            isSelected={stage === actionStages.NOT_STARTED && (exchangeSelection || inventorySelection)}
-            exchangeSelection={exchangeSelection}
-            inventorySelection={inventorySelection}
-            onClear={onClear}
-            onClickExchange={() => { setExchangeSelectorOpen(true) }}
-            onClickInventory={() => { setInventorySelectorOpen(true) }}
-            origin={origin}
-            originLot={originLot}
-            stage={stage}
-            title="Origin"
-            titleDetails={transportDistance !== undefined && (
-              <TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />
+          {usingFoodSupplyEntitlement
+            ? (
+              <FlexSectionInputBlock
+                disabled
+                image={(
+                  <ResourceThumbnail
+                    resource={Product.TYPES[Product.IDS.FOOD]}
+                    tooltipContainer={null}
+                  />
+                )}
+                label="Food Supply"
+                sublabel="Included in Starter Pack"
+                title="Origin"
+              />
+            )
+            : (
+              <MultiSourceInputBlock
+                crew={crew}
+                disabled={stage !== actionStages.NOT_STARTED}
+                isSelected={stage === actionStages.NOT_STARTED && (exchangeSelection || inventorySelection)}
+                exchangeSelection={exchangeSelection}
+                inventorySelection={inventorySelection}
+                onClear={onClear}
+                onClickExchange={() => { setExchangeSelectorOpen(true) }}
+                onClickInventory={() => { setInventorySelectorOpen(true) }}
+                origin={origin}
+                originLot={originLot}
+                stage={stage}
+                title="Origin"
+                titleDetails={transportDistance !== undefined && (
+                  <TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />
+                )}
+                transferMass={-totalMass}
+                transferVolume={-totalVolume} />
             )}
-            transferMass={-totalMass}
-            transferVolume={-totalVolume} />
 
           <FlexSectionSpacer>
             <ForwardIcon />
@@ -371,7 +373,9 @@ const FeedCrew = ({
           <>
             <FlexSection style={{ alignItems: 'flex-start' }}>
               <FlexSectionBlock
-                title={`${exchangeSelection ? 'Purchase' : 'Transfer'} Food`}
+                title={usingFoodSupplyEntitlement
+                  ? 'Starter Pack Food'
+                  : `${exchangeSelection ? 'Purchase' : 'Transfer'} Food`}
                 style={{ alignSelf: 'stretch', marginBottom: 56 }}
                 bodyStyle={{ padding: 0 }}>
                 <ItemSelectionSection
@@ -502,19 +506,21 @@ const FeedCrew = ({
         crewAvailableTime={crewTimeRequirement}
         disabled={disabled}
         finalizeLabel="Complete"
-        goLabel={`${exchangeSelection?.fillPaymentTotal > 0 ? 'Purchase & ' : ''}Transfer`}
+        goLabel={usingFoodSupplyEntitlement
+          ? 'Resupply with Starter Pack'
+          : `${exchangeSelection?.fillPaymentTotal > 0 ? 'Purchase & ' : ''}Transfer`}
         goLabelPrice={exchangeSelection?.fillPaymentTotal}
         onGo={onStartFeeding}
         stage={stage}
         waitForCrewReady
         {...props} />
 
-      {stage === actionStages.NOT_STARTED && (
+      {stage === actionStages.NOT_STARTED && !hasFoodSupplyEntitlement && (
         <>
           <TransferSelectionDialog
             sourceEntity={origin}
             sourceContents={originInventory?.contents || []}
-            targetInventoryConstraints={{ [129]: Math.max(0, foodStats.maxFood - foodStats.currentFood) }}
+            targetInventoryConstraints={{ 129: Math.max(0, foodStats.maxFood - foodStats.currentFood) }}
             initialSelection={selectedItems}
             inventoryBonuses={crew?._inventoryBonuses}
             onClose={() => setTransferSelectorOpen(false)}

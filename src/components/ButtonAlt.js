@@ -178,13 +178,13 @@ const DisabledTooltip = styled.span`
   padding-left; 6px;
 `;
 
-const loadingCss = css`
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 3px;
-  width: 100%;
-`;
+const loadingStyle = {
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: 3,
+  width: '100%'
+};
 
 const StandardButton = (props) => {
   const {
@@ -225,7 +225,7 @@ const StandardButton = (props) => {
                   ? getContrastText(props.color)
                   : (props.isTransaction ? theme.colors.txButton : theme.colors.main)
               )}
-              css={loadingCss}
+              cssOverride={loadingStyle}
               height={1} />
           )}
           {children}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Address, Asteroid } from '@influenceth/sdk';
+import { Asteroid } from '@influenceth/sdk';
 
 import { ClaimRewardIcon } from '~/components/Icons';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
@@ -35,4 +35,6 @@ const ClaimArrivalReward = ({ asteroid, crew, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: ClaimArrivalReward, isVisible };
+const actionDefinition = { Component: ClaimArrivalReward, isVisible };
+
+export default actionDefinition;

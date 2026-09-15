@@ -136,7 +136,20 @@ const CloseButton = styled(IconButton)`
 `;
 
 const Details = (props) => {
-  const { title, contentProps = {}, contentInnerProps = {}, edgeToEdge, headerProps, onClose, onCloseDestination, outerNode, width, ...restProps } = props;
+  const {
+    title,
+    contentProps = {},
+    contentInnerProps = {},
+    detailsProps = {},
+    edgeToEdge,
+    headerProps,
+    onClose,
+    onCloseDestination,
+    outerNode,
+    width,
+    wrapperProps = {},
+    ...restProps
+  } = props;
   const history = useHistory();
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -149,8 +162,8 @@ const Details = (props) => {
   }, [title]);
 
   return (
-    <Wrapper {...restProps}>
-      <StyledDetails {...restProps}>
+    <Wrapper {...restProps} {...wrapperProps}>
+      <StyledDetails {...restProps} {...detailsProps}>
         {outerNode || null}
         {title && <Header {...headerProps}><span>{title}</span></Header>}
         <CloseButton

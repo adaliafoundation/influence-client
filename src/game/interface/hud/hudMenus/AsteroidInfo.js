@@ -5,7 +5,7 @@ import { Asteroid, Entity, Ship } from '@influenceth/sdk';
 import AddressLink from '~/components/AddressLink';
 import { AsteroidUserPrice } from '~/components/UserPrice';
 import CrewIndicator from '~/components/CrewIndicator';
-import { EccentricityIcon, InclinationIcon, LinkIcon, MagnifyingIcon, OrbitalPeriodIcon, RadiusIcon, ResourceGroupIcons, ScanAsteroidIcon, SemiMajorAxisIcon, SurfaceAreaIcon, WalletIcon } from '~/components/Icons';
+import { EccentricityIcon, InclinationIcon, LinkIcon, MagnifyingIcon, OrbitalPeriodIcon, RadiusIcon, ScanAsteroidIcon, SemiMajorAxisIcon, SurfaceAreaIcon, WalletIcon } from '~/components/Icons';
 import formatters from '~/lib/formatters';
 import { reactBool, reactPreline } from '~/lib/utils';
 import useAsteroid from '~/hooks/useAsteroid';

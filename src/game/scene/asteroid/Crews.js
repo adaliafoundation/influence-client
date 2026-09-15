@@ -136,7 +136,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // TODO: would be nice to include a crew filter on this rather than post-processing to
   //  apply the activeCrewsDisplay filter... then we could also drop crewMovementActivity probably
   //  and just use this with the crews included
-  const { data: ongoing, isLoading } = useQuery({
+  const { data: ongoing } = useQuery({
     queryKey: [ 'activities', 'ongoing', asteroidId ],
     queryFn: async () => {
       const ongoingActivities = await api.getOngoingActivities(

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import { Tooltip } from 'react-tooltip';
 import LoadingAnimation from 'react-spinners/BarLoader';
 
@@ -60,13 +60,13 @@ const CloseButton = styled(IconButton)`
   right: -7px;
 `;
 
-const loadingCss = css`
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 100%;
-`;
+const loadingStyle = {
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: '100%'
+};
 
 const Form = (props) => {
   const { title, children, loading, ...restProps } = props;
@@ -83,7 +83,7 @@ const Form = (props) => {
           Tooltip.hide();
         }
       }}>
-      {loading && <LoadingAnimation height={2} color={theme.colors.main} css={loadingCss} />}
+      {loading && <LoadingAnimation height={2} color={theme.colors.main} cssOverride={loadingStyle} />}
       <Title>{title}</Title>
       {children}
       {open && (

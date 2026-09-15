@@ -13,7 +13,7 @@ const ShipViewer = () => {
 
   const { data: ship, isLoading } = useShip(zoomScene?.shipId);
 
-  const [pendingSound, setPendingSound] = useState(null);
+  const [, setPendingSound] = useState(null);
 
   // Play ship thruster loop
   useEffect(() => {

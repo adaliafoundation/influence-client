@@ -51,7 +51,7 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
   const destinationLotId = currentDockingAction?.meta?.lotId
     || (selectedDestinationIndex && Lot.toId(asteroid?.id, selectedDestinationIndex))
     || undefined;
-  const { data: destinationLot, isLoading: destLotLoading } = useLot(destinationLotId);
+  const { data: destinationLot } = useLot(destinationLotId);
 
   const [hopperBonus, distBonus, exhaustBonus] = useMemo(() => {
     if (!crew) return {};

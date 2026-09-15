@@ -1,61 +1,55 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { trim } from 'lodash';
 
 import { MyAssetDoubleIcon, MyAssetIcon, MyAssetTripleIcon } from '~/components/Icons';
 import api from '~/lib/api';
+import {
+  barebonesCrewmateAppearance,
+  normalizeStarterPackProducts
+} from '~/lib/starterPacks';
 import theme from '~/theme';
 
-export const barebonesCrewmateAppearance = '0x1200010000000000041';
+export { barebonesCrewmateAppearance };
+
+const packVisuals = [
+  {
+    crewmateAppearance: barebonesCrewmateAppearance,
+    color: theme.colors.glowGreen,
+    colorLabel: 'green',
+    flairIcon: <MyAssetIcon />
+  },
+  {
+    crewmateAppearance: '0x2700020002000300032',
+    color: theme.colors.main,
+    colorLabel: undefined,
+    flairIcon: <MyAssetDoubleIcon />
+  },
+  {
+    crewmateAppearance: '0x30001000400070002000a2',
+    color: theme.colors.lightPurple,
+    colorLabel: 'purple',
+    flairIcon: <MyAssetTripleIcon />
+  }
+];
 
 const useStarterPacks = () => {
-  const { data: products } = useQuery({
-    queryKey: ['stripeProducts'],
-    queryFn: () => api.getStripeProducts()
+  const query = useQuery({
+    queryKey: ['starterPackProducts'],
+    queryFn: api.getStarterPackProducts
   });
 
-  const starterPackPricing = useMemo(() => {
-    const packs = {};
-    (products || [])
-      .sort((a, b) => a.amount - b.amount)
-      .forEach((product, i) => {
-        let ui = {
-          checkMarks: product.metadata.checkMarks?.split('|') || [],
-          flavorText: product.metadata.flavorText
-        };
+  const products = useMemo(() => (
+    normalizeStarterPackProducts(query.data?.products)
+      .map((product, index) => ({
+        ...product,
+        ui: packVisuals[index] || packVisuals[packVisuals.length - 1]
+      }))
+  ), [query.data]);
 
-        if (i === 0) {
-          ui.crewmateAppearance = barebonesCrewmateAppearance;
-          ui.color = theme.colors.glowGreen;
-          ui.colorLabel = 'green';
-          ui.flairIcon = <MyAssetIcon />;
-        } else if (i === 1 && products.length > 2) {
-          ui.crewmateAppearance = '0x2700020002000300032'; //'0x22000200070002000a2'
-          ui.color = theme.colors.main;
-          ui.colorLabel = undefined;
-          ui.flairIcon = <MyAssetDoubleIcon />;
-        } else {
-          ui.crewmateAppearance = '0x30001000400070002000a2'; //'0x3000100030002000300032'
-          ui.color = theme.colors.lightPurple;
-          ui.colorLabel = 'purple';
-          ui.flairIcon = <MyAssetTripleIcon />;
-        }
-
-        const buildingIds = (product.metadata.buildings.split(',') || []).map(Number);
-        packs[product.id] = {
-          id: product.id,
-          name: trim(product.name.replace('Starter Pack -', '')),
-          price: product.amount,
-          crewmates: product.metadata.crewmates,
-          buildings: buildingIds,
-          ui
-        }
-      });
-    console.log({ packs })
-    return Object.values(packs);
-  }, [products]);
-
-  return starterPackPricing;
+  return {
+    ...query,
+    data: products
+  };
 };
 
 export default useStarterPacks;

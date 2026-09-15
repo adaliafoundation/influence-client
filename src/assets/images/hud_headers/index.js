@@ -24,7 +24,7 @@ import Ship_3 from './Ship_3.png';
 import Ship_4 from './Ship_4.png';
 import SurfaceShip from './SurfaceShip.png';
 
-export default {
+const hudHeaders = {
   Asteroid,
   Building_1,
   Building_2,
@@ -50,4 +50,6 @@ export default {
   Ship_3,
   Ship_4,
   SurfaceShip,
-}
+};
+
+export default hudHeaders;

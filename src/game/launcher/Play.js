@@ -6,7 +6,7 @@ import { InfluenceIcon } from '~/components/Icons';
 import styled from 'styled-components';
 import useCrewContext from '~/hooks/useCrewContext';
 import formatters from '~/lib/formatters';
-import CrewmateCardFramed, { CrewCaptainCardFramed, EmptyCrewmateCardFramed } from '~/components/CrewmateCardFramed';
+import CrewmateCardFramed, { EmptyCrewmateCardFramed } from '~/components/CrewmateCardFramed';
 import theme from '~/theme';
 import LiveFoodStatus from '~/components/LiveFoodStatus';
 import CrewLocationCompactLabel from '~/components/CrewLocationCompactLabel';

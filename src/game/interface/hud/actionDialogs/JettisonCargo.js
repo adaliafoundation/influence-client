@@ -1,39 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Inventory, Permission, Product } from '@influenceth/sdk';
 import styled from 'styled-components';
 
-import { CheckIcon, CloseIcon, ForwardIcon, HeliocentricIcon, InventoryIcon, JettisonCargoIcon, LocationIcon, RouteIcon, SurfaceTransferIcon, WarningIcon, WarningOutlineIcon } from '~/components/Icons';
+import { ForwardIcon, HeliocentricIcon, InventoryIcon, JettisonCargoIcon, LocationIcon, RouteIcon, WarningIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
-import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, nativeBool } from '~/lib/utils';
-import {
-  ItemSelectionSection,
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  formatMass,
-  formatSampleMass,
-  formatSampleVolume,
-  formatVolume,
-  getBonusDirection,
-  TimeBonusTooltip,
-  FlexSectionSpacer,
-  ActionDialogBody,
-  FlexSection,
-  TransferSelectionDialog,
-  ProgressBarSection,
-  ActionDialogTabs,
-  InventoryChangeCharts,
-  CrewOwnerBlock,
-  TransferDistanceDetails,
-  FlexSectionBlock,
-  WarningAlert,
-  SwayInputBlockInner,
-  InventorySelectionDialog,
-  InventoryInputBlock
-} from './components';
+import { reactBool, locationsArrToObj } from '~/lib/utils';
+import { ItemSelectionSection, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, formatMass, formatVolume, FlexSectionSpacer, ActionDialogBody, FlexSection, TransferSelectionDialog, ActionDialogTabs, InventoryChangeCharts, InventorySelectionDialog, InventoryInputBlock } from './components';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import useCrew from '~/hooks/useCrew';
 import CrewIndicator from '~/components/CrewIndicator';
@@ -48,13 +23,7 @@ import theme from '~/theme';
 import useBlockTime from '~/hooks/useBlockTime';
 import useJettisonCargoManager from '~/hooks/actionManagers/useJettisonCargoManager';
 
-const JettisonCargo = ({
-  asteroid,
-  actionManager,
-  origin: fixedOrigin,
-  stage,
-  ...props
-}) => {
+const JettisonCargo = ({ asteroid, actionManager, origin: fixedOrigin, stage, ...props }) => {
   const { currentJettison, jettisonCargo } = actionManager;
   const { crew, crewCan } = useCrewContext();
 

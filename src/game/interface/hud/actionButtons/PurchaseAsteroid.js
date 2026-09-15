@@ -39,4 +39,6 @@ const PurchaseAsteroid = ({ asteroid, _disabled }) => {
   );
 };
 
-export default { Component: PurchaseAsteroid, isVisible };
+const actionDefinition = { Component: PurchaseAsteroid, isVisible };
+
+export default actionDefinition;

@@ -190,15 +190,13 @@ const useShipTravelManager = (shipId) => {
   const depart = useCallback(() => {
     const {
       v1,
-      v2,
-      deltaV,
       originId,
       destinationId,
       departureTime,
       arrivalTime,
       originPosition,
       destinationPosition,
-      usedPropellantMass,
+      usedPropellantMass
     } = proposedTravelSolution;
 
     // TODO: make sure travelSolution origin is where ship is? or just let the

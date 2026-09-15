@@ -36,4 +36,6 @@ const TransferAgreement = ({ entity, permission, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: TransferAgreement, isVisible };
+const actionDefinition = { Component: TransferAgreement, isVisible };
+
+export default actionDefinition;

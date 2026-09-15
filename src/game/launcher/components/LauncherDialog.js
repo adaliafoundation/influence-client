@@ -3,7 +3,7 @@ import styled from 'styled-components';
 
 import ClipCorner from '~/components/ClipCorner';
 import NavIcon from '~/components/NavIcon';
-import { CloseIcon, LinkIcon } from '~/components/Icons';
+import { BackIcon, CloseIcon, ForwardIcon, LinkIcon } from '~/components/Icons';
 import { reactBool } from '~/lib/utils';
 import theme from '~/theme';
 import IconButton from '~/components/IconButton';
@@ -40,16 +40,30 @@ const PaneWrapper = styled.div`
   border-left: ${p => p.singlePane ? 0 : `1px solid ${borderColor}`};
   height: calc(100vh - 250px);
   overflow: ${p => p.overflow || 'hidden auto'};
-  width: ${p => p.singlePane ? 1375 : 1075}px;
+  transition: width 200ms ease;
+  width: ${p => p.singlePane ? 1375 : (p.menuCollapsed ? 1327 : 1075)}px;
 `;
 
 const TabWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  flex: 0 0 300px;
+  flex: 0 0 ${p => p.collapsed ? 48 : 300}px;
   max-height: calc(100vh - 250px);
   overflow: hidden auto;
   padding: 15px 0;
+  transition: flex-basis 200ms ease;
+`;
+
+const MenuToggleRow = styled.div`
+  display: flex;
+  flex: 0 0 34px;
+  justify-content: ${p => p.collapsed ? 'center' : 'flex-end'};
+  padding: 0 ${p => p.collapsed ? 0 : 12}px 8px;
+`;
+
+const MenuToggle = styled(IconButton)`
+  font-size: 20px;
+  margin: 0;
 `;
 
 const NavIconWrapper = styled.span`
@@ -127,12 +141,26 @@ const CloseButton = styled(IconButton)`
   ${p => p.hasBackground ? 'background: rgba(0, 0, 0, 0.75);' : ''}
 `;
 
-const BottomLeft = styled.div``;
+const TopRightSlot = styled.div`
+  position: absolute;
+  right: 64px;
+  top: 17px;
+  z-index: 3;
+`;
 
-const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu, paneOverflow }) => {
+const BottomLeft = styled.div`
+  margin-top: auto;
+`;
+
+const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu, paneOverflow, initiallyCollapsed = false }) => {
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
 
+  const [menuCollapsed, setMenuCollapsed] = useState(initiallyCollapsed);
   const [selected, setSelected] = useState();
+
+  useEffect(() => {
+    setMenuCollapsed(initiallyCollapsed);
+  }, [initiallyCollapsed]);
 
   useEffect(() => {
     if (!!panes?.length) {
@@ -155,41 +183,55 @@ const LauncherDialog = ({ panes = [], preselect, singlePane, bottomLeftMenu, pan
   return (
     <DialogWrapper id="DialogWrapper">
       <Padding>
-        <Dialog>
+        <Dialog id="launcher-dialog-root">
+          <TopRightSlot id="launcher-dialog-top-right-slot" />
           <CloseButton borderless hasBackground onClick={onClose}><CloseIcon /></CloseButton>
           {!singlePane && (
-            <TabWrapper>
-              {panes.map((pane) => {
-                const isSelected = (selected?.key || selected?.label) === (pane.key || pane.label);
-                return (
-                  <Tab
-                    key={pane.key || pane.label}
-                    isSelected={isSelected}
-                    onClick={() => handleClick(pane)}>
-                    <NavIconWrapper><NavIcon color={theme.colors.main} /></NavIconWrapper>
-                    <Label>
-                      {pane.label}
-                      {pane.sublabel && <Sublabel>{pane.sublabel}</Sublabel>}
-                    </Label>
-                    {pane.link && <LinkIcon />}
-                    {pane.attention
-                      ? <AttentionIcon><AttentionDot size={12} /></AttentionIcon>
-                      : <BadgeIcon isSelected={isSelected}><Badge subtler value={pane.badge} /></BadgeIcon>
-                    }
-                  </Tab>
-                );
-              })}
-              {bottomLeftMenu && (
+            <TabWrapper collapsed={menuCollapsed}>
+              <MenuToggleRow collapsed={menuCollapsed}>
+                <MenuToggle
+                  borderless
+                  dataFor="launcherTooltip"
+                  dataPlace="right"
+                  dataTip={menuCollapsed ? 'Expand menu' : 'Collapse menu'}
+                  onClick={() => setMenuCollapsed((collapsed) => !collapsed)}>
+                  {menuCollapsed ? <ForwardIcon /> : <BackIcon />}
+                </MenuToggle>
+              </MenuToggleRow>
+              {!menuCollapsed && (
                 <>
-                  <div style={{ flex: 1 }} />
-                  <BottomLeft>
-                    {bottomLeftMenu}
-                  </BottomLeft>
+                  {panes.map((pane) => {
+                    const isSelected = (selected?.key || selected?.label) === (pane.key || pane.label);
+                    return (
+                      <Tab
+                        key={pane.key || pane.label}
+                        isSelected={isSelected}
+                        onClick={() => handleClick(pane)}>
+                        <NavIconWrapper><NavIcon color={theme.colors.main} /></NavIconWrapper>
+                        <Label>
+                          {pane.label}
+                          {pane.sublabel && <Sublabel>{pane.sublabel}</Sublabel>}
+                        </Label>
+                        {pane.link && <LinkIcon />}
+                        {pane.attention
+                          ? <AttentionIcon><AttentionDot size={12} /></AttentionIcon>
+                          : <BadgeIcon isSelected={isSelected}><Badge subtler value={pane.badge} /></BadgeIcon>
+                        }
+                      </Tab>
+                    );
+                  })}
                 </>
+              )}
+              {bottomLeftMenu && (
+                <BottomLeft>
+                  {typeof bottomLeftMenu === 'function'
+                    ? bottomLeftMenu({ collapsed: menuCollapsed })
+                    : bottomLeftMenu}
+                </BottomLeft>
               )}
             </TabWrapper>
           )}
-          <PaneWrapper overflow={paneOverflow} singlePane={!!reactBool(singlePane)}>
+          <PaneWrapper menuCollapsed={menuCollapsed} overflow={paneOverflow} singlePane={!!reactBool(singlePane)}>
             {singlePane || selected?.pane || null}
           </PaneWrapper>
           <ClipCorner dimension={30} color={borderColor} />

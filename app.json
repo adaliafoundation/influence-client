@@ -7,8 +7,8 @@
   ],
   "env": {
     "REACT_APP_CONFIG_ENV": {
-      "description": "Override NODE_ENV in choosing which config to use (optional)",
-      "required": false
+      "description": "Network preset: prerelease or production",
+      "required": true
     },
     "REACT_APP_API_CLIENTID_GTM": {
       "description": "Google Tag Manager ID (optional)",
@@ -22,16 +22,52 @@
       "description": "Layerswap Client ID (optional)",
       "required": false
     },
-    "REACT_APP_API_CLIENTID_RAMP": {
-      "description": "Ramp API Key (optional)",
-      "required": false
-    },
     "REACT_APP_API_CLIENTID_STRIPE": {
       "description": "Stripe Publishable API Key (optional)",
       "required": false
     },
     "REACT_APP_STARKNET_PROVIDER": {
-      "description": "Custom Starknet rpc provider (optional)",
+      "description": "Starknet RPC URL for the selected network",
+      "required": true
+    },
+    "REACT_APP_API_INFLUENCE": {
+      "description": "Influence API base URL",
+      "required": true
+    },
+    "REACT_APP_API_IPFS": {
+      "description": "Public IPFS gateway URL",
+      "required": true
+    },
+    "REACT_APP_API_AVNU": {
+      "description": "AVNU API URL for the selected network",
+      "required": true
+    },
+    "REACT_APP_ETHEREUM_PROVIDER": {
+      "description": "Ethereum RPC URL for the selected network",
+      "required": true
+    },
+    "REACT_APP_PRIVY_APPID": {
+      "description": "Optional Privy app ID; requires the paymaster proxy",
+      "required": false
+    },
+    "REACT_APP_PRIVY_CLIENTID": {
+      "description": "Optional Privy client ID",
+      "required": false
+    },
+    "REACT_APP_STARKNET_PAYMASTERPROXY": {
+      "description": "Authenticated paymaster proxy URL; required when Privy is enabled",
+      "required": false
+    },
+    "REACT_APP_API_BANXA": {
+      "description": "Optional Banxa base URL",
+      "required": false
+    },
+    "REACT_APP_STARKNET_PROVIDERBACKUP": {
+      "description": "Optional backup Starknet RPC URL",
+      "required": false
+    },
+    "REACT_APP_STARKNET_PAYMASTER": {
+      "description": "Optional external-wallet paymaster URL",
       "required": false
     }
   }

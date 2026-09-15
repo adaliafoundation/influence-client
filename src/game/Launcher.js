@@ -18,11 +18,9 @@ import {
   RewardsIcon,
   SettingsIcon,
   AssetPortalIcon,
-  WalletIcon,
   BugIcon,
   DownloadIcon,
-  InboxIcon,
-  WarningIcon
+  InboxIcon
 } from '~/components/Icons';
 import InfluenceLogo from '~/components/InfluenceLogo';
 import HudMenu from '~/game/interface/hud/HudMenu';
@@ -387,12 +385,6 @@ const ExitSimulationLink = styled.div`
   }
 `;
 
-const NavItemLabel = styled.div`
-  color: ${p => p.theme.colors.error};
-  font-size: 16px;
-  position: absolute;
-  right: 0;
-`;
 const NavItemBadge = styled(Badge)`
   font-size: 16px;
   position: absolute;
@@ -400,9 +392,9 @@ const NavItemBadge = styled(Badge)`
 `;
 
 const Launcher = (props) => {
-  const { accountAddress, authenticating, authenticated, login, loginPrompt, walletId } = useSession(false);
+  const { accountAddress, authenticating, authenticated, login, loginPrompt } = useSession(false);
   const { data: priceConstants, isLoading: priceConstantsLoading } = usePriceConstants();
-  const { hasNoPublicKey, unreadTally } = useWalletInbox();
+  const { unreadTally } = useWalletInbox();
 
   const launcherPage = useStore(s => s.launcherPage);
   const simulationEnabled = useStore(s => s.simulationEnabled);
@@ -498,10 +490,6 @@ const Launcher = (props) => {
     window.open(appConfig.get('Url.help'), '_blank', 'noopener');
   }, []);
 
-  const openWebWalletDashboard = useCallback(() => {
-    window.open(`${appConfig.get('Api.argentWebWallet')}`, '_blank', 'noopener');
-  }, []);
-
   return (
     <StyledLauncher {...props}>
       {launcherPage === 'play' && <HudMenu />}
@@ -540,8 +528,7 @@ const Launcher = (props) => {
                 onClick={() => dispatchLauncherPage('inbox')}
                 selected={launcherPage === 'inbox'}>
                 <InboxIcon /> Inbox
-                {hasNoPublicKey && <NavItemLabel><WarningIcon /></NavItemLabel>}
-                {!hasNoPublicKey && unreadTally > 0 && <NavItemBadge value={unreadTally} />}
+                {unreadTally > 0 && <NavItemBadge value={unreadTally} />}
               </NavItem>
             )}
 
@@ -552,12 +539,6 @@ const Launcher = (props) => {
               selected={launcherPage === 'bridge'}>
               <AssetPortalIcon /> Asset Portal
             </NavItem>
-
-            {walletId === 'argentWebWallet' && (
-              <NavItem onClick={openWebWalletDashboard} isExternal>
-                <WalletIcon /> Wallet Dashboard
-              </NavItem>
-            )}
 
             {appConfig.get('Url.bugReport') && (
               <NavItem onClick={openHelpChannel} isExternal>
@@ -602,7 +583,7 @@ const Launcher = (props) => {
                   <LeftIcon connecting={loginPrompt?.busy} connected={authenticated}>
                     {loginPrompt?.busy ? <Loader color="currentColor" size="0.9em" /> : <UserIcon />}
                   </LeftIcon>
-                  <label>{loginPrompt?.busy ? 'Logging In' : (isNew ? 'Existing Account' : 'Log-In')}</label>
+                  <label>{loginPrompt?.busy ? loginPrompt?.label : (isNew ? 'Existing Account' : 'Log-In')}</label>
                   <RightIcon expanded={loginPrompt?.open}><ChevronDoubleRightIcon /></RightIcon>
                 </AccountButton>
                 <LoginPrompt

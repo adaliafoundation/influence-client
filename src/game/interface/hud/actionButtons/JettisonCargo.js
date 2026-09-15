@@ -52,4 +52,6 @@ const JettisonCargo = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dial
   );
 };
 
-export default { Component: JettisonCargo, isVisible };
+const actionDefinition = { Component: JettisonCargo, isVisible };
+
+export default actionDefinition;

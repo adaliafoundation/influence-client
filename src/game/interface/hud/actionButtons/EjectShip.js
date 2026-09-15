@@ -55,4 +55,6 @@ const EjectShip = ({ asteroid, blockTime, crew, lot, ship, onSetAction, _disable
   );
 };
 
-export default { Component: EjectShip, isVisible };
+const actionDefinition = { Component: EjectShip, isVisible };
+
+export default actionDefinition;

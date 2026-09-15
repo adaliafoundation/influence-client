@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useQuery, useQueryClient,  } from '@tanstack/react-query';
 import { Entity, Lot, Permission, Ship } from '@influenceth/sdk';
 

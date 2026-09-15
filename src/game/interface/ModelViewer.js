@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ACESFilmicToneMapping, AgXToneMapping, AnimationMixer, Box3, CineonToneMapping, Color,
-  DirectionalLight, EquirectangularReflectionMapping, LinearToneMapping, LoopRepeat,
-  NeutralToneMapping, NoToneMapping, Raycaster, ReinhardToneMapping, Vector2, Vector3
-} from 'three';
+import { AnimationMixer, Box3, Color, DirectionalLight, EquirectangularReflectionMapping, LoopRepeat, Raycaster, Vector2, Vector3 } from 'three';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';

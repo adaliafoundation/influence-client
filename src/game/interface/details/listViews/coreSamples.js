@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Entity, Lot, Product } from '@influenceth/sdk';
+import { Lot, Product } from '@influenceth/sdk';
 
 import { MyAssetIcon } from '~/components/Icons';
 import useSession from '~/hooks/useSession';

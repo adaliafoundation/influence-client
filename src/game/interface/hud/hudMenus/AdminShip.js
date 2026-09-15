@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import styled from 'styled-components';
-import { Entity, Permission } from '@influenceth/sdk';
+import { Entity } from '@influenceth/sdk';
 
 import useLot from '~/hooks/useLot';
 import useShip from '~/hooks/useShip';

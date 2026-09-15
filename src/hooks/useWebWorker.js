@@ -58,7 +58,7 @@ class WorkerThread {
   }
 }
 
-class WorkerThreadPool {
+export class WorkerThreadPool {
   constructor(tally) {
     this.workers = [...Array(tally)].map(_ => new WorkerThread());
     this.available = [...this.workers];
@@ -84,6 +84,8 @@ class WorkerThreadPool {
 
   addToQueue(workItem, resolve, transfer, options = {}) {
     const meta = {
+      onTiming: options.onTiming,
+      queuedAt: options.onTiming ? performance.now() : undefined,
       group: options.group ?? workItem._concurrencyGroup ?? null,
       id: workIds++,
       maxConcurrent: options.maxConcurrent ?? workItem._maxConcurrent ?? Infinity,
@@ -147,6 +149,7 @@ class WorkerThreadPool {
       const w = this.available.pop();
       const { workItem, resolve: workResolve, transfer, ...work } = this.workQueue.splice(nextIndex, 1)[0];
 
+      const startedAt = work.onTiming ? performance.now() : undefined;
       this.trackWorkStart(w, work);
 
       w.postMessage(
@@ -154,6 +157,12 @@ class WorkerThreadPool {
         (v) => {
           this.trackWorkEnd(w);
           this.available.push(w);
+          if (work.onTiming) {
+            work.onTiming({
+              queueMs: startedAt - work.queuedAt,
+              executionMs: performance.now() - startedAt
+            });
+          }
           if (workResolve) workResolve(v);
           this.processQueue();
         },

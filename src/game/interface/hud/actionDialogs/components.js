@@ -31,41 +31,7 @@ import CrewIndicator from '~/components/CrewIndicator';
 import CrewLocationLabel from '~/components/CrewLocationLabel';
 import Dialog from '~/components/Dialog';
 import IconButton from '~/components/IconButton';
-import {
-  ChevronRightIcon,
-  CloseIcon,
-  CrewIcon,
-  DeltaVIcon,
-  FastForwardIcon,
-  LocationIcon,
-  PlusIcon,
-  WarningOutlineIcon,
-  SurfaceTransferIcon,
-  TransferToSiteIcon,
-  GasIcon,
-  SwayIcon,
-  RadioCheckedIcon,
-  RadioUncheckedIcon,
-  MyAssetIcon,
-  CaptainIcon,
-  EmergencyModeEnterIcon,
-  TargetIcon,
-  ProductionIcon,
-  WarningIcon,
-  CoreSampleIcon,
-  ResourceIcon,
-  CheckedIcon,
-  UncheckedIcon,
-  ScheduleFullIcon,
-  CheckSmallIcon,
-  MarketBuyIcon,
-  InventoryIcon,
-  CaretIcon,
-  ShipIcon,
-  BuildingIcon,
-  ConstructIcon,
-  InfoIcon
-} from '~/components/Icons';
+import { ChevronRightIcon, CloseIcon, CrewIcon, DeltaVIcon, FastForwardIcon, LocationIcon, PlusIcon, WarningOutlineIcon, SurfaceTransferIcon, TransferToSiteIcon, GasIcon, SwayIcon, RadioCheckedIcon, RadioUncheckedIcon, MyAssetIcon, CaptainIcon, EmergencyModeEnterIcon, TargetIcon, ProductionIcon, WarningIcon, CoreSampleIcon, ResourceIcon, CheckedIcon, UncheckedIcon, ScheduleFullIcon, CheckSmallIcon, MarketBuyIcon, InventoryIcon, CaretIcon, ShipIcon, ConstructIcon, InfoIcon } from '~/components/Icons';
 import LiveTimer from '~/components/LiveTimer';
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';
 import ResourceColorIcon from '~/components/ResourceColorIcon';
@@ -1757,7 +1723,7 @@ const SelectionTableToggle = styled.div`
 `;
 
 export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, onClose, onSelected, open }) => {
-  const { accountCrewIds, crew } = useCrewContext();
+  const { accountCrewIds } = useCrewContext();
   const [selection, setSelection] = useState(initialSelection);
   const [showForSale, setShowForSale] = useState(true);
   const [showUsed, setShowUsed] = useState(true);
@@ -2677,7 +2643,6 @@ export const InventorySelectionDialog = ({
                   </div>
                 )
             ),
-            noMinWidth: true,
           }
           : null
       ),
@@ -3017,15 +2982,7 @@ const OrderSelectionTable = ({ orders, productId, onSelected, selected }) => {
   );
 };
 
-export const OrderSelectionDialog = ({
-  asteroidId,
-  otherEntity,
-  maxAmount,
-  onClose,
-  onCompleted,
-  open,
-  productId
-}) => {
+export const OrderSelectionDialog = ({ asteroidId, otherEntity, maxAmount, onClose, onCompleted, open, productId }) => {
   const { crew } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
@@ -3056,7 +3013,6 @@ export const OrderSelectionDialog = ({
   const {
     data: resourceMarketplaces,
     dataUpdatedAt: resourceMarketplacesUpdatedAt,
-    isLoading: resourceMarketplacesLoading,
     refetch: refetchResourceMarketplaces
   } = useShoppingListData(asteroidId, destLotId, [productId]);
   const exchanges = useMemo(() => resourceMarketplaces?.[productId] || [], [resourceMarketplacesUpdatedAt]);
@@ -3064,6 +3020,8 @@ export const OrderSelectionDialog = ({
   useInterval(() => { refetchResourceMarketplaces(); }, 60e3); // keep things loosely fresh
 
   const orders = useMemo(() => {
+    if (targetAmount <= 0) return [];
+
     return exchanges.reduce((aggOrders, row) => {
       const exchangeDistance = Asteroid.getLotDistance(asteroidId, Lot.toIndex(row.lotId), Lot.toIndex(destLotId));
       const exchangeTravelTime = Time.toRealDuration(
@@ -3086,6 +3044,8 @@ export const OrderSelectionDialog = ({
           );
 
           const fill = fills[0];
+          if (!fill) return null;
+
           fill.price = fill.price * TOKEN_SCALE[TOKEN.SWAY];
           return {
             _orderPath: `${fill.crew.uuid}.${fill.entity.uuid}.${fill.orderType}.${fill.product}.${fill.price}.${fill.storage.uuid}.${fill.storageSlot}`,
@@ -3096,6 +3056,8 @@ export const OrderSelectionDialog = ({
             ...fill,
           };
         })
+
+        .filter(Boolean)
 
         .sort((a, b) => a._adjUnitPrice - b._adjUnitPrice)
 
@@ -4035,7 +3997,7 @@ export const ResourceGridSectionInner = ({
   style,
   theming = 'default'
 }) => {
-  const { totalItems, totalMass, totalVolume } = useMemo(() => {
+  const { totalMass, totalVolume } = useMemo(() => {
     return items.reduce((acc, { i, numerator, denominator, selected }) => {
       if (!Product.TYPES[i]) {
         console.error(`Product #${i} invalid`)
@@ -4244,13 +4206,7 @@ export const TransferDistanceDetails = ({ distance, crewDistBonus }) => {
 export const ProgressBarSection = ({
   finishTime,
   isCountDown,
-  overrides = {
-    barColor: null,
-    color: null,
-    left: '',
-    center: '',
-    right: ''
-  },
+  overrides = { barColor: null, color: null, left: '', center: '', right: '' },
   stage,
   startTime,
   title,
@@ -5659,7 +5615,7 @@ const extractBonuses = (bonusObj, isTimeStat) => {
       direction: getBonusDirection({ totalBonus: multiplier })
     });
   }
-  Object.keys(bonusObj.titles || {}).map((titleId) => {
+  Object.keys(bonusObj.titles || {}).forEach((titleId) => {
     const { matches, bonus, /* bonusPerMatch */ } = bonusObj.titles[titleId];
     x.push({
       text: `${Crewmate.getTitle(titleId)?.name} on Crew (x${matches})`,
@@ -5667,7 +5623,7 @@ const extractBonuses = (bonusObj, isTimeStat) => {
       direction: getBonusDirection({ totalBonus: 1 + timeMult * bonus }, !isTimeStat)
     });
   });
-  Object.keys(bonusObj.traits || {}).map((traitId) => {
+  Object.keys(bonusObj.traits || {}).forEach((traitId) => {
     const { matches, bonus, /* bonusPerMatch */ } = bonusObj.traits[traitId];
     x.push({
       text: `${Crewmate.getTrait(traitId)?.name} (x${matches})`,

@@ -90,4 +90,6 @@ const StationCrew = ({ accountCrewIds, asteroid, blockTime, crew, lot, ship, onS
   );
 };
 
-export default { Component: StationCrew, isVisible };
+const actionDefinition = { Component: StationCrew, isVisible };
+
+export default actionDefinition;

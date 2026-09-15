@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Building, Crewmate, Inventory, Lot, Time } from '@influenceth/sdk';
+import { Building, Crewmate, Inventory, Lot } from '@influenceth/sdk';
 
 import {
   DeconstructIcon,
@@ -8,22 +8,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
 import { reactBool, formatTimer, formatFixed, getCrewAbilityBonuses } from '~/lib/utils';
 
-import {
-  DeconstructionMaterialsSection,
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  BonusTooltip,
-  getBonusDirection,
-  TravelBonusTooltip,
-  ActionDialogBody,
-  ProgressBarSection,
-  FlexSection,
-  getBuildingRequirements,
-  LotInputBlock,
-  MaterialBonusTooltip,
-  formatTimeRequirements
-} from './components';
+import { DeconstructionMaterialsSection, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, getBonusDirection, TravelBonusTooltip, ActionDialogBody, ProgressBarSection, FlexSection, getBuildingRequirements, LotInputBlock, MaterialBonusTooltip, formatTimeRequirements } from './components';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import actionStage from '~/lib/actionStages';
 import { getTripDetails } from './components';

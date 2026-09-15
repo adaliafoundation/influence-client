@@ -24,4 +24,6 @@ const ViewAgreements = ({ entity, permission, tally, _disabled }) => {
   );
 };
 
-export default { Component: ViewAgreements, isVisible };
+const actionDefinition = { Component: ViewAgreements, isVisible };
+
+export default actionDefinition;

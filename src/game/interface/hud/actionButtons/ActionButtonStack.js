@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import styled, { css } from 'styled-components';
 
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';

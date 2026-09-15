@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Asteroid, Building, Deposit, Lot, Product } from '@influenceth/sdk';
 
-import { CheckIcon, CheckedIcon, CoreSampleIcon, MyAssetIcon, PlusIcon, ResourceIcon, SwayIcon, UncheckedIcon } from '~/components/Icons';
+import { CheckedIcon, CoreSampleIcon, MyAssetIcon, PlusIcon, ResourceIcon, SwayIcon, UncheckedIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useCoreSampleManager from '~/hooks/actionManagers/useCoreSampleManager';
 import useExtractionManager from '~/hooks/actionManagers/useExtractionManager';
@@ -14,7 +14,7 @@ import useStore from '~/hooks/useStore';
 import { formatFixed, formatPrice, keyify } from '~/lib/utils';
 import theme, { hexToRGB } from '~/theme';
 import actionButtons from '../../actionButtons';
-import { HudMenuCollapsibleSection, Scrollable, Tray, trayHeight } from './components';
+import { HudMenuCollapsibleSection, Scrollable, Tray } from './components';
 import Button from '~/components/ButtonAlt';
 import EntityLink from '~/components/EntityLink';
 import { ListForSaleInner } from './ListForSalePanel';

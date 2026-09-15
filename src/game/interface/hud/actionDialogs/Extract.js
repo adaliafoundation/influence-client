@@ -4,7 +4,7 @@ import { Asteroid, Crewmate, Deposit, Extractor, Inventory, Lot, Permission, Pro
 import cloneDeep from 'lodash/cloneDeep';
 
 import { CrewCaptainCardFramed } from '~/components/CrewmateCardFramed';
-import { AgreementIcon, CoreSampleIcon, ExtractionIcon, InfoIcon, InventoryIcon, LocationIcon, ResourceIcon, SwayIcon, SwayMonochromeIcon, WarningIcon } from '~/components/Icons';
+import { AgreementIcon, CoreSampleIcon, ExtractionIcon, InventoryIcon, LocationIcon, ResourceIcon, SwayIcon, WarningIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useActionCrew from '~/hooks/useActionCrew';
 import useBlockTime from '~/hooks/useBlockTime';
@@ -16,43 +16,10 @@ import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
 import actionStage from '~/lib/actionStages';
 import formatters from '~/lib/formatters';
-import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed, keyify, getProcessorLeaseConfig, getProcessorLeaseSelections } from '~/lib/utils';
+import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed, getProcessorLeaseConfig, getProcessorLeaseSelections } from '~/lib/utils';
 import theme from '~/theme';
 import { ActionDialogInner, theming, useAsteroidAndLot } from '../ActionDialog';
-import {
-  ResourceAmountSlider,
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  getBonusDirection,
-  formatResourceVolume,
-  formatSampleMass,
-  formatSampleVolume,
-  TravelBonusTooltip,
-  TimeBonusTooltip,
-  ActionDialogBody,
-  FlexSection,
-  FlexSectionInputBlock,
-  EmptyResourceImage,
-  FlexSectionSpacer,
-  Section,
-  SectionTitle,
-  SectionBody,
-  ProgressBarSection,
-  CoreSampleSelectionDialog,
-  SublabelBanner,
-  InventorySelectionDialog,
-  InventoryInputBlock,
-  TransferDistanceDetails,
-  getTripDetails,
-  BuildingInputBlock,
-  LeaseTooltip,
-  LeaseDetailsLabel,
-  BuyingDetailsLabel,
-  LeaseInfoIcon,
-  AssetSellerIndicator,
-  formatTimeRequirements
-} from './components';
+import { ResourceAmountSlider, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, getBonusDirection, formatResourceVolume, formatSampleMass, formatSampleVolume, TravelBonusTooltip, TimeBonusTooltip, ActionDialogBody, FlexSection, FlexSectionInputBlock, EmptyResourceImage, FlexSectionSpacer, Section, SectionTitle, SectionBody, ProgressBarSection, CoreSampleSelectionDialog, SublabelBanner, InventorySelectionDialog, InventoryInputBlock, TransferDistanceDetails, getTripDetails, BuildingInputBlock, LeaseTooltip, LeaseDetailsLabel, BuyingDetailsLabel, AssetSellerIndicator, formatTimeRequirements } from './components';
 
 const SampleAmount = styled.span`
   color: ${p => p.theme.colors.depositSize};

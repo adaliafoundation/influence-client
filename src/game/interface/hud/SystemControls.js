@@ -259,7 +259,7 @@ const SystemControls = () => {
     refetchSwayBalance();
   }, [refetchSwayBalance]);
 
-  const { hasNoPublicKey, unreadTally } = useWalletInbox();
+  const { unreadTally } = useWalletInbox();
 
   return (
     <StyledSystemControls id="topMenu">
@@ -313,7 +313,6 @@ const SystemControls = () => {
 
       <IconButton
         badge={launcherPage ? 0 : unreadTally}
-        badgeProps={accountAddress && hasNoPublicKey ? { color: 'errorRGB', isDot: true, showOnZero: !launcherPage } : {}}
         onClick={onToggleLauncher}
         style={{ fontSize: 17 }}>
         {launcherPage ? <FaCaretRight /> : <MenuIcon />}

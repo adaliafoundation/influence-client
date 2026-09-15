@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { ACESFilmicToneMapping, AxesHelper, CameraHelper, Color, DirectionalLight, DirectionalLightHelper, Quaternion, Vector3 } from 'three';
+import { AxesHelper, CameraHelper, Color, DirectionalLight, DirectionalLightHelper, Vector3 } from 'three';
 import gsap from 'gsap';
 import { AdalianOrbit, Asteroid, Entity, Lot, Product, Ship } from '@influenceth/sdk';
 
@@ -10,8 +10,12 @@ import useGetTime from '~/hooks/useGetTime';
 import useWebWorker from '~/hooks/useWebWorker';
 import Config from '~/lib/asteroidConfig';
 import constants from '~/lib/constants';
+import terrainPerformance from '~/lib/terrainPerformance';
 import theme from '~/theme';
 import QuadtreeTerrainCube from './asteroid/helpers/QuadtreeTerrainCube';
+import TerrainCameraMotion from './asteroid/helpers/TerrainCameraMotion';
+import { createLotCameraPath } from './asteroid/helpers/LotCameraPath';
+import { asteroidZoomVisual, createAsteroidZoomPath, pointOpacityForDistance } from './asteroid/helpers/AsteroidZoom';
 import Lots from './asteroid/Lots';
 import Rings from './asteroid/Rings';
 import Telemetry from './asteroid/Telemetry';
@@ -23,25 +27,7 @@ import visualConfigs from '~/lib/visuals';
 
 const validateHex = (v) => /[a-f0-9]{6}/i.test(v) ? v : '';
 
-const trajDebugColors = [
-  0xe81416,
-  0xffa500,
-  0xfaeb36,
-  0x79c314,
-  0x487de7,
-  0x4b369d,
-  0x70369d,
-  0xffffff,
-  0xcccccc,
-  0x999999,
-  0x555555
-];
-
-const {
-  CHUNK_SPLIT_DISTANCE,
-  MIN_FRUSTUM_AT_SURFACE,
-  UPDATE_QUADTREE_EVERY,
-} = constants;
+const { CHUNK_SPLIT_DISTANCE, MIN_FRUSTUM_AT_SURFACE, UPDATE_QUADTREE_EVERY } = constants;
 
 const UPDATE_DISTANCE_MULT = CHUNK_SPLIT_DISTANCE * UPDATE_QUADTREE_EVERY;
 
@@ -53,12 +39,16 @@ const DIRECTIONAL_LIGHT_DISTANCE = 10;
 const LIGHT_ANIMATION_TIME = 500;
 export const ZOOM_IN_ANIMATION_TIME = 3000;
 export const ZOOM_OUT_ANIMATION_TIME = 2000;
-export const ZOOM_TO_PLOT_ANIMATION_MIN_TIME = 350;
-export const ZOOM_TO_PLOT_ANIMATION_MAX_TIME = 5000;
+export const ZOOM_TO_PLOT_ANIMATION_MIN_TIME = 600;
+export const ZOOM_TO_PLOT_ANIMATION_MAX_TIME = 7500;
 const ZOOM_TO_PLOT_DRAMATIC_MULT = 3;
 
 // some numbers estimated from https://web.dev/rendering-performance/
 const TARGET_FPS = 60;
+const MAX_CHUNK_ALLOCATIONS_PER_FRAME = 4;
+const MAX_PREPARING_CHUNKS = 8;
+const CHUNK_ALLOCATION_BUDGET_MS = 2;
+const MOVING_PREPARATION_BUDGET_MS = 5;
 const USABLE_FRAME = 0.6; // leave time for GPU housekeeping, etc
 const INITIAL_RENDER_WO_SWAP_EST = 2;
 const INITIAL_RENDER_W_SWAP_EST = 2.5;
@@ -139,7 +129,7 @@ const EMISSIVE_INTENSITY = {
 };
 
 const AsteroidComponent = () => {
-  const { controls } = useThree();
+  const { controls, gl, camera, scene } = useThree();
   const cinematicInitialPosition = useStore(s => s.asteroids.cinematicInitialPosition);
   const origin = useStore(s => s.asteroids.origin);
   const { textureSize } = useStore(s => s.getTerrainQuality());
@@ -201,6 +191,7 @@ const AsteroidComponent = () => {
   const debug = useRef(); // TODO: remove
   const chunkSwapThisCycle = useRef();
   const geometry = useRef();
+  const terrainCameraMotion = useRef(new TerrainCameraMotion());
   const group = useRef();
   const light = useRef();
   const lockToSurface = useRef();
@@ -366,6 +357,10 @@ const AsteroidComponent = () => {
       // if geometry.current already exists, dispose first
       if (geometry.current) disposeGeometry();
       geometry.current = new QuadtreeTerrainCube(origin, c, textureSize, webWorkerPool);
+      geometry.current.builder.maxConcurrent = 1;
+      geometry.current.builder.skirtsEnabled = true;
+      setTerrainInitialized(false);
+      group.current.position.set(...position.current);
       geometry.current.groups.forEach((g) => {
         quadtreeRef.current.add(g);
       });
@@ -413,6 +408,10 @@ const AsteroidComponent = () => {
       disposeLight();
 
       geometry.current = new QuadtreeTerrainCube(origin, config, textureSize, webWorkerPool);
+      geometry.current.builder.maxConcurrent = 1;
+      geometry.current.builder.skirtsEnabled = true;
+      setTerrainInitialized(false);
+      group.current.position.set(...position.current);
       geometry.current.groups.forEach((g) => {
         quadtreeRef.current.add(g);
       });
@@ -484,7 +483,73 @@ const AsteroidComponent = () => {
     }
   }, [zoomStatus]);
 
-  const shouldZoomIn = zoomStatus === 'zooming-in' && controls && config?.radius;
+  const animateAsteroidZoom = (destination, duration, onComplete, trackAsteroid = false) => {
+    selectedLotTween.current?.kill();
+    selectedLotTween.current = null;
+    gsap.killTweensOf([controls.object.position, controls.object.up, controls.targetScene.position]);
+    const camera = controls.object;
+    const currentCenter = group.current.position.clone();
+    const sample = createAsteroidZoomPath({
+      center: currentCenter.clone(),
+      centerOnArrival: trackAsteroid,
+      start: { position: camera.position, up: camera.up, scene: controls.targetScene.position },
+      end: destination,
+      radius: config.radius * maxStretch,
+      fov: camera.fov
+    });
+    const wasEnabled = controls.enabled;
+    controls.enabled = false;
+    automatingCamera.current = true;
+    const progress = { value: 0 };
+    asteroidZoomVisual.asteroidId = origin;
+    asteroidZoomVisual.active = true;
+    asteroidZoomVisual.completed = false;
+    asteroidZoomVisual.direction = trackAsteroid ? 'zooming-in' : 'zooming-out';
+    const apply = () => {
+      if (trackAsteroid) {
+        currentCenter.fromArray(position.current);
+        group.current.position.copy(currentCenter);
+      }
+      const distance = sample(progress.value, camera, controls.targetScene, currentCenter);
+      camera.lookAt(controls.target);
+      asteroidZoomVisual.pointOpacity = pointOpacityForDistance(distance, config.radius * maxStretch, camera.fov);
+    };
+    apply();
+    const tween = gsap.to(progress, {
+      value: 1, duration, ease: 'none',
+      onUpdate: apply,
+      onComplete: () => {
+        automatingCamera.current = false;
+        asteroidZoomVisual.active = false;
+        asteroidZoomVisual.completed = true;
+        asteroidZoomVisual.pointOpacity = trackAsteroid ? 0 : 1;
+        // Install destination settings before a controls update can clamp the camera.
+        onComplete();
+        controls.enabled = wasEnabled;
+      }
+    });
+    return () => {
+      tween.kill();
+      controls.enabled = wasEnabled;
+      automatingCamera.current = false;
+      asteroidZoomVisual.active = false;
+    };
+  };
+
+  const configureAsteroidControls = () => {
+    // Update distances to maximize precision
+    controls.minDistance = config.radius * MIN_ZOOM_DEFAULT;
+    controls.maxDistance = Math.max(config.radius * MAX_ZOOM, INITIAL_ZOOM * 1.2);
+
+    // set zoom speed for this scale
+    controls.zoomSpeed = 1.2 * Math.pow(0.4, Math.log(config?.radiusNominal / 1000) / Math.log(9));
+    controls.object.near = 100;
+
+    controls.object.updateProjectionMatrix();
+    controls.noPan = true;
+  };
+
+  const shouldZoomIn = zoomStatus === 'zooming-in' && controls && config?.radius && terrainInitialized;
   useEffect(() => {
     if (!shouldZoomIn || !initialOrientation || !config) return;
     if (!group.current || !position.current) return;
@@ -503,29 +568,16 @@ const AsteroidComponent = () => {
 
     group.current.position.copy(new Vector3(...position.current));
 
-    // TODO: zoomingDuration should probably be distance-dependent
-    const zoomingDuration = ZOOM_IN_ANIMATION_TIME / 1e3;
-    const timeline = gsap.timeline({
-      defaults: { duration: zoomingDuration, ease: 'power4.out' },
-      onComplete: () => {
-        // console.log('on complete');
-        updateZoomStatus('in', true);
-      }
-    });
-
-    // Pan the target scene to center the asteroid
-    // (not full duration because we want scene to beat camera to place)
-    timeline.to(controls.targetScene.position, { ...initialOrientation.targetScenePosition, duration: zoomingDuration - 0.25 }, 0);
-
-    // Zoom in the camera to the asteroid
-    timeline.to(controls.object.position, { ...initialOrientation.objectPosition }, 0);
-
-    // Set Up
-    timeline.to(controls.object.up, { ...initialOrientation.objectUp, ease: 'slow.out' }, 0);
-
-    // make sure can see asteroid as zoom
     controls.object.near = 100;
     controls.object.updateProjectionMatrix();
+    return animateAsteroidZoom({
+      position: initialOrientation.objectPosition,
+      up: initialOrientation.objectUp,
+      scene: initialOrientation.targetScenePosition
+    }, ZOOM_IN_ANIMATION_TIME / 1e3, () => {
+      configureAsteroidControls();
+      updateZoomStatus('in', true);
+    }, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ shouldZoomIn, !initialOrientation ]);
 
@@ -537,20 +589,11 @@ const AsteroidComponent = () => {
     group.current?.position.copy(panTo);
     panTo.negate();
 
-    controls.targetScene.position.copy(initialOrientation.targetScenePosition);
+    controls.targetScene.position.copy(panTo);
     controls.object.position.copy(initialOrientation.objectPosition);
     controls.object.up.copy(initialOrientation.objectUp);
 
-    // Update distances to maximize precision
-    controls.minDistance = config.radius * MIN_ZOOM_DEFAULT;
-    controls.maxDistance = Math.max(config.radius * MAX_ZOOM, INITIAL_ZOOM * 1.2);
-
-    // set zoom speed for this scale
-    controls.zoomSpeed = 1.2 * Math.pow(0.4, Math.log(config?.radiusNominal / 1000) / Math.log(9));
-    controls.object.near = 100;
-
-    controls.object.updateProjectionMatrix();
-    controls.noPan = true;
+    configureAsteroidControls();
 
     automatingCamera.current = false;
 
@@ -563,30 +606,17 @@ const AsteroidComponent = () => {
   // Handle zooming back out
   const shouldZoomOut = zoomStatus === 'zooming-out' && zoomedFrom && controls;
   useEffect(() => {
-    if (!shouldZoomOut) return;
+    if (!shouldZoomOut || !config || !group.current) return;
 
     controls.minDistance = 0;
     controls.maxDistance = 10 * constants.AU;
 
-    const timeline = gsap.timeline({
-      defaults: { duration: ZOOM_OUT_ANIMATION_TIME / 1e3, ease: 'power4.in' },
-      onComplete: () => {
-        controls.targetScene.position.copy(zoomedFrom.scene);
-        controls.object.position.copy(zoomedFrom.position);
-        controls.object.up.copy(zoomedFrom.up);
-        controls.object.near = 1000000;
-        controls.object.updateProjectionMatrix();
-        controls.noPan = false;
-        updateZoomStatus('out');
-      }
+    return animateAsteroidZoom(zoomedFrom, ZOOM_OUT_ANIMATION_TIME / 1e3, () => {
+      controls.object.near = 1000000;
+      controls.object.updateProjectionMatrix();
+      controls.noPan = false;
+      updateZoomStatus('out');
     });
-
-    // Pan the scene back to the original orientation
-    timeline.to(controls.targetScene.position, { ...zoomedFrom.scene }, 0);
-
-    // Zoom the camera out and put it right side up
-    timeline.to(controls.object.position, { ...zoomedFrom.position }, 0);
-    timeline.to(controls.object.up, { ...zoomedFrom.up }, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ shouldZoomOut ]);
 
@@ -801,8 +831,6 @@ const AsteroidComponent = () => {
     }
   }, [cameraNeedsHighAltitude]);
 
-  const [debugTrajectory, setDebugTrajectory] = useState([]);
-
   const automatingCamera = useRef();
   const selectedLotTween = useRef();
   useEffect(() => {
@@ -906,67 +934,23 @@ const AsteroidComponent = () => {
         }
       }
 
-      const maxCoarseDisp = (config.dispWeight || 1) * (1 - config.fineDispFraction || 1);
-      // console.log({ maxCoarseDisp })
-      const lerpPoints = [];
-
-      if (radiansBetween > (config.radius > 5000 ? 0.5 : 1)) {
-        const midpointTally = Math.floor(12 * radiansBetween);
-        const quatA = (new Quaternion()).setFromUnitVectors(
-          new Vector3(0, 0, 1),
-          controls.object.position.clone().normalize()
-        );
-        const heightA = controls.object.position.length();
-        const quatB = (new Quaternion()).setFromUnitVectors(
-          new Vector3(0, 0, 1),
-          lotPosition.clone().normalize()
-        );
-        const heightB = lotPosition.length();
-
-        for (let i = 0; i < midpointTally; i++) {
-          const lerp = (i + 1) / (midpointTally + 1);
-
-          const midQ = quatA.clone().slerp(quatB, lerp).normalize();
-          const midpoint = new Vector3(0, 0, 1).applyQuaternion(midQ);
-
-          // get simple lerp height between initial camera position and final
-          const lerpHeight = heightA * (1 - lerp) + heightB * lerp;
-
-          // guesstimate a safe min height based on asteroid surface distortion
-          const safeHeight = midpoint.clone().applyAxisAngle(rotationAxis.current, -willBeRotation);  // get unrotated position so can stretch properly
-          safeHeight.setLength(config.radius).multiply(config.stretch); // best guess of highest possible surface at midpoint
-          safeHeight.setLength(safeHeight.length() * (1 + maxCoarseDisp) + targetAltitude); // aim for target altitude
-
-          // apply the height to the minpoint
-          midpoint.setLength(Math.max(lerpHeight, safeHeight.length()));
-          lerpPoints.push({ ...midpoint });
-        }
-
-        // add final destination
-        lerpPoints.push({ ...lotPosition });
-
-        // setDebugTrajectory(lerpPoints);
-
-        // create a linear animation sequence
-        const timeline = gsap.timeline({
-          paused: true,
-          onComplete: onZoomComplete
-        });
-        lerpPoints.forEach((p) => timeline.to(controls.object.position, { ...p, ease: 'linear' }));
-
-        // run the timeline as a single animation
-        selectedLotTween.current = gsap.to(timeline, animationTime / 1e3, { progress: 1, ease: 'power4.out' });
-
-      } else {
-        selectedLotTween.current = gsap.timeline({
-          defaults: {
-            duration: animationTime / 1e3,
-            ease: 'power1.out' // power>1.out seems to have bounce artifact for short trips
-          },
-          onComplete: onZoomComplete
-        })
-        .to(controls.object.position, { ...lotPosition });
-      }
+      const samplePath = createLotCameraPath({
+        start: controls.object.position,
+        end: lotPosition,
+        radius: config.radius,
+        stretch: config.stretch,
+        rotationAxis: rotationAxis.current,
+        rotation: willBeRotation,
+        displacement: (config.dispWeight || 1) * (1 - config.fineDispFraction || 1)
+      });
+      const travel = { progress: 0 };
+      selectedLotTween.current = gsap.to(travel, {
+        progress: 1,
+        duration: animationTime / 1e3,
+        ease: 'none',
+        onUpdate: () => samplePath(travel.progress, controls.object.position),
+        onComplete: onZoomComplete
+      });
     }
   }, [cameraRecenterTimestamp, zoomedIntoAsteroidId, origin, selectedLot, config?.radiusNominal, zoomStatus]);
 
@@ -978,13 +962,17 @@ const AsteroidComponent = () => {
 
   // Positions the asteroid in space based on time changes
   useFrame((state) => {
+    chunkSwapThisCycle.current = false;
     if (!asteroidData) return;
     if (!geometry.current?.builder?.ready) return;
+    if (!geometry.current.cameraPosition) {
+      geometry.current.initializeCoarseTerrain();
+      return;
+    }
 
     const frameStart = getNow();
 
     let updatedMapsThisCycle = false;
-    chunkSwapThisCycle.current = false;
 
     // vvv BENCHMARK <0.1ms
     // update asteroid position
@@ -1063,19 +1051,39 @@ const AsteroidComponent = () => {
     rotatedCameraPosition.applyAxisAngle(rotationAxis.current, -rotation.current);
     // ^^^
 
+    const cameraMoving = terrainCameraMotion.current.update(
+      rotatedCameraPosition,
+      controls.object.up.clone().applyAxisAngle(rotationAxis.current, -rotation.current),
+      automatingCamera.current,
+      performance.now()
+    );
+
     // if builder is working on an update, manage within frame rate
-    if (!automatingCamera.current && geometry.current.builder.isUpdating()) {
+    if (geometry.current.builder.isUpdating()) {
       // keep building maps until maps are ready (some per frame)
       if (geometry.current.builder.isWaitingOnMaps()) {
         // TODO: (redo) vvv BENCHMARK (~1ms / max frameTimeLeftms)
-        geometry.current.builder.updateMaps(Date.now() + frameTimeLeft(frameStart, false));
+        const preparationBudget = Math.min(
+          cameraMoving ? MOVING_PREPARATION_BUDGET_MS : Infinity,
+          frameTimeLeft(frameStart, false)
+        );
+        geometry.current.builder.updateMaps(Date.now() + preparationBudget, {
+          renderer: gl,
+          camera,
+          scene,
+          maxPreparedChunks: cameraMoving ? 2 : Infinity,
+          completeChunks: true,
+          allowFallback: !cameraMoving
+        });
         // ^^^
 
         updatedMapsThisCycle = true;
       }
 
+      geometry.current.builder.trackSwapWait(automatingCamera.current);
+
       // when ready to finish, actually run chunk swap
-      if (!geometry.current.builder.isWaitingOnMaps()) {
+      if (!automatingCamera.current && !geometry.current.builder.isWaitingOnMaps()) {
 
         // if this is the only thing doing this cycle, have to always do it (even if not enough time)
         // if this was also processing maps this cycle, can bump chunk swap to next loop if helpful
@@ -1162,12 +1170,14 @@ const AsteroidComponent = () => {
       }
     }
 
-    // if not processing an update already, and camera is not currently moving, process next change for cube
+    // Prepare destination chunks during flights, but keep visible swaps paused above.
     if (frameTimeLeft(frameStart, chunkSwapThisCycle.current) <= 0) return;
-    if (!automatingCamera.current && !geometry.current.builder.isUpdating() && !settingCameraPosition.current) {
-      // vvv BENCHMARK <0.1ms
-      geometry.current.processNextQueuedChange();
-      // ^^^
+    if ((geometry.current.pendingChange || !geometry.current.builder.isUpdating()) && !settingCameraPosition.current) {
+      const allocationBudget = Math.min(CHUNK_ALLOCATION_BUDGET_MS, frameTimeLeft(frameStart, chunkSwapThisCycle.current));
+      geometry.current.processNextQueuedChange(
+        Math.min(MAX_CHUNK_ALLOCATIONS_PER_FRAME, Math.max(0, MAX_PREPARING_CHUNKS - geometry.current.builder.preparingChunks)),
+        performance.now() + allocationBudget
+      );
     }
 
     // dbg('frame loop', frameStart);
@@ -1189,10 +1199,14 @@ const AsteroidComponent = () => {
 
   // NOTE: useFrame 2 is renderer w/ postprocessor
   useFrame(() => {
-    reportRenderTime(
-      chunkSwapThisCycle.current ? 'W_SWAP' : 'WO_SWAP',
-      getNow() - renderTimer.current
-    );
+    const renderDuration = getNow() - renderTimer.current;
+    reportRenderTime(chunkSwapThisCycle.current ? 'W_SWAP' : 'WO_SWAP', renderDuration);
+    if (geometry.current) {
+      terrainPerformance.record(
+        chunkSwapThisCycle.current ? 'render CPU: swap frame' : 'render CPU: normal frame',
+        renderDuration
+      );
+    }
   }, 3);
 
   return (
@@ -1214,7 +1228,7 @@ const AsteroidComponent = () => {
       )}
 
       {/* TODO: fade telemetry out at higher zooms */}
-      {config?.radius && zoomStatus !== 'out' && initialOrientation?.objectPosition && (
+      {config?.radius && terrainInitialized && zoomStatus !== 'out' && initialOrientation?.objectPosition && (
         <Telemetry
           axis={rotationAxis.current}
           getPosition={() => position.current}
@@ -1253,16 +1267,7 @@ const AsteroidComponent = () => {
       )}
       {false && light.current?.shadow?.camera && <primitive object={new CameraHelper(light.current.shadow.camera)} />}
       {false && <primitive object={new AxesHelper(config?.radius * 2)} />}
-      {false && debugTrajectory?.length && (
-        <group>
-          {debugTrajectory.map((pos, i) => (
-            <mesh position={[ ...Object.values(pos) ]}>
-              <sphereGeometry args={[5000]} />
-              <meshBasicMaterial color={trajDebugColors[i % trajDebugColors.length]} opacity={0.8} transparent />
-            </mesh>
-          ))}
-        </group>
-      )}
+
     </group>
   );
 }

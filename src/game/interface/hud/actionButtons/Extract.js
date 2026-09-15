@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Deposit, Permission } from '@influenceth/sdk';
 
-import { CoreSampleIcon, ResourceIcon, ExtractionIcon } from '~/components/Icons';
+import { ExtractionIcon } from '~/components/Icons';
 import useExtractionManager from '~/hooks/actionManagers/useExtractionManager';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -94,4 +94,6 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
   );
 };
 
-export default { Component: Extract, isVisible };
+const actionDefinition = { Component: Extract, isVisible };
+
+export default actionDefinition;

@@ -8,6 +8,17 @@ import { Building, Entity, Lot } from '@influenceth/sdk';
 import constants from '~/lib/constants';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import { TOKEN } from '~/lib/priceUtils';
+import {
+  createStarterPackCheckoutState,
+  createStarterPackCustomizationDraft,
+  resizeStarterPackCustomizationDraft,
+  updateStarterPackCheckoutState
+} from '~/lib/starterPacks';
+import {
+  createCrewmatePurchaseCheckoutState,
+  createCrewmatePurchaseDraft,
+  updateCrewmatePurchaseCheckoutState
+} from '~/lib/crewmatePurchases';
 import { safeBigInt } from '~/lib/utils';
 import SIMULATION_CONFIG from '~/simulation/simulationConfig';
 import { appConfig } from '~/appConfig';
@@ -98,6 +109,7 @@ const useStore = create(
   subscribeWithSelector(
     persist((set, get) => ({
         actionDialog: {},
+        launcherDialogOptions: null,
         launcherPage: null,
         launcherSubpage: null,
         openHudMenu: null,
@@ -166,6 +178,12 @@ const useStore = create(
 
         chatHistory: [],
         bridgeTransfers: {},
+        activeFundingIntentId: null,
+        fundingIntents: {},
+        starterPackCheckout: null,
+        starterPackCustomizationDrafts: {},
+        crewmatePurchaseCheckout: null,
+        crewmatePurchaseDrafts: {},
 
         hasSeenIntroVideo: false,
         hiddenActionItems: [],
@@ -182,10 +200,9 @@ const useStore = create(
 
         gameplay: {
           activeCrewsDisplay: 'all', // selected, delegated, all
-          autoswap: true,
           dismissTutorial: false,
           feeToken: null, // deprecated
-          feeTokens: [TOKEN.SWAY, TOKEN.USDC],
+          feeTokens: [TOKEN.USDC],
           useSessions: null
         },
 
@@ -210,6 +227,7 @@ const useStore = create(
 
         failedTransactions: [],
         pendingTransactions: [],
+        paidFeeAcknowledgements: {},
 
         lotLoader: {
           id: null,
@@ -220,7 +238,6 @@ const useStore = create(
 
         referrer: null,
 
-        preferredUiCurrency: null,
 
         dmPrivateKey: null,
 
@@ -273,16 +290,19 @@ const useStore = create(
           state.actionDialog = { type, params };
         })),
 
-        dispatchLauncherPage: (page, subpage) => set(produce(state => {
+        dispatchLauncherPage: (page, subpage, dialogOptions = null) => set(produce(state => {
           if (['play', 'store', 'help', 'rewards', 'settings', 'inbox', 'bridge'].includes(page)) {
+            state.launcherDialogOptions = dialogOptions;
             state.launcherPage = page;
             state.launcherSubpage = subpage;
           }
           else if (page) {
+            state.launcherDialogOptions = null;
             state.launcherPage = 'play';
             state.launcherSubpage = null;
           }
           else {
+            state.launcherDialogOptions = null;
             state.launcherPage = null;
             state.launcherSubpage = null;
           }
@@ -540,6 +560,110 @@ const useStore = create(
           );
         })),
 
+        dispatchFundingIntentStarted: (intent) => set(produce(state => {
+          if (!intent?.id) return;
+          if (!state.fundingIntents) state.fundingIntents = {};
+          state.fundingIntents[intent.id] = {
+            ...intent,
+            updatedAt: Date.now()
+          };
+          state.activeFundingIntentId = intent.id;
+        })),
+        dispatchFundingIntentUpdated: (id, update) => set(produce(state => {
+          if (!id || !state.fundingIntents?.[id]) return;
+          state.fundingIntents[id] = {
+            ...state.fundingIntents[id],
+            ...update,
+            updatedAt: Date.now()
+          };
+        })),
+        dispatchFundingIntentCleared: (id) => set(produce(state => {
+          if (!id || !state.fundingIntents) return;
+          delete state.fundingIntents[id];
+          if (state.activeFundingIntentId === id) {
+            state.activeFundingIntentId = null;
+          }
+        })),
+
+        dispatchStarterPackCheckoutStarted: (purchase, update) => set(produce(state => {
+          state.starterPackCheckout = createStarterPackCheckoutState(purchase, update);
+        })),
+        dispatchStarterPackCheckoutUpdated: (purchase, update) => set(produce(state => {
+          state.starterPackCheckout = updateStarterPackCheckoutState(state.starterPackCheckout, purchase, update);
+        })),
+        dispatchStarterPackCheckoutCleared: () => set(produce(state => {
+          state.starterPackCheckout = null;
+        })),
+        dispatchStarterPackCustomizationDraftInitialized: (purchase) => set(produce(state => {
+          if (!purchase?.id) return;
+          if (!state.starterPackCustomizationDrafts) state.starterPackCustomizationDrafts = {};
+          const existingDraft = state.starterPackCustomizationDrafts[purchase.id];
+          state.starterPackCustomizationDrafts[purchase.id] = existingDraft
+            ? resizeStarterPackCustomizationDraft(existingDraft, purchase.requiredCrewmates)
+            : createStarterPackCustomizationDraft(purchase);
+        })),
+        dispatchStarterPackCustomizationDraftUpdated: (purchaseId, update) => set(produce(state => {
+          if (!purchaseId || !state.starterPackCustomizationDrafts?.[purchaseId]) return;
+          state.starterPackCustomizationDrafts[purchaseId] = {
+            ...state.starterPackCustomizationDrafts[purchaseId],
+            ...update,
+            updatedAt: Date.now()
+          };
+        })),
+        dispatchStarterPackCustomizationCrewmateUpdated: (purchaseId, index, update) => set(produce(state => {
+          const crewmate = state.starterPackCustomizationDrafts?.[purchaseId]?.crewmates?.[index];
+          if (!crewmate) return;
+          state.starterPackCustomizationDrafts[purchaseId].crewmates[index] = {
+            ...crewmate,
+            ...update
+          };
+          state.starterPackCustomizationDrafts[purchaseId].updatedAt = Date.now();
+        })),
+        dispatchStarterPackCustomizationDraftCleared: (purchaseId) => set(produce(state => {
+          if (!purchaseId || !state.starterPackCustomizationDrafts) return;
+          delete state.starterPackCustomizationDrafts[purchaseId];
+        })),
+        dispatchStarterPackStateReset: () => set(produce(state => {
+          state.starterPackCheckout = null;
+          state.starterPackCustomizationDrafts = {};
+        })),
+
+        dispatchCrewmatePurchaseCheckoutStarted: (purchase, update) => set(produce(state => {
+          state.crewmatePurchaseCheckout = createCrewmatePurchaseCheckoutState(purchase, update);
+        })),
+        dispatchCrewmatePurchaseCheckoutUpdated: (purchase, update) => set(produce(state => {
+          state.crewmatePurchaseCheckout = updateCrewmatePurchaseCheckoutState(state.crewmatePurchaseCheckout, purchase, update);
+        })),
+        dispatchCrewmatePurchaseCheckoutCleared: () => set(produce(state => {
+          state.crewmatePurchaseCheckout = null;
+        })),
+        dispatchCrewmatePurchaseDraftInitialized: (purchase) => set(produce(state => {
+          if (!purchase?.id) return;
+          if (!state.crewmatePurchaseDrafts) state.crewmatePurchaseDrafts = {};
+          state.crewmatePurchaseDrafts[purchase.id] = state.crewmatePurchaseDrafts[purchase.id] || createCrewmatePurchaseDraft(purchase);
+        })),
+        dispatchCrewmatePurchaseDraftUpdated: (purchaseId, update) => set(produce(state => {
+          if (!purchaseId || !state.crewmatePurchaseDrafts?.[purchaseId]) return;
+          state.crewmatePurchaseDrafts[purchaseId] = {
+            ...state.crewmatePurchaseDrafts[purchaseId],
+            ...update,
+            updatedAt: Date.now()
+          };
+        })),
+        dispatchCrewmatePurchaseCrewmateUpdated: (purchaseId, update) => set(produce(state => {
+          const crewmate = state.crewmatePurchaseDrafts?.[purchaseId]?.crewmate;
+          if (!crewmate) return;
+          state.crewmatePurchaseDrafts[purchaseId].crewmate = {
+            ...crewmate,
+            ...update
+          };
+          state.crewmatePurchaseDrafts[purchaseId].updatedAt = Date.now();
+        })),
+        dispatchCrewmatePurchaseDraftCleared: (purchaseId) => set(produce(state => {
+          if (!purchaseId || !state.crewmatePurchaseDrafts) return;
+          delete state.crewmatePurchaseDrafts[purchaseId];
+        })),
+
         dispatchTimeOverride: (anchor, speed) => set((produce(state => {
           state.timeOverride = anchor ? { anchor, speed, ts: Date.now() } : null;
         }))),
@@ -573,6 +697,13 @@ const useStore = create(
 
         dispatchSimulationEnabled: (which) => set(produce(state => {
           state.simulationEnabled = which;
+        })),
+        dispatchSimulationReset: (enabled = true) => set(produce(state => {
+          state.simulationEnabled = enabled;
+          state.simulation = { ...simulationStateDefault };
+          state.launcherDialogOptions = null;
+          state.launcherPage = null;
+          state.launcherSubpage = null;
         })),
 
         dispatchSimulationStep: (step) => set(produce(state => {
@@ -805,14 +936,6 @@ const useStore = create(
           state.perProcessLeases.push({ key, endTime });
         })),
 
-        dispatchPreferredUiCurrency: (token) => set(produce(state => {
-          state.preferredUiCurrency = token;
-        })),
-
-        dispatchAutoswapEnabled: (which) => set(produce(state => {
-          state.gameplay.autoswap = !!which;
-        })),
-
         dispatchTutorialDisabled: (which) => set(produce(state => {
           state.gameplay.dismissTutorial = !!which;
         })),
@@ -827,6 +950,16 @@ const useStore = create(
           } else {
             state.gameplay.feeTokens.push(which);
           }
+        })),
+
+        dispatchFeeTokenEnabled: (which) => set(produce(state => {
+          if (!state.gameplay.feeTokens.includes(which)) state.gameplay.feeTokens.push(which);
+        })),
+
+        dispatchPaidFeesAcknowledged: (accountAddress) => set(produce(state => {
+          if (!accountAddress) return;
+          if (!state.paidFeeAcknowledgements) state.paidFeeAcknowledgements = {};
+          state.paidFeeAcknowledgements[accountAddress] = true;
         })),
 
         dispatchActiveCrewsDisplaySet: (which) => set(produce(state => {
@@ -865,13 +998,6 @@ const useStore = create(
         //
         // SPECIAL GETTERS
 
-        getPreferredUiCurrency: () => {
-          const s = get();
-          if ([TOKEN.ETH, TOKEN.USDC].includes(s.preferredUiCurrency)) return s.preferredUiCurrency;
-          else if (s.currentSession?.walletId && s.currentSession.walletId !== 'argentWebWallet') return TOKEN.ETH;
-          return TOKEN.USDC;
-        },
-
         getShadowQuality: () => {
           // NOTE: 0 is no shadows, 1 is single-light shadows, 2 is CSMs
           //       (support for CSMs has been removed because it was non-performant and didn't look great)
@@ -902,7 +1028,7 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 8,
+      version: 9,
       migrate: (persistedState, oldVersion) => {
         const migrations = [
           (state, version) => {
@@ -949,6 +1075,13 @@ const useStore = create(
             }
             return state;
           },
+          (state, version) => {
+            if (version >= 9) return;
+            delete state.starterPackWalletIntent;
+            state.starterPackCheckout = null;
+            state.starterPackCustomizationDrafts = {};
+            return state;
+          },
         ];
 
         for (let i = 0; i < migrations.length; i++) {
@@ -974,6 +1107,7 @@ const useStore = create(
         'cutscene',
         'draggables',
         'hudMenuState',
+        'launcherDialogOptions',
         'lotLoader',
         'simulationActions',
         'timeOverride' // should this be in ClockContext?

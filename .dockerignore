@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+build
+coverage
+node_modules
+npm-debug.log*
+server.built.js*
+tmp
+test-results
+playwright-report

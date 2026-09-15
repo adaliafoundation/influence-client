@@ -39,4 +39,6 @@ const FormAgreement = ({ entity, permission, _disabled }) => {
   );
 };
 
-export default { Component: FormAgreement, isVisible };
+const actionDefinition = { Component: FormAgreement, isVisible };
+
+export default actionDefinition;

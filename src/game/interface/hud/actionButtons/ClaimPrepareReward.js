@@ -33,4 +33,6 @@ const ClaimPrepareReward = ({ asteroid, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: ClaimPrepareReward, isVisible };
+const actionDefinition = { Component: ClaimPrepareReward, isVisible };
+
+export default actionDefinition;

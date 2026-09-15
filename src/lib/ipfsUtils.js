@@ -1,4 +1,6 @@
-const getIpfsGatewayUrl = () => (process.env.REACT_APP_API_IPFS || '').replace(/\/$/, '');
+import { appConfig } from '~/appConfig';
+
+const getIpfsGatewayUrl = () => (appConfig.get('Api.ipfs') || '').replace(/\/$/, '');
 
 export const getIpfsUrl = (path) => {
   const gateway = getIpfsGatewayUrl();

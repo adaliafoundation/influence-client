@@ -6,36 +6,7 @@ import { ForwardIcon, AssembleShipIcon, InventoryIcon, LocationIcon, SwayIcon, A
 import useCrewContext from '~/hooks/useCrewContext';
 import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed, getProcessorLeaseSelections, getProcessorLeaseConfig } from '~/lib/utils';
 
-import {
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  ActionDialogBody,
-  FlexSection,
-  FlexSectionSpacer,
-  FlexSectionBlock,
-  RecipeSlider,
-  TransferDistanceDetails,
-  ProcessInputSquareSection,
-  formatMass,
-  ProcessSelectionDialog,
-  LotInputBlock,
-  TravelBonusTooltip,
-  getTripDetails,
-  getBonusDirection,
-  TimeBonusTooltip,
-  InventorySelectionDialog,
-  InventoryInputBlock,
-  ShipImage,
-  ProgressBarSection,
-  LandingSelectionDialog,
-  ProcessSelectionBlock,
-  LeaseTooltip,
-  LeaseDetailsLabel,
-  LeaseInfoIcon,
-  AssetSellerIndicator,
-  formatTimeRequirements
-} from './components';
+import { ActionDialogFooter, ActionDialogHeader, ActionDialogStats, ActionDialogBody, FlexSection, FlexSectionSpacer, FlexSectionBlock, RecipeSlider, TransferDistanceDetails, ProcessInputSquareSection, formatMass, ProcessSelectionDialog, LotInputBlock, TravelBonusTooltip, getTripDetails, getBonusDirection, TimeBonusTooltip, InventorySelectionDialog, InventoryInputBlock, ShipImage, ProgressBarSection, LandingSelectionDialog, ProcessSelectionBlock, LeaseTooltip, LeaseDetailsLabel, AssetSellerIndicator, formatTimeRequirements } from './components';
 import useLot from '~/hooks/useLot';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import actionStages from '~/lib/actionStages';
@@ -148,7 +119,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
     ];
   }, [asteroid?.id, lot?.id, crew?._timeAcceleration, originLot?.id, crewDistBonus, crewTravelBonus]);
 
-  const [outputTransportDistance, outputTransportTime] = useMemo(() => {
+  const [outputTransportDistance] = useMemo(() => {
     if (!lot?.id || !destinationLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(lot?.id), Lot.toIndex(destinationLot?.id)) || 0,

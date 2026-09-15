@@ -5,26 +5,7 @@ import { LaunchShipIcon, RouteIcon, ShipIcon, WarningOutlineIcon } from '~/compo
 import useCrewContext from '~/hooks/useCrewContext';
 import { reactBool, formatFixed, formatTimer, getCrewAbilityBonuses } from '~/lib/utils';
 
-import {
-  ActionDialogFooter,
-  ActionDialogHeader,
-  ActionDialogStats,
-  ActionDialogTabs,
-  ActionDialogBody,
-  FlexSection,
-  FlexSectionInputBlock,
-  FlexSectionSpacer,
-  ProgressBarSection,
-  AsteroidImage,
-  ProgressBarNote,
-  PropellantSection,
-  ShipTab,
-  PropulsionTypeSection,
-  LotInputBlock,
-  formatMass,
-  MaterialBonusTooltip,
-  formatTimeRequirements
-} from './components';
+import { ActionDialogFooter, ActionDialogHeader, ActionDialogStats, ActionDialogTabs, ActionDialogBody, FlexSection, FlexSectionInputBlock, FlexSectionSpacer, ProgressBarSection, AsteroidImage, PropellantSection, ShipTab, PropulsionTypeSection, LotInputBlock, formatMass, MaterialBonusTooltip, formatTimeRequirements } from './components';
 import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
 import { ActionDialogInner } from '../ActionDialog';
@@ -45,9 +26,9 @@ import useHydratedCrew from '~/hooks/useHydratedCrew';
 const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 
 const LaunchShip = ({ asteroid, originLot, manager, ship, shipCrews, stage, ...props }) => {
-  const createAlert = useStore(s => s.dispatchAlertLogged);
+  useStore(s => s.dispatchAlertLogged);
 
-  const { currentUndockingAction, undockShip } = manager;
+  const { undockShip } = manager;
   const blockTime = useBlockTime();
   const { accountCrewIds, crew } = useCrewContext();
 

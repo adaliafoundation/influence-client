@@ -244,7 +244,7 @@ const AsteroidResourcePrices = ({ asteroid, mode, resource }) => {
     return transformedOrders;
   }, [asteroid.id, coachmarkHelperProduct, crew, orderSummary, simulationEnabled, simulationActions, resourceMarketplaceEntities]);
 
-  const selectedSupply = useMemo(() => {
+  useMemo(() => {
     return resourceMarketplaces.find((m) => m.lotId === selected)?.supply || 0;
   }, [selected]);
 
@@ -311,7 +311,7 @@ const AsteroidResourcePrices = ({ asteroid, mode, resource }) => {
               access={marketplacesLoading ? 'full' : row.permissions.accessLevel()}
               crew>
               {row.marketplaceName}
-              {!marketplacesLoading && (!crew || row.permissions.accessLevel() === 'full') || (
+              {(!marketplacesLoading && (!crew || row.permissions.accessLevel() === 'full')) || (
                 <MarketplacePermissionsIcon
                   style={{ marginLeft: 6, fontSize:'140%'}}
                   permissions={row.permissions}
@@ -517,7 +517,7 @@ const AsteroidResourcePrices = ({ asteroid, mode, resource }) => {
             <div>
               {marketplaceOwner && <CrewIndicator crew={marketplaceOwner} flip label="Managed by" />}
               <MarketplaceImage>
-                <img src={getBuildingIcon(8, 'w400')} />
+                <img src={getBuildingIcon(8, 'w400')} alt="Marketplace" />
                 <ClipCorner dimension={10} color="#333" />
               </MarketplaceImage>
             </div>

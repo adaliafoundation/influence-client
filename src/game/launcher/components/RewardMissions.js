@@ -18,49 +18,49 @@ const missions = {
       id: 1,
       title: 'Romulus, Remus, and the Rest',
       Objective: 'Construct a building on Adalia Prime',
-      ['Mission Cap']: '7,000 buildings'
+      'Mission Cap': '7,000 buildings'
     },
     {
       id: 2,
       title: 'Learn by Doing',
       Objective: 'Construct a Warehouse or an Extractor anywhere in the Belt',
-      ['Mission Cap']: '6,000 buildings'
+      'Mission Cap': '6,000 buildings'
     },
     {
       id: 3,
       title: 'Four Pillars',
       Objective: 'Construct a Refinery, Bioreactor, Factory, or Shipyard anywhere in the Belt',
-      ['Mission Cap']: '3,000 buildings'
+      'Mission Cap': '3,000 buildings'
     },
     {
       id: 4,
       title: 'Together, We Can Rise',
       Objective: 'Construct a Spaceport, Marketplace, or Habitat anywhere in the Belt',
-      ['Mission Cap']: '400 buildings'
+      'Mission Cap': '400 buildings'
     },
     {
       id: 5,
       title: 'The Fleet',
       Objective: 'Construct a ship',
-      ['Mission Cap']: '300 ships'
+      'Mission Cap': '300 ships'
     },
     {
       id: 6,
       title: 'Rock Breaker',
       Objective: 'Mine one tonne of material',
-      ['Mission Cap']: '12,000 tonnes'
+      'Mission Cap': '12,000 tonnes'
     },
     {
       id: 7,
       title: 'Prospecting Pays Off',
       Objective: 'Take one core sample',
-      ['Mission Cap']: '15,000 core samples'
+      'Mission Cap': '15,000 core samples'
     },
     {
       id: 8,
       title: 'Potluck',
       Objective: 'Manufacture 5 tonnes of food',
-      ['Mission Cap']: '20,000 tonnes'
+      'Mission Cap': '20,000 tonnes'
     },
   ],
   colonization: [
@@ -363,9 +363,9 @@ const Mission = ({ mission, mode }) => {
 };
 const RewardMissions = ({ mode }) => {
   const { isLaunched } = useCrewContext();
-  const [comingSoon, setComingSoon] = useState();
-  const [error, setError] = useState();
-  const [loading, setLoading] = useState();
+  useState();
+  const [error] = useState();
+  const [loading] = useState();
   return (
     <Wrapper>
       <RewardsTitle>Powered By <b>Wendash</b></RewardsTitle>

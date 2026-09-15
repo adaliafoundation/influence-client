@@ -16,35 +16,17 @@ to recover the reasonable costs of operating, maintaining, or administering the 
 not primarily intended for or directed toward commercial advantage or monetary compensation, and that no profit is
 distributed to operators, contributors, or participants.
 
-## Test Environment
-1. Initialize your .env file:
-    ```
-    echo "BUFFER_GLOBAL=1
-    SKIP_PREFLIGHT_CHECK=1
+## Local development
 
-    NODE_ENV=development
-    REACT_APP_CONFIG_ENV=prerelease
-    REACT_APP_APP_VERBOSELOGS=1" > .env
-    ```
-1. Adjust or fill in any missing .env variables as needed. Most values are preset in
-`src/appConfig/prerelease.json`. However, if you need to overwrite any of these presets,
-you can do so in your local env file by following the instructions in `src/appConfig/index.js`
-    - For example, adding these settings may make development less cumbersome:
-        ```
-        REACT_APP_APP_DISABLEINTROANIMATION=1
-        REACT_APP_APP_DISABLELAUNCHERLANDING=1
-        REACT_APP_APP_DISABLELAUNCHTRAILER=1
-        REACT_APP_APP_DISABLESCREENSIZEWARNING=1
-        REACT_APP_APP_DEFAULTMUTED=1
-        ```
-    - The following api keys need to be filled in if you want to interact with all third-party apis:
-        ```
-        REACT_APP_API_CLIENTID_GOOGLE=
-        REACT_APP_API_CLIENTID_LAYERSWAP=
-        REACT_APP_API_CLIENTID_RAMP=
-        ```
-1. Run `npm install`.
-1. Run `npm start`.
+1. Use Node.js 22 and run `npm ci`.
+2. Copy `.env.example` to `.env` and fill in the required public service endpoints.
+3. Set `REACT_APP_CONFIG_ENV=prerelease` or `production` explicitly.
+4. Run `npm start`.
+
+Optional integrations are hidden when their configuration is absent. See
+[Runtime client configuration](docs/runtime-configuration.md) for required services,
+optional features, types, and container deployment instructions. `NODE_ENV` is
+managed by the build tool; it does not select the game network.
 
 ## Available Scripts
 
@@ -82,3 +64,15 @@ If you aren’t satisfied with the build tool and configuration choices, you can
 Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
 
 You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+
+## Container deployments
+
+The production image is built once and configured when it starts. The same image
+digest is suitable for prerelease and production; set `REACT_APP_CONFIG_ENV` to
+select the versioned defaults and provide any operator-specific public overrides
+through the deployment stack.
+
+Operator-specific service endpoints, IDs, and keys must be supplied at runtime rather
+than committed to this repository. See
+[Runtime client configuration](docs/runtime-configuration.md) for the complete
+configuration and security contract.

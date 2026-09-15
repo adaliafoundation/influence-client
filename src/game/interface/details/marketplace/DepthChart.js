@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import { Building, Crewmate, Entity, Lot, Order, Permission, Product } from '@influenceth/sdk';
+import { Building, Crewmate, Entity, Lot, Order, Permission } from '@influenceth/sdk';
 
 import {
   LimitBuyIcon,

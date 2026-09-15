@@ -1,20 +1,15 @@
 import styled from 'styled-components';
 
-import BrightButton from '~/components/BrightButton';
+import Button from '~/components/ButtonAlt';
 import { ChevronRightIcon } from '~/components/Icons';
-import SwayPrice from '~/components/SwayPrice';
-import UserPrice from '~/components/UserPrice';
+import PurchaseButtonInner from '~/components/PurchaseButtonInner';
+import { UsdPrice } from '~/components/UserPrice';
 import useCrewContext from '~/hooks/useCrewContext';
 import { TOKEN, TOKEN_FORMAT } from '~/lib/priceUtils';
 import { nativeBool, reactBool } from '~/lib/utils';
 
-const PurchaseButtonInner = styled.div`
+const StyledPurchaseButtonInner = styled(PurchaseButtonInner)`
   & > svg:last-child {
-    position: absolute;
-    right: 8px;
-    top: 0;
-    height: 100%;
-    display: flex;
     font-size: 20px;
   }
 `;
@@ -22,31 +17,24 @@ const PurchaseButtonInner = styled.div`
 const SKUButton = ({ usdcPrice, onClick, isPurchasing, isSway, ...props }) => {
   const { isLaunched } = useCrewContext();
   return (
-    <BrightButton
+    <Button
       disabled={nativeBool(isPurchasing || !isLaunched)}
+      isTransaction
       loading={reactBool(isPurchasing)}
       onClick={onClick}
+      size="large"
       {...props}>
-      <PurchaseButtonInner>
+      <StyledPurchaseButtonInner>
         Purchase{usdcPrice ? (<>: {(
-          isSway
-            ? (
-              <SwayPrice
-                price={usdcPrice}
-                priceToken={TOKEN.USDC}
-                format={TOKEN_FORMAT.SHORT} />
-            )
-            : (
-              <UserPrice
-                price={usdcPrice}
-                priceToken={TOKEN.USDC}
-                format={TOKEN_FORMAT.SHORT} />
-            )
+          <UsdPrice
+            price={usdcPrice}
+            priceToken={TOKEN.USDC}
+            format={TOKEN_FORMAT.SHORT} />
           )}</>) : null
         }
         <ChevronRightIcon />
-      </PurchaseButtonInner>
-    </BrightButton>
+      </StyledPurchaseButtonInner>
+    </Button>
   );
 }
 

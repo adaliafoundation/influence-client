@@ -101,4 +101,6 @@ const RecruitCrewmate = ({ asteroid, blockTime, crew, lot, simulation, _disabled
   );
 };
 
-export default { Component: RecruitCrewmate, isVisible };
+const actionDefinition = { Component: RecruitCrewmate, isVisible };
+
+export default actionDefinition;

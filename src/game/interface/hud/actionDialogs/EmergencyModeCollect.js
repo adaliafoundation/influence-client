@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Crewmate, Inventory, Product, Ship, Time } from '@influenceth/sdk';
+import { Inventory, Product, Ship, Time } from '@influenceth/sdk';
 
 import { EmergencyModeCollectIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
 import useShip from '~/hooks/useShip';
-import { reactBool, formatTimer, getCrewAbilityBonuses } from '~/lib/utils';
+import { reactBool, formatTimer } from '~/lib/utils';
 
 import {
   ActionDialogFooter,

@@ -5,7 +5,7 @@ import { Permission } from '@influenceth/sdk';
 
 import ClipCorner from '~/components/ClipCorner';
 import useSyncedTime from '~/hooks/useSyncedTime';
-import { formatFixed, formatTimer, isProcessingPermission, nativeBool, reactBool } from "~/lib/utils";
+import { formatFixed, formatTimer, nativeBool, reactBool } from "~/lib/utils";
 import theme, { hexToRGB } from '~/theme';
 import useCrewContext from '~/hooks/useCrewContext';
 import { AgreementIcon, ScheduleFullIcon, SwayIcon } from '~/components/Icons';
@@ -447,8 +447,9 @@ export const getCrewDisabledReason = ({
   blockTime,
   crew,
   prepaidLeaseConfig,
-  isAllowedInSimulation = false,  // TODO: use config to get by step (can attach step to crew as well... or even allowed buttons directly on crew, etc)
-  isSequenceable = false,
+  isAllowedInSimulation = false,
+  // TODO: use config to get by step (can attach step to crew as well... or even allowed buttons directly on crew, etc)
+isSequenceable = false,
   permission,
   permissionTarget,
   requireAsteroid = true,

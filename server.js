@@ -12,8 +12,12 @@ const { IpFilter } = require('express-ipfilter');
 
 const basicAuth = require('./auth');
 const getOpengraphTags = require('./opengraph')
+const { createRuntimeConfigScript } = require('./runtime-config.cjs');
 
 const readFileAsync = promisify(fs.readFile);
+const runtimeConfigScript = createRuntimeConfigScript(process.env, {
+  requireConfigEnvironment: process.env.REQUIRE_RUNTIME_CONFIG === 'true'
+});
 
 const ipFilter = (req, res, next) => {
   // custom next function to handle errors
@@ -41,7 +45,14 @@ const app = express();
 
 app.use(ipFilter);
 
+app.get('/healthz', (req, res) => res.status(204).end());
+
 if (process.env.AUTH_PASSWORD) app.use(basicAuth);
+app.get('/runtime-config.js', (req, res) => {
+  res.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.header('Pragma', 'no-cache');
+  res.type('application/javascript').send(runtimeConfigScript);
+});
 app.use(compression());
 app.use(historyApiFallback());
 app.use(enforce.HTTPS({ trustProtoHeader: true }));

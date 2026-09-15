@@ -21,6 +21,10 @@ const adjustWorkbox = () => config => {
   config.plugins.forEach(p => {
     if (p.constructor.name === 'InjectManifest') {
       p.config.maximumFileSizeToCacheInBytes = 30 * 1024 * 1024;
+      p.config.exclude = [
+        ...(p.config.exclude || []),
+        /runtime-config\.js$/
+      ];
     }
   });
 
@@ -44,6 +48,16 @@ const addDataUriFileLoader = () => config => {
     use: [
       'raw-loader',
     ]
+  });
+
+  return config;
+};
+
+const addJsonImportAttributesCompatibility = () => config => {
+  const loaders = config.module.rules.find(rule => Array.isArray(rule.oneOf)).oneOf;
+  loaders.unshift({
+    test: /node_modules\/(?:@privy-io\/react-auth\/node_modules\/)?@base-org\/account\/dist\/core\/constants\.js$/,
+    use: [path.resolve(__dirname, 'src/compat/json-import-attributes-loader.js')]
   });
 
   return config;
@@ -85,9 +99,7 @@ const addCompatibilityAliases = () => config => {
   return config;
 };
 
-patchNpmModules = () => config => {
-  const loaders = config.module.rules.find(rule => Array.isArray(rule.oneOf)).oneOf;
-
+const patchNpmModules = () => config => {
   // NOTE: this is entirely for three's GLTFExporter
   // loaders.unshift({
   //   test: /\.js$/,
@@ -119,5 +131,6 @@ module.exports = override(
   addCompatibilityAliases(),
   addGlslifyLoader(),
   addDataUriFileLoader(),
+  addJsonImportAttributesCompatibility(),
   addSVGR()
 );

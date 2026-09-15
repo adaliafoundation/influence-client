@@ -1,4 +1,4 @@
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import LoadingAnimation from 'react-spinners/BarLoader';
 
 import useStore from '~/hooks/useStore';
@@ -64,13 +64,13 @@ const StyledBadge = styled(Badge)`
   margin-right: -6px;
 `;
 
-const loadingCss = css`
-  left: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 100%;
-`;
+const loadingStyle = {
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: 0,
+  width: '100%'
+};
 
 const Button = (props) => {
   const {
@@ -95,7 +95,7 @@ const Button = (props) => {
       data-tooltip-place={dataPlace || "right"}
       key={dataTip}
       {...restProps}>
-      {loading && <LoadingAnimation height={2} color={theme.colors.main} css={loadingCss} />}
+      {loading && <LoadingAnimation height={2} color={theme.colors.main} cssOverride={loadingStyle} />}
       {props.children}
       {props.badge && (
         <StyledBadge value={props.badge} />

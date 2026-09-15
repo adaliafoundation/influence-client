@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { Deposit, Entity } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
@@ -7,7 +7,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
 import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
-
+import { getStarterCoreSampleSource } from '~/lib/starterPacks';
 
 const useCoreSampleManager = (lotId) => {
   const blockTime = useBlockTime();
@@ -159,14 +159,16 @@ const useCoreSampleManager = (lotId) => {
   }, [actionItems, blockTime, completingSamples, pendingTransactions, getPendingTx, getStatus, payload, lot?.deposits]);
 
   const startSampling = useCallback((resourceId, coreDrillSource) => {
-    // console.log('coreDrillSource', coreDrillSource); return;
+    const source = coreDrillSource || getStarterCoreSampleSource(crew);
+    if (!source) return;
+
     execute('SampleDepositStart', {
       resource: resourceId,
-      origin: { id: coreDrillSource.id, label: coreDrillSource.label },
-      origin_slot: coreDrillSource.slot,
+      origin: { id: source.id, label: source.label },
+      origin_slot: source.slot,
       ...payload
     })
-  }, [execute, payload]);
+  }, [crew, execute, payload]);
 
   const startImproving = useCallback((depositId, coreDrillSource, depositOwnerCrew) => {
     const sample = (lot?.deposits || []).find((c) => c.id === depositId);

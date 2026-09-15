@@ -45,7 +45,6 @@ import {
   WarningIcon,
   EditIcon,
   CheckCircleIcon,
-  StarIcon,
   JettisonCargoIcon,
   InboxIcon,
 } from '~/components/Icons';
@@ -1058,12 +1057,6 @@ const formatAsTx = (item) => {
     case 'FinishAllReady': {
       formatted.icon = <CheckCircleIcon />;
       formatted.label = `Finish Multiple Actions`;
-      break;
-    }
-
-    case 'PurchaseStarterPack': {
-      formatted.icon = <StarIcon />;
-      formatted.label = `Purchase Starter Pack`;
       break;
     }
 

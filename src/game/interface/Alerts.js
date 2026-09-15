@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { ReactNotifications, Store as notify } from 'react-notifications-component';
 import '~/compat/react-notifications-component.css';

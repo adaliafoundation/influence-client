@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import styled from 'styled-components';
 
 import { SwayIcon } from '~/components/Icons';

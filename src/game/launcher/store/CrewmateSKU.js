@@ -1,24 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback } from 'react';
+import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import { Crewmate } from '@influenceth/sdk';
 
+import Button from '~/components/ButtonAlt';
 import UncontrolledTextInput, { TextInputWrapper } from '~/components/TextInputUncontrolled';
-import { nativeBool, safeBigInt } from '~/lib/utils';
-import useCrewManager from '~/hooks/actionManagers/useCrewManager';
-import useFundingFlow from '~/hooks/useFundingFlow';
-import usePriceConstants from '~/hooks/usePriceConstants';
-import usePriceHelper from '~/hooks/usePriceHelper';
-import { PurchaseForm, PurchaseFormRows } from './components/PurchaseForm';
-import SKUTitle from './components/SKUTitle';
 import AdalianFlourish from '~/components/AdalianFlourish';
 import CrewmateCardFramed from '~/components/CrewmateCardFramed';
-import theme from '~/theme';
-import SKUInputRow from './components/SKUInputRow';
-import { CrewmateSwayPrice } from '~/components/SwayPrice';
-import SKUHighlight from './components/SKUHighlight';
 import { CrewmateCreditIcon } from '~/components/Icons';
-import SKUButton from './components/SKUButton';
+import useCrewContext from '~/hooks/useCrewContext';
+import SKUTitle from './components/SKUTitle';
+import { PurchaseForm, PurchaseFormRows } from './components/PurchaseForm';
+import SKUHighlight from './components/SKUHighlight';
+import theme from '~/theme';
 import { barebonesCrewmateAppearance } from '~/hooks/useStarterPacks';
+import useStore from '~/hooks/useStore';
+import formatters from '~/lib/formatters';
 
 const Wrapper = styled.div`
   align-items: flex-end;
@@ -67,66 +64,33 @@ const CrewmatePurchaseForm = styled(PurchaseForm)`
 `;
 
 const FlairCard = styled.div`
+  filter: drop-shadow(2px 2px 6px black);
   left: 10px;
   position: absolute;
   top: 10px;
   z-index: 1;
-  filter: drop-shadow(2px 2px 6px black);
 `;
 
 const Body = styled.div`
   padding: 10px;
 `;
 
-const maxCrewmatesAtOnce = 25;
-
-const cleanseCrewmates = (x) => {
-  if (x === '') return '';
-  return Math.abs(Math.min(parseInt(x) || 0, maxCrewmatesAtOnce));
-};
-
 const CrewmateSKU = () => {
-  const { purchaseCredits, getPendingCreditPurchase } = useCrewManager();
-  const { fundingPrompt, onVerifyFunds } = useFundingFlow();
-  const { data: priceConstants } = usePriceConstants();
-  const priceHelper = usePriceHelper();
+  const history = useHistory();
+  const { crew, crews } = useCrewContext();
+  const selectedCrewId = useStore(s => s.selectedCrewId);
+  const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
+  const activeCrew = crew || crews?.find((c) => c.id === selectedCrewId) || null;
 
-  const [quantity, setQuantity] = useState(1);
-  const [isPurchasing, setIsPurchasing] = useState(false);
-
-  useEffect(() => {
-    setIsPurchasing(!!getPendingCreditPurchase());
-  }, [getPendingCreditPurchase]);
-
-  const totalPrice = useMemo(() => {
-    if (!priceConstants?.ADALIAN_PURCHASE_PRICE || !priceConstants?.ADALIAN_PURCHASE_TOKEN) return null;
-
-    const cleanQuantity = cleanseCrewmates(quantity) || 1;
-    return priceHelper.from(
-      safeBigInt(cleanQuantity) * priceConstants.ADALIAN_PURCHASE_PRICE,
-      priceConstants.ADALIAN_PURCHASE_TOKEN
-    );
-  }, [quantity, priceConstants, priceHelper]);
-
-  const onPurchase = useCallback(async () => {
-    setIsPurchasing(true);
-    try {
-      await purchaseCredits(cleanseCrewmates(quantity) || 1);
-    } catch (e) {
-      console.warn(e);
-    }
-    setIsPurchasing(false);
-  }, [quantity]);
-
-  const onClick = useCallback(() => {
-    if (!totalPrice) return;
-    onVerifyFunds(totalPrice, onPurchase);
-  }, [onPurchase, onVerifyFunds, totalPrice]);
+  const onOpenCrew = useCallback(() => {
+    dispatchLauncherPage();
+    history.push(activeCrew?.id ? `/crew/${activeCrew.id}` : '/recruit/0');
+  }, [activeCrew?.id, dispatchLauncherPage, history]);
 
   return (
     <Wrapper>
       <div style={{ paddingRight: 20 }}>
-        <SKUTitle>Buy Crewmates</SKUTitle>
+        <SKUTitle>Recruit Crewmates</SKUTitle>
         <Description>
           <div>
             <AdalianFlourish filter="brightness(125%) saturate(135%)" />
@@ -135,8 +99,8 @@ const CrewmateSKU = () => {
             Crewmates are the literal heart and soul of Adalia. They perform all in-game
             tasks and form your crew. A crew is composed of up to 5 crewmates.
             <br/><br/>
-            Crewmate credits are turned into crewmates after completing their backstory
-            and earning traits at any Habitat in the belt.
+            Recruit additional crewmates directly from your active crew. Select an open
+            slot in Crew Details to customize and recruit your next Adalian.
           </p>
         </Description>
       </div>
@@ -168,47 +132,36 @@ const CrewmateSKU = () => {
             </div>
             <div>
               <label>Price</label>
-              <span>
-                <CrewmateSwayPrice /> Each
-              </span>
+              <span>$5.00 Each</span>
             </div>
           </PurchaseFormRows>
         </div>
 
         <Body>
-          <h4>Quantity</h4>
-          <SKUInputRow>
-            <TextInputWrapper rightLabel="CREWMATE CREDITS">
-              <UncontrolledTextInput
-                disabled={nativeBool(isPurchasing)}
-                max={maxCrewmatesAtOnce}
-                min={0}
-                onChange={(e) => setQuantity(cleanseCrewmates(e.currentTarget.value))}
-                step={1}
-                style={{ height: 28 }}
-                type="number"
-                value={quantity} />
-            </TextInputWrapper>
-          </SKUInputRow>
+          <h4>Recruitment</h4>
+          <TextInputWrapper rightLabel="CREW DETAILS">
+            <UncontrolledTextInput
+              disabled
+              style={{ height: 28 }}
+              value={activeCrew ? formatters.crewName(activeCrew) : 'No active crew'} />
+          </TextInputWrapper>
 
           <div style={{ margin: '20px 0 15px' }}>
             <h4>Receive</h4>
             <SKUHighlight>
               <CrewmateCreditIcon />
-              <span style={{ marginLeft: 8 }}>{quantity} Crewmate{quantity === 1 ? '' : 's'}</span>
+              <span style={{ marginLeft: 8 }}>1 Crewmate</span>
             </SKUHighlight>
           </div>
 
-          <SKUButton
-            isPurchasing={isPurchasing}
-            isSway
-            onClick={onClick}
-            usdcPrice={totalPrice?.usdcValue || 0n}
-            style={{ width: '100%' }}
-          />
+          <Button
+            isTransaction
+            onClick={onOpenCrew}
+            style={{ width: '100%' }}>
+            {activeCrew?.id ? 'Open Active Crew' : 'Recruit First Crewmate'}
+          </Button>
         </Body>
       </CrewmatePurchaseForm>
-      {fundingPrompt}
     </Wrapper>
   );
 };

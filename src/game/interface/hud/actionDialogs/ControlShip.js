@@ -10,17 +10,7 @@ import actionStage from '~/lib/actionStages';
 import formatters from '~/lib/formatters';
 import { locationsArrToObj, reactBool } from '~/lib/utils';
 
-import {
-  ActionDialogFooter,
-  ActionDialogHeader,
-  
-  FlexSection,
-  FlexSectionInputBlock,
-  ActionDialogBody,
-  AsteroidImage,
-  FlexSectionSpacer,
-  ShipInputBlock
-} from './components';
+import { ActionDialogFooter, ActionDialogHeader, FlexSection, FlexSectionInputBlock, ActionDialogBody, FlexSectionSpacer, ShipInputBlock } from './components';
 import { ActionDialogInner } from '../ActionDialog';
 import theme from '~/theme';
 import useControlShip from '~/hooks/actionManagers/useControlShip';

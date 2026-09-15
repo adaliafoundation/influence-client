@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { features } from '~/appConfig/features';
+import { useEffect, useMemo, useRef } from 'react';
 
 import AsteroidsHeroImage from '~/assets/images/sales/asteroids_hero.png';
 import CrewmatesHeroImage from '~/assets/images/sales/crewmates_hero.png';
@@ -7,6 +8,7 @@ import StarterPackHeroImage from '~/assets/images/sales/starter_packs_hero.jpg';
 import usePriceConstants from '~/hooks/usePriceConstants';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
+import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import PageLoader from '~/components/PageLoader';
 import LauncherDialog from './components/LauncherDialog';
 import AsteroidSKU from './store/AsteroidSKU';
@@ -14,11 +16,12 @@ import CrewmateSKU from './store/CrewmateSKU';
 import FaucetSKU from './store/FaucetSKU';
 import StarterPackSKU from './store/StarterPackSKU';
 import SwaySKU from './store/SwaySKU';
+import FundingStatusIndicator from './store/components/FundingStatusIndicator';
 import SKULayout from './store/components/SKULayout';
 import { appConfig } from '~/appConfig';
 
 const storeAssets = {
-  packs: 'Starter Packs',
+  ...(features.stripe ? { packs: 'Starter Packs' } : {}),
   sway: 'Sway',
   crewmates: 'Crewmates',
   asteroids: 'Asteroids',
@@ -34,16 +37,30 @@ const coverImages = {
   sway: SwayHeroImage,
 };
 
+const STORE_BALANCE_REFRESH_MS = 60e3;
 
 const Store = () => {
   const { crew } = useCrewContext();
   const { data: priceConstants, isLoading } = usePriceConstants();
+  const { refetch: refetchBalances } = useWalletPurchasableBalances();
+  const refetchBalancesRef = useRef(refetchBalances);
 
   const initialSubpage = useStore(s => s.launcherSubpage);
+  const initiallyCollapsed = useStore(s => !!s.launcherDialogOptions?.menuCollapsed);
+
+  useEffect(() => {
+    refetchBalancesRef.current = refetchBalances;
+  }, [refetchBalances]);
+
+  useEffect(() => {
+    refetchBalancesRef.current();
+    const interval = setInterval(() => refetchBalancesRef.current(), STORE_BALANCE_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   const initialSelection = useMemo(() => {
-    // use specified starting page, or default (starter packs for new users, sway for existing)
-    let selectionKey = initialSubpage || (!!crew ? 'sway' : 'packs');
+    const defaultSelection = crew ? 'sway' : (features.stripe ? 'packs' : 'crewmates');
+    const selectionKey = Object.prototype.hasOwnProperty.call(storeAssets, initialSubpage) ? initialSubpage : defaultSelection;
     const linkedSelectionIndex = Object.keys(storeAssets).indexOf(selectionKey);
     return linkedSelectionIndex >= 0 ? linkedSelectionIndex : 0;
   }, [!crew, initialSubpage]);
@@ -65,9 +82,11 @@ const Store = () => {
     }))
   }, []);
 
-  if (!priceConstants?.ADALIAN_PURCHASE_PRICE) return isLoading ? <PageLoader /> : null;
+  if (isLoading && !priceConstants) return <PageLoader />;
   return (
     <LauncherDialog
+      bottomLeftMenu={({ collapsed }) => <FundingStatusIndicator collapsed={collapsed} />}
+      initiallyCollapsed={initiallyCollapsed}
       panes={panes}
       preselect={initialSelection} />
   );

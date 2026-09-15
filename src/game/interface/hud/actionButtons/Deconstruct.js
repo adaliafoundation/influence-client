@@ -62,4 +62,6 @@ const Deconstruct = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: Deconstruct, isVisible };
+const actionDefinition = { Component: Deconstruct, isVisible };
+
+export default actionDefinition;

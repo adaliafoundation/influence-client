@@ -1,3 +1,4 @@
+import { features } from '~/appConfig/features';
 import { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import Loader from 'react-spinners/PuffLoader';
@@ -178,7 +179,7 @@ const YoutubeFeed = ({ playlistId, title }) => {
 };
 
 const panes = [
-  {
+  ...(features.tutorials ? [{
     label: 'Tutorials',
     pane: <YoutubeFeed title="Official Tutorial Videos" playlistId="PLEu_4bnIEcK7dt9r_JHReo8n2JdLPpby_" />
   },
@@ -189,10 +190,17 @@ const panes = [
   {
     label: 'Non-English Content',
     pane: <YoutubeFeed title="Unofficial Tutorial Videos (Non-English)" playlistId="PLEu_4bnIEcK7JDPyrAfPNBZnQacYtWAbG" />
-  },
+  }
+  ] : []),
   {
     label: 'Game Wiki',
-    link: appConfig.get('Url.wiki')
+    link: appConfig.get('Url.wiki'),
+    pane: (
+      <Wrapper>
+        <h2>Game Wiki</h2>
+        <p>Explore the guides and reference material in the <a href={appConfig.get('Url.wiki')} target="_blank" rel="noopener noreferrer">Influence Wiki</a>.</p>
+      </Wrapper>
+    )
   }
 ];
 

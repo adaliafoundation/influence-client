@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import { MdFullscreen as FullscreenIcon, MdFullscreenExit as ExitFullscreenIcon } from 'react-icons/md';
@@ -107,7 +107,7 @@ const SceneControlsSection = styled.div`
 const MainMenu = () => {
   const { isMobile } = useScreenSize();
   const location = useLocation();
-  const history = useHistory();
+  useHistory();
   const setCoachmarkRef = useCoachmarkRefSetter();
 
   const lotId = useStore(s => s.asteroids.lot);
@@ -125,7 +125,7 @@ const MainMenu = () => {
 
   const [ fullscreen, setFullscreen ] = useState(screenfull.isEnabled && screenfull.isFullscreen);
 
-  const [backButtonRefEl, setBackButtonRefEl] = useState();
+  useState();
 
   // TODO: genesis book deprecation vvv
   // const { crew, crewmateMap } = useCrewContext();
@@ -197,6 +197,7 @@ const MainMenu = () => {
           {!onClickBack && appConfig.get('Starknet.chainId') !== '0x534e5f5345504f4c4941' && (
             <img
               src={`${process.env.PUBLIC_URL}/maskable-logo-48x48.png`}
+              alt="Influence"
               style={{ height: 38, marginLeft: 3 }} />
           )}
           {!onClickBack && appConfig.get('Starknet.chainId') === '0x534e5f5345504f4c4941' && (

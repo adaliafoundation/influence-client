@@ -68,4 +68,6 @@ const SelectTravelDestination = ({ crew, simulation, simulationActions }) => {
   );
 };
 
-export default { Component: SelectTravelDestination, isVisible };
+const actionDefinition = { Component: SelectTravelDestination, isVisible };
+
+export default actionDefinition;

@@ -1,0 +1,162 @@
+name: Release client image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full 40-character Git commit SHA from main; defaults to the selected ref
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-image-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Resolve requested SHA
+        id: requested
+        env:
+          INPUT_SHA: ${{ inputs.commit_sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          COMMIT_SHA="${INPUT_SHA:-$EVENT_SHA}"
+          [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout requested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.requested.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify reviewed source and set image names
+        id: image
+        env:
+          COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+          git merge-base --is-ancestor "$COMMIT_SHA" refs/remotes/origin/main
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "name=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "candidate=$IMAGE:candidate-$COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "release=$IMAGE:release-$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build test image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: browser-test
+          load: true
+          tags: influence-client:test
+
+      - name: Run client tests
+        run: docker run --rm influence-client:test
+
+      - name: Block critical npm dependency vulnerabilities
+        run: docker run --rm influence-client:test npm audit --omit=dev --audit-level=critical
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refuse to replace an existing release
+        env:
+          RELEASE: ${{ steps.image.outputs.release }}
+        run: |
+          if docker buildx imagetools inspect "$RELEASE" >/dev/null 2>&1; then
+            echo 'This commit already has a released image. Use its existing digest.' >&2
+            exit 1
+          fi
+
+      - name: Build candidate with SBOM and provenance
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.candidate }}
+          build-args: IMAGE_REVISION=${{ steps.requested.outputs.sha }}
+          sbom: true
+          provenance: mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.requested.outputs.sha }}
+
+      - name: Block all critical vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          fail-build: true
+          severity-cutoff: critical
+          only-fixed: false
+
+      - name: Block fixable high vulnerabilities
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+        with:
+          image: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+
+      - name: Smoke-test the exact candidate digest
+        env:
+          CLIENT_IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          CLIENT_BROWSER_TEST_IMAGE: influence-client:test
+        run: bash scripts/test-production-image.sh "$CLIENT_IMAGE"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign and verify the candidate digest
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "$IMAGE"
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/$GITHUB_WORKFLOW_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+      - name: Publish immutable release tag
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          RELEASE: ${{ steps.image.outputs.release }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+        run: |
+          docker buildx imagetools create --prefer-index=false -t "$RELEASE" "$IMAGE@$DIGEST"
+          test "$(docker buildx imagetools inspect "$RELEASE" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+          printf '%s\n' "$IMAGE@$DIGEST" > client-image.txt
+          {
+            echo '### Client image released'
+            echo "Commit: \`$COMMIT_SHA\`"
+            echo "Deploy to prerelease or production: \`$IMAGE@$DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save deployment reference
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: client-image
+          path: client-image.txt

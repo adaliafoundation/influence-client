@@ -94,4 +94,6 @@ const EjectGuestCrew = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dia
   );
 };
 
-export default { Component: EjectGuestCrew, isVisible };
+const actionDefinition = { Component: EjectGuestCrew, isVisible };
+
+export default actionDefinition;

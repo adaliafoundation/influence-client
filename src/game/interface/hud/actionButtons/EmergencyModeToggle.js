@@ -57,4 +57,6 @@ const EmergencyModeToggle = ({ crew, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: EmergencyModeToggle, isVisible };
+const actionDefinition = { Component: EmergencyModeToggle, isVisible };
+
+export default actionDefinition;

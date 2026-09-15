@@ -3,10 +3,7 @@ import styled from 'styled-components';
 import { Asteroid } from '@influenceth/sdk';
 
 import CrewmateCardFramed from '~/components/CrewmateCardFramed';
-import {
-  BecomeAdminIcon,
-  KeysIcon, MyAssetIcon,
-} from '~/components/Icons';
+import { BecomeAdminIcon, MyAssetIcon } from '~/components/Icons';
 import useAsteroid from '~/hooks/useAsteroid';
 import useControlAsteroid from '~/hooks/actionManagers/useControlAsteroid';
 import useStore from '~/hooks/useStore';

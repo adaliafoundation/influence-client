@@ -4,8 +4,8 @@ import { PuffLoader as Loader } from 'react-spinners';
 
 import ButtonPill from '~/components/ButtonPill';
 import useUser from '~/hooks/useUser';
-import UncontrolledTextInput, { TextInputWrapper } from './TextInputUncontrolled';
-import { CheckedIcon, CheckIcon, CloseIcon, DotsIcon, UncheckedIcon } from './Icons';
+import UncontrolledTextInput from './TextInputUncontrolled';
+import { CheckedIcon, CheckIcon, CloseIcon, UncheckedIcon } from './Icons';
 import theme from '~/theme';
 import Button from './ButtonAlt';
 import { nativeBool } from '~/lib/utils';

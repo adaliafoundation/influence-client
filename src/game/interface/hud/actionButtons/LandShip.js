@@ -74,4 +74,6 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: LandShip, isVisible };
+const actionDefinition = { Component: LandShip, isVisible };
+
+export default actionDefinition;

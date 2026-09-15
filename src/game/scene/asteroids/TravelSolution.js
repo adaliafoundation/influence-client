@@ -73,7 +73,7 @@ const TravelSolution = ({}) => {
   const [predeparture, setPredeparture] = useState();
   const [trajectory, setTrajectory] = useState();
   const [trajectoryCenter, setTrajectoryCenter] = useState();
-  const [trajectoryDebug, setTrajectoryDebug] = useState();
+  const [, setTrajectoryDebug] = useState();
   const [trajectoryLength, setTrajectoryLength] = useState();
 
   const travelSolution = useStore(s => s.asteroids.travelSolution);
@@ -104,7 +104,7 @@ const TravelSolution = ({}) => {
       || travelSolution.departureTime < baseTime
 
       // ...on time override (i.e. ff / rewind)
-      || timeOverride && ![0, 1].includes(Number(timeOverride.speed))
+      || (timeOverride && ![0, 1].includes(Number(timeOverride.speed)))
 
       // ...crew's propellant bonus has changed
       || travelSolution.exhaustBonus !== (exhaustBonus.totalBonus || 1)

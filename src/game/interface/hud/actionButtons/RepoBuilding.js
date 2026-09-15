@@ -66,4 +66,6 @@ const RepoBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
   );
 };
 
-export default { Component: RepoBuilding, isVisible };
+const actionDefinition = { Component: RepoBuilding, isVisible };
+
+export default actionDefinition;

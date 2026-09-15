@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { lambert } from '@influenceth/astro';
 import { GM_ADALIA } from '@influenceth/sdk';
@@ -7,7 +7,7 @@ import { Vector3 } from 'three';
 
 import useStore from '~/hooks/useStore';
 import useWebWorker from '~/hooks/useWebWorker';
-import theme, { hexToRGB } from '~/theme';
+import theme from '~/theme';
 import Grid from './porkchop/Grid';
 import SolutionLabels from './porkchop/SolutionLabels';
 import Reticule from './porkchop/Reticule';

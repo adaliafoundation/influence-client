@@ -4,6 +4,7 @@ import { Entity } from '@influenceth/sdk';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useCrewContext from '~/hooks/useCrewContext';
 import actionStages from '~/lib/actionStages';
+import { getStarterFoodSupplySource } from '~/lib/starterPacks';
 
 const useFeedCrewManager = () => {
   const { crew, isLoading } = useCrewContext();
@@ -28,15 +29,18 @@ const useFeedCrewManager = () => {
           caller_crew
         });
       } else {
+        const source = origin || getStarterFoodSupplySource(crew);
+        if (!source) return;
+
         execute('ResupplyFood', {
-          origin,
-          origin_slot: originSlot,
+          origin: { id: source.id, label: source.label },
+          origin_slot: originSlot ?? source.slot,
           food: amount,
           caller_crew
         });
       }
     },
-    [execute, caller_crew]
+    [caller_crew, crew, execute]
   );
 
   const currentFeeding = useMemo(

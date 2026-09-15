@@ -38,4 +38,6 @@ const MultiBuy = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogPro
   );
 };
 
-export default { Component: MultiBuy, isVisible };
+const actionDefinition = { Component: MultiBuy, isVisible };
+
+export default actionDefinition;

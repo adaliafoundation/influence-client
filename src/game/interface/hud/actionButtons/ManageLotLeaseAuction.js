@@ -56,4 +56,6 @@ const ManageLotLeaseAuction = ({ asteroid, crew, lot, blockTime, onSetAction, _d
   );
 };
 
-export default { Component: ManageLotLeaseAuction, isVisible };
+const actionDefinition = { Component: ManageLotLeaseAuction, isVisible };
+
+export default actionDefinition;

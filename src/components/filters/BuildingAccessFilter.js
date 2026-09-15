@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Address } from '@influenceth/sdk';
 
 import { RadioCheckedIcon, RadioUncheckedIcon } from '~/components/Icons';

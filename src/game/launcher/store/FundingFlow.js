@@ -1,28 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import styled, { css } from 'styled-components';
+import { features } from '~/appConfig/features';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import { createPortal } from 'react-dom';
 import { PropagateLoader as Loader } from 'react-spinners';
-import { RampInstantSDK } from '@ramp-network/ramp-instant-sdk';
+import { Tooltip } from 'react-tooltip';
 
 import { appConfig } from '~/appConfig';
+import AvnuLogo from '~/assets/images/sales/logo_avnu.svg';
+import LayerswapIcon from '~/assets/images/sales/logo_layerswap_icon.svg';
+import StarknetIcon from '~/assets/images/starknet-icon.png';
 import Button from '~/components/ButtonAlt';
-import { ChevronRightIcon, CloseIcon, LinkIcon, WalletIcon } from '~/components/Icons';
+import { ChevronRightIcon, CloseIcon, EthIcon, UpdateIcon, WalletIcon } from '~/components/Icons';
 import Details from '~/components/DetailsV2';
+import IconButton from '~/components/IconButton';
 import useSession from '~/hooks/useSession';
-import BrightButton from '~/components/BrightButton';
-import MouseoverInfoPane from '~/components/MouseoverInfoPane';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
-import UserPrice from '~/components/UserPrice';
-import { TOKEN, TOKEN_FORMAT, TOKEN_FORMATTER } from '~/lib/priceUtils';
-import usePriceHelper from '~/hooks/usePriceHelper';
+import { useUSDCBalance } from '~/hooks/useWalletTokenBalance';
+import { TOKEN, TOKEN_FORMAT, TOKEN_FORMATTER, TOKEN_SCALE } from '~/lib/priceUtils';
 import useStore from '~/hooks/useStore';
 import EthFaucetButton from './components/EthFaucetButton';
-import { areChainsEqual, fireTrackingEvent, resolveChainId, safeBigInt } from '~/lib/utils';
+import { areChainsEqual, fireTrackingEvent, nativeBool, resolveChainId } from '~/lib/utils';
+import api from '~/lib/api';
+import { BANXA_DEFAULTS, createClientFundingIntent, normalizeBanxaOrder, parseBanxaReturnUrl } from '~/lib/funding';
 
 const layerSwapChains = {
   SN_MAIN: { ethereum: 'ETHEREUM_MAINNET', starknet: 'STARKNET_MAINNET' },
   SN_SEPOLIA: { ethereum: 'ETHEREUM_SEPOLIA', starknet: 'STARKNET_SEPOLIA' }
 };
+
+const AVNU_APP_URL = 'https://app.avnu.fi/';
 
 const FundingBody = styled.div`
   align-items: center;
@@ -31,94 +37,175 @@ const FundingBody = styled.div`
   margin: 0 30px;
   padding: 5px 0;
   width: 450px;
-  h3 {
-    align-items: center;
-    color: ${p => p.theme.colors.warning};
-    display: flex;
-    font-size: 16px;
-    font-weight: normal;
-    & > svg {
-      font-size: 30px;
-      margin-right: 16px;
-    }
-  }
 `;
 
 const FundingButtons = styled.div`
-  padding: 0px 0 20px;
+  padding: 0 0 20px;
   width: 100%;
-  & button {
+
+  & > button {
     margin-bottom: 10px;
-    padding: 15px 10px;
     text-transform: none;
     width: 100%;
+
     & > div {
       align-items: center;
       display: flex;
       justify-content: center;
+
       & > span {
         flex: 1;
         text-align: left;
       }
     }
   }
-  & h4 {
-    align-items: flex-end;
-    font-weight: normal;
-    margin: 0 0 10px;
-    text-transform: uppercase;
+`;
 
-    display: flex;
-    flex-direction: row;
-    & > span {
-      flex: 1;
-    }
-    & > label {
-      opacity: 0.5;
-      font-size: 13px;
-      text-transform: none;
-      &:hover {
-        opacity: 0.8;
-      }
-    }
+const FundingOptionButton = styled(Button)`
+  & > div {
+    min-height: 50px;
   }
 `;
 
-const Disclaimer = styled.div`
+const SecondaryOptionsToggle = styled.button`
+  align-items: center;
+  background: transparent;
+  border: 0;
   color: ${p => p.theme.colors.main};
-  font-size: 12px;
-  padding: 10px 10px 20px;
-  pointer-events: ${p => p.visible ? 'all' : 'none'};
-  & a {
+  cursor: ${p => p.theme.cursors.active};
+  display: inline-flex;
+  font-family: 'Jura', sans-serif;
+  font-size: 15px;
+  gap: 6px;
+  margin: 2px 0 8px;
+  opacity: 0.8;
+  padding: 0;
+  text-transform: none;
+
+  &:hover {
+    color: ${p => p.theme.colors.brightMain};
+    opacity: 1;
+  }
+
+  & > svg {
+    font-size: 14px;
+    transform: rotate(${p => p.$open ? '-90deg' : '90deg'});
+    transition: transform 100ms ease;
+  }
+`;
+
+const SecondaryOptions = styled.div`
+  border-top: ${p => p.$primary ? 'none' : '1px solid #333'};
+  margin-top: ${p => p.$primary ? 0 : 10}px;
+  padding-top: ${p => p.$primary ? 0 : 10}px;
+`;
+
+const AdvancedOptionButton = styled.button`
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #222;
+  color: ${p => p.theme.colors.main};
+  cursor: ${p => p.theme.cursors.active};
+  display: flex;
+  font-family: 'Jura', sans-serif;
+  font-size: 16px;
+  gap: 12px;
+  height: 48px;
+  padding: 0 4px;
+  text-align: left;
+  text-transform: none;
+  transition: color 100ms ease, background 100ms ease;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background: rgba(${p => p.theme.colors.mainRGB}, 0.08);
     color: white;
-    text-decoration: none;
-    &:hover {
-      text-decoration: underline;
-    }
+  }
+
+  &:disabled {
+    color: ${p => p.theme.colors.disabledText};
+    cursor: ${p => p.theme.cursors.default};
+  }
+
+  & label {
+    flex: 1;
+  }
+
+  & > span:last-child {
+    align-items: center;
+    display: inline-flex;
+    justify-content: flex-end;
+  }
+`;
+
+const AdvancedOptionIcon = styled.span`
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: white;
+  display: inline-flex;
+  flex: 0 0 30px;
+  font-size: 16px;
+  font-weight: bold;
+  height: 30px;
+  justify-content: center;
+  overflow: hidden;
+  width: 30px;
+
+  & img {
+    display: block;
+    height: 22px;
+    object-fit: contain;
+    width: 22px;
+  }
+
+  & svg {
+    display: block;
+    height: 22px;
+    width: 22px;
   }
 `;
 
 const Receipt = styled.div`
   margin-bottom: 30px;
   width: 100%;
+
   & > div {
     align-items: center;
     display: flex;
     flex-direction: row;
     height: 30px;
+
     & > label {
       opacity: 0.5;
       flex: 1;
     }
-    &:last-child {
-      border-top: 1px solid #333;
-      color: ${p => p.theme.colors.warning};
-      margin-top: 4px;
-      height: 38px;
-      & > span {
-        // color: ${p => p.theme.colors.warning};
-        font-weight: bold;
-      }
+
+    & > span {
+      font-weight: bold;
+    }
+  }
+`;
+
+const BalanceActions = styled.div`
+  align-items: center;
+  display: flex;
+  gap: 8px;
+
+  & button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: ${p => p.theme.colors.main};
+    cursor: ${p => p.theme.cursors.active};
+    display: inline-flex;
+    font-size: 18px;
+    padding: 0;
+
+    &:hover {
+      color: ${p => p.theme.colors.brightMain};
     }
   }
 `;
@@ -126,42 +213,12 @@ const Receipt = styled.div`
 const ButtonRow = styled.div`
   display: flex;
   flex-direction: row;
+
   & > button {
     margin-right: 10px;
+
     &:last-child {
       margin-right: 0;
-    }
-  }
-`;
-
-const Collapsible = styled.div`
-  height: 26px;
-  overflow: visible hidden;
-  transition: height 150ms ease;
-
-  & > h4 {
-    border-bottom: 1px solid #333;
-    padding-bottom: 6px;
-
-    cursor: ${p => p.theme.cursors.active};
-    opacity: 0.5;
-    transition: opacity 150ms ease;
-    & > svg {
-      transition: transform 150ms ease;
-    }
-  }
-  & > ${ButtonRow} {
-    padding: 0 3px;
-  }
-
-  &:hover {
-    height: 92px;
-    & > h4 {
-      border-bottom-color: transparent;
-      opacity: 1;
-      & > svg {
-        transform: rotate(90deg);
-      }
     }
   }
 `;
@@ -178,6 +235,7 @@ const GiantIcon = styled.div`
   margin: 40px 0 10px;
   width: 115px;
 `;
+
 const WaitingWrapper = styled.div`
   align-items: center;
   display: flex;
@@ -190,12 +248,15 @@ const WaitingWrapper = styled.div`
     display: flex;
     flex-direction: column;
     text-align: center;
+
     & > h4 {
       margin: 20px 0 0;
     }
+
     & > small {
       opacity: 0.5;
     }
+
     & > button {
       margin-top: 20px;
     }
@@ -210,6 +271,7 @@ const WaitingWrapper = styled.div`
     justify-content: center;
     margin-top: 40px;
     width: 100%;
+
     & > div {
       align-items: center;
       background: #333;
@@ -218,6 +280,7 @@ const WaitingWrapper = styled.div`
       height: 36px;
       justify-content: center;
       width: 225px;
+
       & > * {
         margin-top: -10px;
         margin-left: -10px;
@@ -227,251 +290,215 @@ const WaitingWrapper = styled.div`
   }
 `;
 
-const RampWrapper = styled.div`
-  background: linear-gradient(225deg, black, rgba(${p => p.theme.colors.mainRGB}, 0.3));
-  ${p => !p.display && `
-    height: 0;
-    overflow: hidden;
-    width: 0;
-  `}
-  & > div {
-    height: 600px;
-    width: 900px;
+const EmbeddedCheckoutOverlay = styled.div`
+  align-items: center;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 10000;
+`;
+
+const EmbeddedCheckoutContainer = styled.div`
+  border-radius: 8px;
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+  width: min(520px, calc(100vw - 40px));
+
+  & > iframe {
+    border: 0;
+    display: block;
+    height: min(760px, calc(100vh - 40px));
+    width: 100%;
   }
 `;
 
-const RAMP_PURCHASE_STATUS = {
-  INITIALIZED: {
-    statusText: 'The purchase has been initialized.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_STARTED: {
-    statusText: 'Automated payment has been initiated.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_IN_PROGRESS: {
-    statusText: 'Payment process has been completed.',
-    isSuccess: false,
-    isError: false
-  },
-  PAYMENT_FAILED: {
-    statusText: 'The payment was cancelled, rejected, or otherwise failed.',
-    isSuccess: false,
-    isError: true
-  },
-  PAYMENT_EXECUTED: {
-    statusText: 'Payment approved, waiting for funds to be received.',
-    isSuccess: false,
-    isError: false
-  },
-  FIAT_SENT: {
-    statusText: 'Outgoing bank transfer has been confirmed.',
-    isSuccess: false,
-    isError: false
-  },
-  FIAT_RECEIVED: {
-    statusText: 'Payment confirmed, final checks before crypto transfer.',
-    isSuccess: false,
-    isError: false
-  },
-  RELEASING: {
-    statusText: 'Funds received, initiating crypto transfer...',
-    isSuccess: false,
-    isError: false
-  },
-  RELEASED: {
-    statusText: 'Waiting for funds to be received by user\'s wallet...',
-    isSuccess: true,
-    isError: false
-  },
-  EXPIRED: {
-    statusText: 'Time to pay for the purchase was exceeded. Please try again, making sure to follow all prompts.',
-    isSuccess: false,
-    isError: true
-  },
-  CANCELLED: {
-    statusText: 'The purchase was been cancelled.',
-    isSuccess: false,
-    isError: true
+const EmbeddedCheckoutCloseButton = styled(IconButton)`
+  background: rgba(0, 0, 0, 0.75);
+  position: fixed !important;
+  right: 24px;
+  top: 24px;
+  z-index: 10001;
+`;
+
+const SwapConfirmation = styled.div`
+  padding: 10px 30px 25px;
+  width: 450px;
+
+  & > p {
+    color: #ccc;
+    font-size: 16px;
+    line-height: 1.4em;
+    margin: 0 0 22px;
   }
+
+  & b {
+    color: white;
+    font-weight: normal;
+  }
+`;
+
+const getSuggestedAmounts = (fundsNeeded) => {
+  if (!fundsNeeded) return [10e6, 25e6, 50e6];
+
+  const needed = Math.max(TOKEN_SCALE[TOKEN.USDC], Math.ceil(fundsNeeded.to(TOKEN.USDC)));
+  if (needed < 20e6) return [needed, 25e6, 50e6];
+  if (needed < 40e6) return [needed, 50e6, 100e6];
+  if (needed < 80e6) return [needed, 100e6, 250e6];
+  if (needed < 200e6) return [needed, 250e6, 500e6];
+  return [needed];
 };
 
-export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
+export const TokenList = ({ items }) => (
+  <>
+    {items.map((item, index) => (
+      <span key={item.token}>
+        {index > 0 && (index === items.length - 1 ? ' and ' : ', ')}
+        {item.label}
+      </span>
+    ))}
+  </>
+);
+
+const getBanxaCheckoutErrorMessage = (error) => {
+  const serverMessage = error?.response?.data?.message || error?.response?.data?.error || error?.message;
+  if (/wallet must be deployed/i.test(serverMessage || '')) {
+    return 'Your wallet is still being prepared. Please try again in a moment.';
+  }
+  return 'Banxa funding is temporarily unavailable. Please try another funding option.';
+};
+
+const BanxaEmbeddedCheckout = ({ checkoutUrl, onClose, onLoad }) => {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  return createPortal(
+    <EmbeddedCheckoutOverlay onClick={onClose} role="presentation">
+      <EmbeddedCheckoutCloseButton
+        borderless
+        dataFor="launcherTooltip"
+        dataPlace="left"
+        dataTip="Close checkout"
+        onClick={onClose}>
+        <CloseIcon />
+      </EmbeddedCheckoutCloseButton>
+      <EmbeddedCheckoutContainer
+        aria-label="Banxa Checkout"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog">
+        <iframe onLoad={onLoad} src={checkoutUrl} title="Banxa hosted checkout" />
+      </EmbeddedCheckoutContainer>
+    </EmbeddedCheckoutOverlay>,
+    document.body
+  );
+};
+
+export const FundingFlow = ({ mode, primaryAction, swapRequirements = [], totalPrice, onClose, onFunded }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
-  const { accountAddress, chainId, walletId } = useSession();
-  const priceHelper = usePriceHelper();
+  const { accountAddress, chainId } = useSession();
+  const activeFundingIntent = useStore(s => {
+    const intent = s.activeFundingIntentId ? s.fundingIntents?.[s.activeFundingIntentId] : null;
+    return intent?.provider === 'banxa' && intent.accountAddress === accountAddress ? intent : null;
+  });
+  const dispatchFundingIntentStarted = useStore(s => s.dispatchFundingIntentStarted);
+  const dispatchFundingIntentUpdated = useStore(s => s.dispatchFundingIntentUpdated);
   const { data: wallet, refetch: refetchBalances } = useWalletPurchasableBalances();
-  const preferredUiCurrency = useStore(s => s.getPreferredUiCurrency());
+  const { data: usdcBalance = 0n, refetch: refetchUsdcBalance } = useUSDCBalance();
 
-  const [hoveredRampButton, setHoveredRampButton] = useState(false);
-  const [ramping, setRamping] = useState();
-  const [waiting, setWaiting] = useState();
+  const [banxaUrl, setBanxaUrl] = useState();
+  const [creatingBanxaOrder, setCreatingBanxaOrder] = useState(false);
+  const [layerswapUrl, setLayerswapUrl] = useState();
+  const [showSecondaryOptions, setShowSecondaryOptions] = useState(false);
 
-  const startingBalance = useRef();
-
-  const [debug, setDebug] = useState(0);
-
-  // TODO: technically could wait to start polling until page is focused again
-  useEffect(() => {
-    // if (waiting && !debug) {
-    //   setTimeout(() => {
-    //     console.log('hack', startingBalance.current, wallet.tokenBalances); // tokenBalances
-    //     startingBalance.current[TOKEN.ETH] -= safeBigInt(1e14);
-    //     setDebug(1);
-    //   }, 5000);
-    // }
-    if (waiting && !!wallet) {
-      if (!startingBalance.current) startingBalance.current = { ...wallet.tokenBalances };
-      const i = setInterval(() => {
-        refetchBalances();
-        // if (debug === 1) setDebug(2); // TODO: deprecate
-      }, 10e3);
-      return () => {
-        if (i) clearInterval(i);
-      };
-    }
-  }, [waiting, !!wallet, debug]);
-
-  useEffect(() => {
-    // if there is an actual increase in currency of a token (i.e. not just an
-    // increase in value b/c we don't want a trigger on exchange rate changes)
-    if (waiting && startingBalance.current) {
-      const increaseToken = Object.keys(startingBalance.current).find((token) => {
-        return (wallet.tokenBalances[token] > startingBalance.current[token])
-      });
-      if (increaseToken) {
-        const increaseAmount = wallet.tokenBalances[increaseToken] - startingBalance.current[increaseToken];
-
-        // alert
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: <>{TOKEN_FORMATTER[increaseToken](safeBigInt(increaseAmount), TOKEN_FORMAT.VERBOSE)} of funds received.</> },
-          duration: 5e3
-        });
-
-        // reset state
-        setWaiting(false);
-        startingBalance.current = null;
-
-        // callbacks
-        // if there are now sufficient funds (or there was no target price), call onFunded && onClose
-        // else (there is an unmet totalPrice), keep flow open (but will be back at beginning)
-        if (!totalPrice || wallet.combinedBalance.usdcValue > totalPrice.usdcValue) {
-          // console.log('FUNDING FLOW', { wallet, combinedBalance: wallet?.combinedBalance })
-          if (onFunded) onFunded();
-          if (onClose) onClose();
-        }
-      }
-    }
-  }, [debug, waiting, wallet?.tokenBalances])
-
-  const [walletBalance, fundsNeeded] = useMemo(
+  const fundsNeeded = useMemo(
     () => {
-      if (!wallet) return [];
-      const balance = wallet.combinedBalance;
-      let needed;
-      if (totalPrice) {
-        needed = totalPrice.clone();
-        needed.usdcValue -= balance.usdcValue;
-      }
-      return [balance, needed];
+      if (!totalPrice) return;
+      const needed = totalPrice.clone();
+      needed.usdcValue = Math.max(0, needed.usdcValue - Number(usdcBalance));
+      return needed;
     },
-    [priceHelper, totalPrice, wallet]
+    [totalPrice, usdcBalance]
   );
 
-  const suggestedAmounts = useMemo(() => {
-    if (!fundsNeeded) return [10e6, 25e6, 50e6];
+  const fundingAction = primaryAction || (totalPrice && fundsNeeded?.usdcValue === 0 && onFunded
+    ? { label: 'Continue', onClick: onFunded }
+    : null);
 
-    const needed = Math.ceil(fundsNeeded.to(TOKEN.USDC));
-    if (needed < 20e6) return [needed, 25e6, 50e6];
-    if (needed < 40e6) return [needed, 50e6, 100e6];
-    if (needed < 80e6) return [needed, 100e6, 250e6];
-    if (needed < 200e6) return [needed, 250e6, 500e6];
-    return [needed]
-  }, [fundsNeeded]);
+  const suggestedAmounts = useMemo(() => getSuggestedAmounts(fundsNeeded), [fundsNeeded]);
+  const onClickBanxa = useCallback((amount) => async () => {
+    fireTrackingEvent('funding_start', { externalId: accountAddress, provider: 'banxa' });
 
-  const to = useRef();
-  const onRampHover = useCallback((which) => (e) => {
-    if (to.current) clearTimeout(to.current);
-    if (which) {
-      setHoveredRampButton(e.target);
-    } else {  // close on delay so have time to click the link
-      to.current = setTimeout(() => {
-        setHoveredRampButton();
-      }, 1500);
-    }
-  }, []);
-
-  const [rampPurchase, setRampPurchase] = useState();
-  const checkRampPurchase = useCallback(async (purchase) => {
     try {
-      const response = await fetch(
-        `${appConfig.get('Api.ramp')}/api/host-api/purchase/${purchase.id}?secret=${purchase.purchaseViewToken}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-      if (response.ok) {
-        const updatePurchaseObject = await response.json();
-        setRampPurchase(updatePurchaseObject);
+      setCreatingBanxaOrder(true);
 
-        // stop checking if terminal status
-        const status = RAMP_PURCHASE_STATUS[updatePurchaseObject.status];
-        if (status.isError || status.isSuccess) {
-          return;
-        }
-      } else {
-        console.error('Response not ok:', response);
-      }
-    } catch (error) {
-      console.error('Error fetching purchase info:', error);
-    }
-  }, []);
-  useEffect(() => {
-    if (rampPurchase) {
-      const i = setInterval(() => { checkRampPurchase(rampPurchase); }, 5000);
-      return () => clearInterval(i);
-    }
-  }, [checkRampPurchase, rampPurchase])
-  
-  const onClickCC = useCallback((amount) => () => {
-    fireTrackingEvent('funding_start', { externalId: accountAddress });
-    setRamping(true);
-    setRampPurchase();
+      const amountUsdc = Math.ceil(amount / TOKEN_SCALE[TOKEN.USDC]);
+      const order = normalizeBanxaOrder(await api.createBanxaCheckout({
+        blockchain: BANXA_DEFAULTS.blockchain,
+        crypto: BANXA_DEFAULTS.crypto,
+        fiat: BANXA_DEFAULTS.fiat,
+        fiatAmount: String(Math.max(Number(appConfig.get('Banxa.minFiat') || 11), amountUsdc)),
+        returnUrl: window.location.href,
+        walletAddress: accountAddress
+      }));
 
-    setTimeout(() => {
-      const embeddedRamp = new RampInstantSDK({
-        hostAppName: 'Influence',
-        hostLogoUrl: window.location.origin + '/maskable-logo-192x192.png',
-        hostApiKey: appConfig.get('Api.ClientId.ramp'),
-        userAddress: accountAddress,
-        swapAsset: 'STARKNET_ETH',  // TODO: STARKNET_USDC once enabled
-        fiatCurrency: 'USD',
-        fiatValue: Math.ceil(amount / 1e6),
-        url: appConfig.get('Api.ramp'),
+      if (!order.id || !order.checkoutUrl) throw new Error('Banxa order creation returned empty');
 
-        variant: 'embedded-desktop',
-        containerNode: document.getElementById('ramp-container')
-      })
-      embeddedRamp.on('PURCHASE_CREATED', (e) => {
-        console.log('PURCHASE_CREATED', e);
-        try {
-          setRampPurchase(e.payload.purchase);
-        } catch (e) {
-          console.warn('purchase_created event missing payload!', e);
-        }
+      const fundingIntent = createClientFundingIntent({
+        accountAddress,
+        amountUsdc,
+        checkoutUrl: order.checkoutUrl,
+        orderId: order.id,
+        providerStatus: order,
+        startingTokenBalances: wallet?.tokenBalances,
+        status: order.status,
+        statusUrl: order.statusUrl,
+        targetUsdcValue: totalPrice?.usdcValue
       });
-      embeddedRamp.show();
-    }, 100);
-  }, [accountAddress]);
+      dispatchFundingIntentStarted(fundingIntent);
+      setBanxaUrl(order.checkoutUrl);
+    } catch (error) {
+      createAlert({
+        type: 'GenericAlert',
+        data: { content: getBanxaCheckoutErrorMessage(error) },
+        level: 'warning',
+        duration: 5000
+      });
+      console.error('Error creating Banxa order:', error);
+      fireTrackingEvent('funding_error', { externalId: accountAddress, provider: 'banxa' });
+    } finally {
+      setCreatingBanxaOrder(false);
+    }
+  }, [accountAddress, createAlert, dispatchFundingIntentStarted, totalPrice?.usdcValue, wallet?.tokenBalances]);
 
-  const [layerswapUrl, setLayerswapUrl] = useState();
+  const onBanxaFrameLoad = useCallback((event) => {
+    if (!activeFundingIntent?.id || !event.currentTarget) return;
+
+    try {
+      const returnData = parseBanxaReturnUrl({
+        baseUrl: appConfig.get('Api.banxa'),
+        href: event.currentTarget.contentWindow.location.href
+      });
+      if (!returnData) return;
+
+      dispatchFundingIntentUpdated(activeFundingIntent.id, returnData);
+      setBanxaUrl();
+    } catch (e) {
+      // Cross-origin iframe locations are expected while the player is in Banxa checkout.
+    }
+  }, [activeFundingIntent?.id, dispatchFundingIntentUpdated]);
+
+  const closeBanxaCheckout = useCallback(() => {
+    setBanxaUrl();
+  }, []);
+
   const onClickLayerswap = useCallback(() => {
     let amount;
     if (fundsNeeded) {
@@ -495,14 +522,22 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
         }).toString()
       }`
     );
-  }, [accountAddress, fundsNeeded]);
+  }, [accountAddress, chainId, fundsNeeded]);
 
   const onClickStarkgate = useCallback(() => {
     const url = `https://${areChainsEqual('SN_SEPOLIA', chainId) ? 'sepolia.' : ''}starkgate.starknet.io/`;
 
     window.open(url, '_blank');
-    setWaiting(true);
+  }, [chainId]);
+
+  const onClickAvnu = useCallback(() => {
+    window.open(AVNU_APP_URL, '_blank', 'noopener');
   }, []);
+
+  const onRefreshBalance = useCallback(() => {
+    refetchBalances();
+    refetchUsdcBalance();
+  }, [refetchBalances, refetchUsdcBalance]);
 
   const onFaucetError = useCallback(() => {
     createAlert({
@@ -512,191 +547,142 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
       duration: 5000
     });
     onClose();
-  }, [onClose]);
+  }, [createAlert, onClose]);
 
-  useEffect(() => {
-    // error: clear ramp purchase + close funding dialog
-    if (RAMP_PURCHASE_STATUS[rampPurchase?.status]?.isError) {
-      // fire error
-      fireTrackingEvent('funding_error', { externalId: accountAddress, status: rampPurchase?.status });
+  return (
+    <>
+      {banxaUrl && (
+        <BanxaEmbeddedCheckout
+          checkoutUrl={banxaUrl}
+          onClose={closeBanxaCheckout}
+          onLoad={onBanxaFrameLoad} />
+      )}
+      {!banxaUrl && createPortal(
+      <>
+        <Details
+          title={mode === 'swap' ? 'Confirm Swap' : 'Add Funds'}
+          onClose={onClose}
+          modalMode
+          style={{ zIndex: 9000 }}>
+        {mode === 'swap' && (
+          <SwapConfirmation>
+            <p>
+              This purchase is priced in <b>USD</b>. To continue, you are authorizing your wallet to swap up to
+              <b><TokenList items={swapRequirements} /></b> through AVNU, then submit the purchase transaction.
+            </p>
+            <ButtonRow>
+              <Button onClick={onClose}>Back</Button>
+              <div style={{ flex: 1 }} />
+              <Button isTransaction onClick={() => { onFunded(); onClose(); }}>
+                <span>Continue</span> <ChevronRightIcon />
+              </Button>
+            </ButtonRow>
+          </SwapConfirmation>
+        )}
 
-      // alert user
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: <>RAMP PAYMENT ERROR: "{RAMP_PURCHASE_STATUS[rampPurchase?.status].statusText}"<br/><br/>Click for more information.</> },
-        level: 'warning',
-      });
-
-      // clear purchase
-      setRampPurchase();
-      onClose();
-
-    // success: clear ramp purchase (don't close funding, let "waiting" handler do that)
-    } else if (RAMP_PURCHASE_STATUS[rampPurchase?.status]?.isSuccess) {
-      // fire success
-      fireTrackingEvent('funding_success', { externalId: accountAddress });
-
-      // clear purchase
-      setRampPurchase();
-      setRamping(); // (this should be redundant)
-      setWaiting(true);
-
-    // processing: switch from ramp widget to "waiting" once PAYMENT_EXECUTED
-    } else if (rampPurchase?.status === 'PAYMENT_EXECUTED') {
-      fireTrackingEvent('funding_payment_executed', { externalId: accountAddress });
-      setRamping();
-      setWaiting(true);
-    }
-  }, [rampPurchase?.status])
-  
-
-  return createPortal(
-    (
-      <Details
-        title={fundsNeeded ? 'Insufficient Funds' : 'Add Funds'}
-        onClose={onClose}
-        modalMode
-        style={{ zIndex: 9000 }}>
-        {!waiting && !ramping && !layerswapUrl && (
+        {mode !== 'swap' && !banxaUrl && !layerswapUrl && !creatingBanxaOrder && (
           <FundingBody>
-            {fundsNeeded && (
-              <Receipt>
-                <div>
-                  <label>Available Balance {/* TODO: based on settings + gas buffer (hide for Web2 / or use tooltip for both) */}(USDC + ETH)</label>
-                  <span>{walletBalance.to(preferredUiCurrency, true)}</span>
-                </div>
-                <div>
-                  <label>Purchase Total</label>
-                  <span>{totalPrice.to(preferredUiCurrency, true)}</span>
-                </div>
-                <div>
-                  <label>
-                    Funding Required
-                  </label>
-                  <span>{fundsNeeded.to(preferredUiCurrency, true)}</span>
-                </div>
-              </Receipt>
-            )}
+            <Receipt>
+              <div>
+                <label>USDC Balance</label>
+                <BalanceActions>
+                  <span>{TOKEN_FORMATTER[TOKEN.USDC](usdcBalance, TOKEN_FORMAT.VERBOSE)}</span>
+                  <button
+                    data-tooltip-content="Refresh USDC Balance"
+                    data-tooltip-id="fundingFlowTooltip"
+                    data-tooltip-place="top"
+                    onClick={onRefreshBalance}
+                    type="button">
+                    <UpdateIcon />
+                  </button>
+                </BalanceActions>
+              </div>
+            </Receipt>
 
-            {walletId === 'argentWebWallet' && (
-              <FundingButtons>
+            <FundingButtons>
+              {fundingAction
+                ? (
+                  <FundingOptionButton
+                    disabled={nativeBool(fundingAction.disabled)}
+                    isTransaction
+                    onClick={() => {
+                      fundingAction.onClick();
+                      onClose();
+                    }}>
+                    <span>{fundingAction.label}</span>
+                    <ChevronRightIcon />
+                  </FundingOptionButton>
+                )
+                : (features.banxa &&
+                  <FundingOptionButton isTransaction onClick={onClickBanxa(suggestedAmounts[0])}>
+                    <span>Add USDC with Banxa</span>
+                    <ChevronRightIcon />
+                  </FundingOptionButton>
+                )
+              }
 
-                {appConfig.get('Starknet.chainId') === '0x534e5f5345504f4c4941' && (
-                  <>
-                    <h4>
-                      <span>Request Free ETH</span>
-                    </h4>
-                    <ButtonRow style={{ marginBottom: 10 }}>
-                      <EthFaucetButton
-                        onError={onFaucetError}
-                        onProcessing={(started) => setWaiting(!!started)} />
-                    </ButtonRow>
-                  </>
-                )}
+              {features.banxa && <SecondaryOptionsToggle
+                $open={showSecondaryOptions}
+                onClick={() => setShowSecondaryOptions(!showSecondaryOptions)}
+                type="button">
+                <span>Other funding options</span>
+                <ChevronRightIcon />
+              </SecondaryOptionsToggle>}
 
-                <h4>
-                  <span>Recharge Wallet</span>
-                  <label onMouseEnter={onRampHover(true)} onMouseLeave={onRampHover(false)}>Disclaimer</label>
-                  <MouseoverInfoPane
-                    referenceEl={hoveredRampButton}
-                    css={css`margin-top:10px;`}
-                    placement="bottom"
-                    visible={!!hoveredRampButton}
-                    zIndex={9001}>
-                    <Disclaimer visible={!!hoveredRampButton}>
-                      RAMP DISCLAIMER: Don't invest unless you're prepared to lose all the money you
-                      invest. This is a high-risk investment and you should not expect to be protected
-                      if something goes wrong.{' '}
-                      <a href="https://ramp.network/risk-warning" target="_blank" rel="noopener noreferrer">Take 2 minutes to learn more.</a>
-                    </Disclaimer>
-                  </MouseoverInfoPane>
-                </h4>
-                <ButtonRow>
-                  {suggestedAmounts.map((usdc, i) => (
-                    <BrightButton key={usdc} onClick={onClickCC(usdc)}>
-                      + <UserPrice price={usdc} priceToken={TOKEN.USDC} format={(fundsNeeded && i === 0) ? true : TOKEN_FORMAT.SHORT} />
-                    </BrightButton>
-                  ))}
-                </ButtonRow>
-
-                {/* TODO: start off collapsed */}
-                <Collapsible style={{ marginTop: 10 }}>
-                  <h4><span>Advanced Options</span><ChevronRightIcon /></h4>
-                  <ButtonRow>
-                    <BrightButton subtle onClick={onClickStarkgate}>
-                      <span>Bridge from L1</span>
+              {(!features.banxa || showSecondaryOptions) && (
+                <SecondaryOptions $primary={!features.banxa}>
+                  {fundingAction && features.banxa && (
+                    <FundingOptionButton isTransaction onClick={onClickBanxa(suggestedAmounts[0])}>
+                      <span>Add USDC with Banxa</span>
                       <ChevronRightIcon />
-                    </BrightButton>
-                    <BrightButton subtle onClick={onClickLayerswap}>
-                      <span>Swap on L2</span>
-                      <ChevronRightIcon />
-                    </BrightButton>
-                  </ButtonRow>
-                </Collapsible>
-              </FundingButtons>
-            )}
+                    </FundingOptionButton>
+                  )}
 
-            {walletId !== 'argentWebWallet' && (
-              <FundingButtons>
-                {appConfig.get('Starknet.chainId') === '0x534e5f5345504f4c4941' && (
-                  <EthFaucetButton
-                    onError={onFaucetError}
-                    onProcessing={(started) => setWaiting(!!started)} />
-                )}
+                  {appConfig.get('Starknet.chainId') === '0x534e5f5345504f4c4941' && (
+                    <EthFaucetButton
+                      onError={onFaucetError}
+                      buttonComponent={AdvancedOptionButton}
+                      icon={<AdvancedOptionIcon><EthIcon /></AdvancedOptionIcon>}
+                      onSuccess={onRefreshBalance} />
+                  )}
 
-                <BrightButton onClick={onClickStarkgate}>
-                  <span>Bridge Funds from L1</span>
-                  <ChevronRightIcon />
-                </BrightButton>
+                  <AdvancedOptionButton onClick={onClickAvnu}>
+                    <AdvancedOptionIcon>
+                      <AvnuLogo />
+                    </AdvancedOptionIcon>
+                    <label>AVNU Swaps</label>
+                    <ChevronRightIcon />
+                  </AdvancedOptionButton>
 
-                <ButtonRow>
-                  <BrightButton subtle onClick={onClickLayerswap}>
-                    <span>Swap L2 Funds</span> <ChevronRightIcon />
-                  </BrightButton>
-                  <BrightButton subtle onClick={onClickCC(suggestedAmounts[0])}>
-                    <span>Purchase L2 Funds</span> <ChevronRightIcon />
-                  </BrightButton>
-                </ButtonRow>
-              </FundingButtons>
-            )}
+                  {features.layerswap && <AdvancedOptionButton onClick={onClickLayerswap}>
+                    <AdvancedOptionIcon>
+                      <LayerswapIcon />
+                    </AdvancedOptionIcon>
+                    <label>Layerswap</label>
+                    <ChevronRightIcon />
+                  </AdvancedOptionButton>}
+
+                  <AdvancedOptionButton onClick={onClickStarkgate}>
+                    <AdvancedOptionIcon>
+                      <img alt="" src={StarknetIcon} />
+                    </AdvancedOptionIcon>
+                    <label>Stargate Bridge</label>
+                    <ChevronRightIcon />
+                  </AdvancedOptionButton>
+                </SecondaryOptions>
+              )}
+            </FundingButtons>
           </FundingBody>
         )}
-        {ramping && (
-          <>
-            <RampWrapper display>
-              <div id="ramp-container" />
-            </RampWrapper>
-            <div style={{ padding: '8px 0' }}>
-              <Button onClick={() => setRamping()}>Back</Button>
-            </div>
-          </>
-        )}
-        {layerswapUrl && (
-          <>
-            <iframe src={layerswapUrl} style={{ border: 0, width: '450px', height: '600px' }} />
-            <div style={{ display: 'flex', flexDirection: 'row', padding: '10px 0' }}>
-              <Button onClick={() => setLayerswapUrl()}>Cancel</Button>
-              <div style={{ flex: 1 }} />
-              <Button onClick={() => { setLayerswapUrl(); setWaiting(true); }}>Finished</Button>
-            </div>
-          </>
-        )}
-        {waiting && (
+
+        {creatingBanxaOrder && (
           <WaitingWrapper>
             <div>
               <GiantIcon>
                 <WalletIcon />
               </GiantIcon>
-              <h4>
-                {rampPurchase && !RAMP_PURCHASE_STATUS[rampPurchase.status].isSuccess
-                  ? RAMP_PURCHASE_STATUS[rampPurchase.status].statusText
-                  : `Waiting for funds to be received...`
-                }
-              </h4>
-              <small>(this may take several moments)</small>
-              <Button size="small" onClick={() => setWaiting(false)}>
-                <CloseIcon /> <span>Cancel</span>
-              </Button>
+              <h4>Generating Banxa checkout...</h4>
+              <small>Please wait while the checkout is prepared.</small>
             </div>
             <footer>
               <div>
@@ -705,9 +691,25 @@ export const FundingFlow = ({ totalPrice, onClose, onFunded }) => {
             </footer>
           </WaitingWrapper>
         )}
-      </Details>
-    ),
-    document.body
+
+        {layerswapUrl && (
+          <>
+            <iframe src={layerswapUrl} title="Layerswap" style={{ border: 0, width: '450px', height: '600px' }} />
+            <div style={{ display: 'flex', flexDirection: 'row', padding: '10px 0' }}>
+              <Button onClick={() => setLayerswapUrl()}>Cancel</Button>
+              <div style={{ flex: 1 }} />
+              <Button onClick={() => { setLayerswapUrl(); onRefreshBalance(); }}>
+                <UpdateIcon /> <span>Refresh Balance</span>
+              </Button>
+            </div>
+          </>
+        )}
+        </Details>
+        <Tooltip id="fundingFlowTooltip" style={{ zIndex: 9001 }} />
+      </>,
+      document.body
+      )}
+    </>
   );
 };
 
