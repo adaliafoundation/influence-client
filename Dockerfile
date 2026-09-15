@@ -30,7 +30,11 @@ FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd
 WORKDIR /app
 ENV NODE_ENV=production
 ENV REQUIRE_RUNTIME_CONFIG=true
-RUN rm -rf /usr/local/lib/node_modules/npm /opt/yarn-* \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends --only-upgrade \
+    libc6 libc-bin libssl3t64 openssl-provider-legacy perl-base gzip libpcre2-8-0 libsqlite3-0 \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm /opt/yarn-* \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/corepack
 ARG IMAGE_REVISION=local
 ENV IMAGE_REVISION=$IMAGE_REVISION
