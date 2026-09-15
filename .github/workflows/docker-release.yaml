@@ -105,21 +105,43 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.requested.outputs.sha }}
 
-      - name: Block all critical vulnerabilities
+      - name: Prepare unexpired vulnerability allowances
+        run: |
+          docker run --rm influence-client:test node --test scripts/create-grype-config.test.cjs
+          docker run --rm influence-client:test node scripts/create-grype-config.cjs > grype-config.json
+
+      - name: Block critical vulnerabilities without an active allowance
+        id: scan-critical
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
         with:
           image: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           fail-build: true
           severity-cutoff: critical
           only-fixed: false
+          output-file: scan-critical.sarif
+          config: grype-config.json
 
       - name: Block fixable high vulnerabilities
+        id: scan-high
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
         with:
           image: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
           only-fixed: true
+          output-file: scan-high.sarif
+          config: grype-config.json
+
+      - name: Save vulnerability reports
+        if: ${{ !cancelled() && steps.scan-critical.outcome != 'skipped' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vulnerability-reports
+          path: |
+            grype-config.json
+            scan-critical.sarif
+            scan-high.sarif
+          if-no-files-found: warn
 
       - name: Smoke-test the exact candidate digest
         env:
