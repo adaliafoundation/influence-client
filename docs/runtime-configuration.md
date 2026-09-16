@@ -36,7 +36,7 @@ Copy `.env.example` to an untracked operator file and fill in:
 | `REACT_APP_API_INFLUENCE` | Influence API, including its WebSocket service |
 | `REACT_APP_API_IPFS` | IPFS gateway serving the versioned media CID |
 | `REACT_APP_API_AVNU` | AVNU API for purchase and transaction swaps |
-| `REACT_APP_STARKNET_PROVIDER` | Starknet RPC for the selected network |
+| `REACT_APP_STARKNET_PROVIDER` | Starknet RPC 0.10 endpoint for the selected network |
 | `REACT_APP_ETHEREUM_PROVIDER` | Ethereum RPC for the built-in asset portal/bridge |
 
 Use HTTP(S) URLs. Browser-facing endpoints must be reachable from players'
@@ -47,6 +47,30 @@ provider's origin restrictions. Private credentials belong on a backend.
 Startup rejects missing required settings and malformed service URLs, naming the
 variables without logging their values. This checks configuration shape, not
 service availability, credentials, CORS, backend compatibility, or RPC chain IDs.
+
+### Starknet.js v10 rollout
+
+The client, AVNU SDK, and Cartridge Controller now share Starknet.js v10. Configure
+both `REACT_APP_STARKNET_PROVIDER` and `REACT_APP_STARKNET_PROVIDERBACKUP` (if set)
+with RPC 0.10 endpoints when deploying this version. For Alchemy, use the
+`/starknet/version/rpc/v0_10/` endpoint path. The client does not rewrite URLs or
+negotiate an older RPC dialect. Cartridge uses its native RPCs for Mainnet and
+Sepolia sessions; custom chains still use the configured endpoint.
+
+Validate on Sepolia before production:
+
+- Ready/Braavos connection, login signing, reconnect, and account/chain changes.
+- Cartridge login, session resume, and gameplay execution.
+- Privy first-use sponsored account deployment and subsequent sponsored gameplay.
+- The end-of-sponsorship transition to STRK or supported gas-token payment.
+- AVNU swaps, bridge fee estimation/transfers, receipt polling, and balance updates.
+
+The automated transaction tests use the real Starknet.js account, signer, and
+paymaster code with mocked transports. They cover sponsorship, deployment data,
+authentication refresh, gas-token fee caps, and rejection of altered paymaster
+responses. They do not replace wallet approval and transaction checks on Sepolia.
+Paymaster URLs and the backend's RPC configuration are separate from these client
+RPC endpoints; do not replace their URLs as part of the client RPC path change.
 
 ## Optional integrations
 
