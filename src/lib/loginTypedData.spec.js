@@ -70,7 +70,7 @@ test('can still build the legacy login typed data explicitly', () => {
   expect(getLoginTypedData(serverChallenge, LOGIN_TYPED_DATA_REVISIONS.LEGACY)).toEqual(serverChallenge);
 });
 
-test('builds revision 1 login typed data that starknet v8 can hash', () => {
+test('builds revision 1 login typed data that Starknet.js can hash', () => {
   const hash = typedData.getMessageHash(
     buildRevisionOneLoginTypedData(serverChallenge),
     accountAddress
