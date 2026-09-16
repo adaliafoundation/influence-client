@@ -182,3 +182,38 @@ jobs:
         with:
           name: client-image
           path: client-image.txt
+
+      - name: Publish the verified main-head prerelease channel
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" != "$COMMIT_SHA" ]; then
+            echo 'A newer main commit exists; leaving the prerelease channel unchanged.'
+            exit 0
+          fi
+          docker buildx imagetools create --prefer-index=false \
+            -t "$IMAGE:stack-prerelease" "$IMAGE@$DIGEST"
+          test "$(docker buildx imagetools inspect "$IMAGE:stack-prerelease" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+
+      - name: Notify prerelease deployment after publication
+        if: github.ref == 'refs/heads/main' && vars.STACK_PRERELEASE_WEBHOOK_URL != ''
+        env:
+          WEBHOOK_URL: ${{ vars.STACK_PRERELEASE_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.STACK_PRERELEASE_WEBHOOK_TOKEN }}
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$WEBHOOK_URL" = https://* ]]
+          test -n "$WEBHOOK_TOKEN"
+          # Only notify for the digest currently promoted to the prerelease channel.
+          if [ "$(docker buildx imagetools inspect "$IMAGE:stack-prerelease" --format '{{.Manifest.Digest}}')" != "$DIGEST" ]; then
+            echo 'The prerelease channel points to another release; skipping notification.'
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 --retry 3 --retry-delay 5 \
+            --request POST --header "X-Webhook-Token: $WEBHOOK_TOKEN" "$WEBHOOK_URL"
