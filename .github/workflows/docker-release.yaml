@@ -1,25 +1,37 @@
-name: Release client image
+name: Release production image
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      commit_sha:
+        required: true
+        type: string
+      channel:
+        required: false
+        default: production
+        type: string
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Full 40-character Git commit SHA from main; defaults to the selected ref
-        required: false
+        description: Full 40-character Git commit SHA from main
+        required: true
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: client-image-release
+  group: ${{ inputs.channel || 'production' }}-client-release
   cancel-in-progress: false
 
 jobs:
   release:
+    name: Build and verify image
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      release: ${{ steps.image.outputs.release }}
+      digest: ${{ steps.build.outputs.digest }}
+      commit_sha: ${{ steps.requested.outputs.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -27,6 +39,13 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Require the main workflow branch and a supported channel
+        env:
+          CHANNEL: ${{ inputs.channel || 'production' }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$CHANNEL" = production || "$CHANNEL" = prerelease ]]
+
       - name: Resolve requested SHA
         id: requested
         env:
@@ -48,13 +67,14 @@ jobs:
         id: image
         env:
           COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+          RELEASE_PREFIX: ${{ inputs.channel == 'prerelease' && 'stack-prerelease' || 'production' }}
         run: |
           test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
           git merge-base --is-ancestor "$COMMIT_SHA" refs/remotes/origin/main
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           echo "name=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "candidate=$IMAGE:candidate-$COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
-          echo "release=$IMAGE:release-$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "release=$IMAGE:$RELEASE_PREFIX-$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -161,12 +181,33 @@ jobs:
             --certificate-identity "https://github.com/$GITHUB_WORKFLOW_REF" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
+  publish:
+    name: ${{ inputs.channel == 'prerelease' && 'Publish prerelease image and request deployment' || 'Publish production image' }}
+    needs: release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.channel || 'production' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish immutable release tag
         env:
-          IMAGE: ${{ steps.image.outputs.name }}
-          RELEASE: ${{ steps.image.outputs.release }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+          IMAGE: ${{ needs.release.outputs.image }}
+          RELEASE: ${{ needs.release.outputs.release }}
+          DIGEST: ${{ needs.release.outputs.digest }}
+          COMMIT_SHA: ${{ needs.release.outputs.commit_sha }}
         run: |
           docker buildx imagetools create --prefer-index=false -t "$RELEASE" "$IMAGE@$DIGEST"
           test "$(docker buildx imagetools inspect "$RELEASE" --format '{{.Manifest.Digest}}')" = "$DIGEST"
@@ -182,3 +223,50 @@ jobs:
         with:
           name: client-image
           path: client-image.txt
+
+      - name: Publish production channel
+        if: inputs.channel != 'prerelease'
+        env:
+          IMAGE: ${{ needs.release.outputs.image }}
+          DIGEST: ${{ needs.release.outputs.digest }}
+        run: |
+          docker buildx imagetools create --prefer-index=false \
+            -t "$IMAGE:production" -t "$IMAGE:latest" "$IMAGE@$DIGEST"
+          test "$(docker buildx imagetools inspect "$IMAGE:production" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+          echo 'Production image published. Deployment on the host is manual.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the verified main-head prerelease channel
+        if: inputs.channel == 'prerelease'
+        env:
+          IMAGE: ${{ needs.release.outputs.image }}
+          DIGEST: ${{ needs.release.outputs.digest }}
+          COMMIT_SHA: ${{ needs.release.outputs.commit_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" != "$COMMIT_SHA" ]; then
+            echo 'A newer main commit exists; leaving the prerelease channel unchanged.'
+            exit 0
+          fi
+          docker buildx imagetools create --prefer-index=false \
+            -t "$IMAGE:stack-prerelease" "$IMAGE@$DIGEST"
+          test "$(docker buildx imagetools inspect "$IMAGE:stack-prerelease" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+
+      - name: Notify prerelease deployment after publication
+        if: inputs.channel == 'prerelease' && vars.STACK_PRERELEASE_WEBHOOK_URL != ''
+        env:
+          WEBHOOK_URL: ${{ vars.STACK_PRERELEASE_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.STACK_PRERELEASE_WEBHOOK_TOKEN }}
+          IMAGE: ${{ needs.release.outputs.image }}
+          DIGEST: ${{ needs.release.outputs.digest }}
+        run: |
+          [[ "$WEBHOOK_URL" = https://* ]]
+          test -n "$WEBHOOK_TOKEN"
+          # Only notify for the digest currently promoted to the prerelease channel.
+          if [ "$(docker buildx imagetools inspect "$IMAGE:stack-prerelease" --format '{{.Manifest.Digest}}')" != "$DIGEST" ]; then
+            echo 'The prerelease channel points to another release; skipping notification.'
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 --retry 3 --retry-delay 5 \
+            --request POST --header "X-Webhook-Token: $WEBHOOK_TOKEN" "$WEBHOOK_URL"
+          echo 'Webhook accepted; deployment completion must be checked on the host.' >> "$GITHUB_STEP_SUMMARY"

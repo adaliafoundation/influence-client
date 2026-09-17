@@ -1,0 +1,19 @@
+name: Release prerelease image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/docker-release.yaml
+    with:
+      commit_sha: ${{ github.sha }}
+      channel: prerelease
+    secrets: inherit
