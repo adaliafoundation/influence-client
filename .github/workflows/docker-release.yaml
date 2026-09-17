@@ -177,8 +177,9 @@ jobs:
           IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
         run: |
           cosign sign --yes "$IMAGE"
+          # Sigstore identifies the signing workflow, including when called by another workflow.
           cosign verify "$IMAGE" \
-            --certificate-identity "https://github.com/$GITHUB_WORKFLOW_REF" \
+            --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/docker-release.yaml@refs/heads/main" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
   publish:
