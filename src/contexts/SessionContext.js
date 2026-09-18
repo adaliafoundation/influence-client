@@ -356,10 +356,10 @@ export function SessionProvider({ children }) {
           } catch (e) { // (standardize error message here since different between wallets)
             throw new Error('Incorrect chain');
           }
+          if (authFlowId !== authFlowRef.current) return;
 
           setStoredWalletId(walletId);
           await connect(true);
-          setConnecting(false);
           return;
         }
 
@@ -385,8 +385,11 @@ export function SessionProvider({ children }) {
           const paymasterConfigured = capabilities.requiresSponsoredTransactions
             ? appConfig.get('Starknet.paymasterProxy')
             : appConfig.get('Starknet.paymaster');
-          setPaymasterTokens(paymasterConfigured ? (await newAccount.paymaster?.getSupportedTokens?.() || []) : []);
+          const tokens = paymasterConfigured ? (await newAccount.paymaster?.getSupportedTokens?.() || []) : [];
+          if (authFlowId !== authFlowRef.current) return;
+          setPaymasterTokens(tokens);
         } catch (error) {
+          if (authFlowId !== authFlowRef.current) return;
           console.warn('Unable to load paymaster-supported fee tokens.', error);
           setPaymasterTokens([]);
         }
@@ -414,6 +417,7 @@ export function SessionProvider({ children }) {
         );
       }
     } catch(e) {
+      if (authFlowId !== authFlowRef.current) return;
       if (e.message === 'Incorrect chain') {
         console.log('');
         setError(`Incorrect chain, please switch to ${resolveChainId(appConfig.get('Starknet.chainId'))}`);
@@ -483,6 +487,11 @@ export function SessionProvider({ children }) {
     resetAuthFlowState();
     resettingWalletRef.current = false;
   }, [dispatchSessionSuspended, resetAuthFlowState]);
+
+  const cancelLogin = useCallback(() => {
+    disconnect();
+    setReadyForChildren(true);
+  }, [disconnect]);
 
   // End / delete session, disconnect wallet and forget last wallet provider (full reset)
   const logout = useCallback(async () => {
@@ -593,7 +602,9 @@ export function SessionProvider({ children }) {
   }, [connectedWalletId, currentSession?.walletId, gameplay.useSessions]);
 
   const prepareGameplaySession = useCallback(async (ignorePreference = false) => {
+    const authFlowId = authFlowRef.current;
     if (!await shouldUseSessionKeys(ignorePreference)) return false;
+    if (authFlowId !== authFlowRef.current) return false;
     if (gameplaySessionReady) return true;
     if (!sessionWallet?.updateSession) throw createGameplaySessionApprovalError(
       new Error('Wallet does not expose a gameplay session API.')
@@ -606,15 +617,18 @@ export function SessionProvider({ children }) {
       throw createGameplaySessionApprovalError(e);
     }
 
+    if (authFlowId !== authFlowRef.current) return false;
     if (!sessionApproved) throw createGameplaySessionApprovalError();
     setGameplaySessionReady(true);
     return true;
   }, [gameplaySessionPolicies, gameplaySessionReady, sessionWallet, shouldUseSessionKeys]);
 
   const signLoginChallenge = useCallback(async (loginMessage, walletId) => {
+    const authFlowId = authFlowRef.current;
     try {
       return await withManualWalletGuard(walletAccount.signMessage(loginMessage), walletId);
     } catch (error) {
+      if (authFlowId !== authFlowRef.current) throw error;
       const e = normalizeAuthSigningError(error);
       if (isLoginCancelledError(e)) throw e;
       if (e.code === 'AUTH_TYPED_DATA_UNSUPPORTED') throw e;
@@ -651,20 +665,20 @@ export function SessionProvider({ children }) {
     const authFlowId = ++authFlowRef.current;
     const newSession = {};
 
-    // Check if the account contract has been deployed yet
-    if (!isUpgradeInsecure) setAuthPhase(AUTH_PHASES.VERIFYING_WALLET);
-    newSession.isDeployed = await checkDeployed();
-    if (authFlowId !== authFlowRef.current) return false;
-
-    // Start authenticating by requesting a login message from API
-    if (!isUpgradeInsecure) setStatus(STATUSES.AUTHENTICATING);
-    if (!isUpgradeInsecure) setAuthPhase(AUTH_PHASES.SIGNING_IN);
-    const serverLoginMessage = await api.requestLogin(connectedAccount);
-    if (authFlowId !== authFlowRef.current) return false;
-
-    const loginMessage = getLoginTypedData(serverLoginMessage);
-
     try {
+      // Check if the account contract has been deployed yet
+      if (!isUpgradeInsecure) setAuthPhase(AUTH_PHASES.VERIFYING_WALLET);
+      newSession.isDeployed = await checkDeployed();
+      if (authFlowId !== authFlowRef.current) return false;
+
+      // Start authenticating by requesting a login message from API
+      if (!isUpgradeInsecure) setStatus(STATUSES.AUTHENTICATING);
+      if (!isUpgradeInsecure) setAuthPhase(AUTH_PHASES.SIGNING_IN);
+      const serverLoginMessage = await api.requestLogin(connectedAccount);
+      if (authFlowId !== authFlowRef.current) return false;
+
+      const loginMessage = getLoginTypedData(serverLoginMessage);
+
       if (newSession.isDeployed) {
         let signature;
         const walletId = normalizeConnectorId(connectedWalletId || walletAccount?.walletProvider?.id);
@@ -697,6 +711,7 @@ export function SessionProvider({ children }) {
       setStatus(STATUSES.AUTHENTICATED);
       return true;
     } catch (e) {
+      if (authFlowId !== authFlowRef.current) return false;
       if (!isUpgradeInsecure) {
         if (isLoginCancelledError(e)) return;
         console.error(e);
@@ -892,6 +907,7 @@ export function SessionProvider({ children }) {
       login,
       loginPrompt: {
         busy: loginPromptBusy,
+        cancel: cancelLogin,
         close: closeLoginPrompt,
         label: getAuthPhaseLabel(authPhase),
         onSelect: handleLoginPrompt,
@@ -942,7 +958,7 @@ export function SessionProvider({ children }) {
               <Reconnecting
                 phase={authPhase}
                 walletName={getWalletLabel(currentSession?.walletId || lastConnectedWalletId)}
-                onLogout={logout} />
+                onLogout={cancelLogin} />
             )
             : null
         )

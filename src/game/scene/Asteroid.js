@@ -40,8 +40,7 @@ const LIGHT_ANIMATION_TIME = 500;
 export const ZOOM_IN_ANIMATION_TIME = 3000;
 export const ZOOM_OUT_ANIMATION_TIME = 2000;
 export const ZOOM_TO_PLOT_ANIMATION_MIN_TIME = 600;
-export const ZOOM_TO_PLOT_ANIMATION_MAX_TIME = 7500;
-const ZOOM_TO_PLOT_DRAMATIC_MULT = 3;
+export const ZOOM_TO_PLOT_ANIMATION_MAX_TIME = 2500;
 
 // some numbers estimated from https://web.dev/rendering-performance/
 const TARGET_FPS = 60;
@@ -796,11 +795,6 @@ const AsteroidComponent = () => {
   //   }
   // }, [controls, config?.radius]);
 
-  const [dramaticZoom, setDramaticZoom] = useState();
-  useEffect(() => {
-    setDramaticZoom(true);
-  }, [origin]);
-
   const [cameraRecenterTimestamp, setCameraRecenterTimestamp] = useState(0);
   useEffect(() => {
     if (cameraNeedsRecenter) {
@@ -890,8 +884,8 @@ const AsteroidComponent = () => {
       const arcLength = config.radius * radiansBetween;
       const metersPerSecond = 25000;
       const animationTime = Math.floor(
-        (dramaticZoom ? ZOOM_TO_PLOT_DRAMATIC_MULT : 1) * Math.min(
-          ZOOM_TO_PLOT_ANIMATION_MAX_TIME / ZOOM_TO_PLOT_DRAMATIC_MULT,
+        Math.min(
+          ZOOM_TO_PLOT_ANIMATION_MAX_TIME,
           Math.max(ZOOM_TO_PLOT_ANIMATION_MIN_TIME, 1e3 * arcLength / metersPerSecond)
         )
       );
@@ -904,7 +898,6 @@ const AsteroidComponent = () => {
         selectedLotTween.current = null;
         automatingCamera.current = false;
         setCameraAutomationVersion((v) => v + 1);
-        setDramaticZoom(false);
       };
 
       // apply rotation to lotPosition (adjusting for mid-animation rotation of asteroid)
