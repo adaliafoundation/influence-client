@@ -588,9 +588,9 @@ export function ChainTransactionProvider({ children }) {
     blockNumber,
     blockTime,
     chainId,
+    getTransactionAccount,
     isDeployed,
     login,
-    logout,
     paymasterTokens,
     provider,
     sessionWallet,
@@ -753,8 +753,9 @@ export function ChainTransactionProvider({ children }) {
   );
 
   const executeWithAccount = useCallback(async (calls, options = {}) => {
-    const account = walletAccountRef.current;
-    if (!account) throw new Error('Account is disconnected');
+    const walletAccount = walletAccountRef.current;
+    if (!walletAccount) throw new Error('Account is disconnected');
+    const account = await getTransactionAccount(walletAccount, calls, options);
     const paymasterConfigured = walletCapabilities.requiresSponsoredTransactions
       ? appConfig.get('Starknet.paymasterProxy')
       : appConfig.get('Starknet.paymaster');
@@ -898,6 +899,7 @@ export function ChainTransactionProvider({ children }) {
     dispatchLauncherPage,
     dispatchPaidFeesAcknowledged,
     gameplay.feeTokens,
+    getTransactionAccount,
     isDeployed,
     nonce,
     paymasterTokens,
@@ -1365,18 +1367,15 @@ export function ChainTransactionProvider({ children }) {
       });
     }
 
-    // Session expired for Argent web wallet sessions, user should be logged out
-    if (e?.message && e?.message.includes('session expired')) {
+    if (/session expired|session\/(expired|revoked)/i.test(e?.message || '')) {
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'Session expired. Please log in again.' },
+        data: { content: 'Your wallet session is no longer valid. Please try again to approve a new session.' },
         level: 'warning',
         duration: 5000
       });
-
-      logout();
     }
-  }, [accountAddress, createAlert, dispatchFailedTransaction, logout]);
+  }, [accountAddress, createAlert, dispatchFailedTransaction]);
 
   const deployAccount = useCallback(async () => {
     if (isDeployed) return { deployed: true, transaction: null };

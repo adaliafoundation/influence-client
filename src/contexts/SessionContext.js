@@ -33,6 +33,7 @@ import {
   setStoredWalletId
 } from '~/lib/wallets';
 import { allowedMethods, buildGameplaySessionPolicies } from '~/lib/walletPolicies';
+import { createWalletSession } from '~/lib/walletSessions';
 import useStore from '~/hooks/useStore';
 
 const silentReconnectAttempts = 3;
@@ -211,6 +212,7 @@ export function SessionProvider({ children }) {
   const dispatchSessionSuspended = useStore(s => s.dispatchSessionSuspended);
   const dispatchSessionResumed = useStore(s => s.dispatchSessionResumed);
   const dispatchSessionEnded = useStore(s => s.dispatchSessionEnded);
+  const dispatchGameplaySessionUpdated = useStore(s => s.dispatchGameplaySessionUpdated);
 
   const [readyForChildren, setReadyForChildren] = useState(false);
 
@@ -229,6 +231,7 @@ export function SessionProvider({ children }) {
 
   const [paymasterTokens, setPaymasterTokens] = useState([]);
   const authFlowRef = useRef(0);
+  const walletSessionRef = useRef(null);
   const resettingWalletRef = useRef(false);
 
   const [blockNumber, setBlockNumber] = useState(0);
@@ -262,11 +265,11 @@ export function SessionProvider({ children }) {
           rpcUrl: appConfig.get('Starknet.provider')
         }),
         errorDisplayMode: 'notification',
-        policies: gameplaySessionPolicies
+        policies: gameplay.useSessions === false ? { contracts: {} } : gameplaySessionPolicies
       },
       privyConnector
     });
-  }, [gameplaySessionPolicies, privyConnector]);
+  }, [gameplaySessionPolicies, gameplay.useSessions, privyConnector]);
 
   const connectConnector = useCallback(async (connector, { auto = false, connectorId, resumeAuth = false } = {}) => {
     const connectPromise = connector.connect({
@@ -397,7 +400,24 @@ export function SessionProvider({ children }) {
 
         setWalletAccount(newAccount);
         setAccountDeploymentData(connectorData.deploymentData);
-        setGameplaySessionReady(!!capabilities.supportsSessionKeys);
+        const savedSession = useStore.getState().sessions[Address.toStandard(newAccount.address)];
+        const walletSession = createWalletSession({
+          walletId: normalizeConnectorId(walletId), wallet, account: newAccount, provider,
+          chainId: resolveChainId(chainId, 'hex'),
+          storedSession: savedSession?.walletId === walletId ? savedSession.gameplaySession : null,
+          serviceUrl: appConfig.get('Api.argent'),
+          strkToken: appConfig.get('Starknet.Address.strkToken'),
+          approvedOnConnect: useStore.getState().gameplay.useSessions !== false,
+          isActive: () => walletSessionRef.current === walletSession,
+          isEnabled: () => walletSessionRef.current === walletSession && useStore.getState().gameplay.useSessions !== false,
+          onChange: (session) => {
+            if (walletSessionRef.current !== walletSession) return;
+            dispatchGameplaySessionUpdated(newAccount.address, walletId, session);
+            setGameplaySessionReady(!!session);
+          }
+        });
+        walletSessionRef.current = walletSession;
+        setGameplaySessionReady(!!walletSession?.ready);
 
         clearPendingAuthWalletId();
         setStoredWalletId(walletId);
@@ -450,6 +470,7 @@ export function SessionProvider({ children }) {
   }, [connectConnector, currentSession, getConnectors, lastConnectedWalletId, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearWalletConnection = useCallback(() => {
+    walletSessionRef.current = null;
     setConnectedAccount();
     setConnectedChainId();
     setConnectedWalletId();
@@ -496,6 +517,7 @@ export function SessionProvider({ children }) {
   // End / delete session, disconnect wallet and forget last wallet provider (full reset)
   const logout = useCallback(async () => {
     const connector = getDisconnectConnector();
+    walletSessionRef.current = null;
     resettingWalletRef.current = true;
     try {
       await connector?.disconnect?.();
@@ -535,6 +557,7 @@ export function SessionProvider({ children }) {
         return;
       } else if (sessions[eventAccount]) {
         // If the account we just switched to has a suspended session, use it
+        disconnectWalletOnly();
         dispatchSessionResumed(sessions[eventAccount]); // flow manager should fire connect()
       } else {
         // Otherwise we disconnect and wait for the user to explicitly login / reconnect
@@ -596,32 +619,35 @@ export function SessionProvider({ children }) {
     return walletCapabilities.supportsSessionKeys ? connectedConnector?.wallet : null;
   }, [connectedConnector?.wallet, currentSession?.walletId, connectedWalletId]);
 
-  const shouldUseSessionKeys = useCallback((ignorePreference = false) => {
-    const walletCapabilities = getWalletCapabilities(currentSession?.walletId || connectedWalletId);
-    return !!walletCapabilities.supportsSessionKeys && (ignorePreference || gameplay.useSessions !== false);
-  }, [connectedWalletId, currentSession?.walletId, gameplay.useSessions]);
+  const shouldUseSessionKeys = useCallback(async (ignorePreference = false) => {
+    if (!ignorePreference && useStore.getState().gameplay.useSessions === false) return false;
+    return !!await walletSessionRef.current?.supported();
+  }, []);
 
   const prepareGameplaySession = useCallback(async (ignorePreference = false) => {
     const authFlowId = authFlowRef.current;
+    const walletSession = walletSessionRef.current;
     if (!await shouldUseSessionKeys(ignorePreference)) return false;
-    if (authFlowId !== authFlowRef.current) return false;
-    if (gameplaySessionReady) return true;
-    if (!sessionWallet?.updateSession) throw createGameplaySessionApprovalError(
-      new Error('Wallet does not expose a gameplay session API.')
-    );
-
-    let sessionApproved;
+    if (authFlowId !== authFlowRef.current || walletSession !== walletSessionRef.current) return false;
     try {
-      sessionApproved = await sessionWallet.updateSession({ policies: gameplaySessionPolicies });
+      const approved = await walletSession.prepare();
+      if (authFlowId !== authFlowRef.current || walletSession !== walletSessionRef.current) return false;
+      setGameplaySessionReady(approved);
+      return approved;
     } catch (e) {
       throw createGameplaySessionApprovalError(e);
     }
+  }, [shouldUseSessionKeys]);
 
-    if (authFlowId !== authFlowRef.current) return false;
-    if (!sessionApproved) throw createGameplaySessionApprovalError();
-    setGameplaySessionReady(true);
-    return true;
-  }, [gameplaySessionPolicies, gameplaySessionReady, sessionWallet, shouldUseSessionKeys]);
+  const getTransactionAccount = useCallback(async (account, calls, options) => {
+    const walletSession = walletSessionRef.current;
+    if (!walletSession) return account;
+    const transactionAccount = await walletSession.getAccount(calls, options);
+    if (walletSession !== walletSessionRef.current) throw new Error('Account is disconnected');
+    setGameplaySessionReady(!!walletSession.ready);
+    return transactionAccount;
+  }, []);
+
 
   const signLoginChallenge = useCallback(async (loginMessage, walletId) => {
     const authFlowId = authFlowRef.current;
@@ -706,6 +732,7 @@ export function SessionProvider({ children }) {
         Object.assign(newSession, { walletId: connectedWalletId, accountAddress: connectedAccount, token: newToken });
       }
 
+      if (walletSessionRef.current?.session) newSession.gameplaySession = walletSessionRef.current.session;
       dispatchSessionStarted(newSession);
       setAuthPhase(AUTH_PHASES.AUTHENTICATED);
       setStatus(STATUSES.AUTHENTICATED);
@@ -762,7 +789,7 @@ export function SessionProvider({ children }) {
     // Check for pre-existing session and use it if it's still valid
     const existingSession = Object.assign({}, sessions[connectedAccount]);
 
-    if (existingSession && !isExpired(existingSession.token) && existingSession.isDeployed) {
+    if (existingSession && existingSession.walletId === connectedWalletId && !isExpired(existingSession.token) && existingSession.isDeployed) {
       existingSession.startTime = Date.now();
       dispatchSessionStarted(existingSession);
       setStatus(STATUSES.AUTHENTICATED);
@@ -770,7 +797,7 @@ export function SessionProvider({ children }) {
     }
 
     await authenticate();
-  }, [authenticate, connectedAccount, walletAccount, sessions, disconnect, dispatchSessionStarted]);
+  }, [authenticate, connectedAccount, connectedWalletId, walletAccount, sessions, disconnect, dispatchSessionStarted]);
 
   // End session and disconnect wallet if session expires
   useEffect(() => {
@@ -927,6 +954,7 @@ export function SessionProvider({ children }) {
       gasTokens: authenticated ? gasTokens : null,
       paymasterTokens: authenticated ? paymasterTokens : null,
       gameplaySessionReady,
+      getTransactionAccount,
       provider,
       prepareGameplaySession,
       shouldUseSessionKeys,

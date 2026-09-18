@@ -69,7 +69,7 @@ export const walletCapabilities = {
   [WALLET_IDS.ARGENT_X]: {
     embeddedAccount: false,
     preferredForStarterPacks: false,
-    supportsSessionKeys: false,
+    supportsSessionKeys: true,
     supportsSubsidies: true
   },
   [WALLET_IDS.BRAAVOS]: {

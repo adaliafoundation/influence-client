@@ -85,9 +85,11 @@ class ErrorBoundary extends Component {
     // remove token data
     delete redactedStore.state.currentSession.token;
     delete redactedStore.state.currentSession.sessionDappKey;
+    delete redactedStore.state.currentSession.gameplaySession;
     Object.keys(redactedStore.state.sessions).forEach((key) => {
       delete redactedStore.state.sessions[key].token;
       delete redactedStore.state.sessions[key].sessionDappKey;
+      delete redactedStore.state.sessions[key].gameplaySession;
     });
 
     // remove inbox private key
