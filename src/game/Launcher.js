@@ -11,6 +11,7 @@ import useStore from '~/hooks/useStore';
 import { getLicensedAssetUrl } from '~/lib/assetUtils';
 import {
   ChevronDoubleRightIcon,
+  CloseIcon,
   UserIcon,
   PlayIcon,
   StoreIcon,
@@ -217,6 +218,15 @@ const LeftIcon = styled.div`
 const RightIcon = styled.div`
   align-items: center;
   display: flex;
+  flex: 0 0 1em;
+  height: 1em;
+  width: 1em;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: ${p => p.theme.cursors.active};
   transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
   transform: rotate(${p => p.expanded ? '90deg' : '0deg'});
 `;
@@ -584,7 +594,19 @@ const Launcher = (props) => {
                     {loginPrompt?.busy ? <Loader color="currentColor" size="0.9em" /> : <UserIcon />}
                   </LeftIcon>
                   <label>{loginPrompt?.busy ? loginPrompt?.label : (isNew ? 'Existing Account' : 'Log-In')}</label>
-                  <RightIcon expanded={loginPrompt?.open}><ChevronDoubleRightIcon /></RightIcon>
+                  <RightIcon
+                    as={loginPrompt?.busy ? 'button' : 'div'}
+                    type={loginPrompt?.busy ? 'button' : undefined}
+                    aria-label={loginPrompt?.busy ? 'Cancel' : undefined}
+                    data-tooltip-id="launcherTooltip"
+                    data-tooltip-content={loginPrompt?.busy ? 'Cancel' : undefined}
+                    expanded={!loginPrompt?.busy && loginPrompt?.open}
+                    onClick={loginPrompt?.busy ? (event) => {
+                      event.stopPropagation();
+                      loginPrompt.cancel();
+                    } : undefined}>
+                    {loginPrompt?.busy ? <CloseIcon /> : <ChevronDoubleRightIcon />}
+                  </RightIcon>
                 </AccountButton>
                 <LoginPrompt
                   busy={loginPrompt?.busy}

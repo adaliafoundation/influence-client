@@ -111,17 +111,24 @@ test('rejects a gas-token fee above the approved cap before signing', async () =
   expect(signRawHash).not.toHaveBeenCalled();
 });
 
-test('connects an injected wallet and preserves its execute request', async () => {
+test('connects Ready with the configured RPC and preserves its execute request', async () => {
+  const info = jest.spyOn(console, 'info');
   const provider = new RpcProvider({ nodeUrl: 'https://rpc.example', chainId });
-  const wallet = { on: jest.fn(), request: jest.fn(async ({ type }) => {
+  const wallet = { id: 'argentX', on: jest.fn(), request: jest.fn(async ({ type }) => {
     if (type === 'wallet_requestAccounts') return ['0xabc'];
     if (type === 'wallet_addInvokeTransaction') return { transaction_hash: '0xdef' };
     throw new Error(`Unexpected wallet request: ${type}`);
   }) };
-  const account = await WalletAccount.connect(provider, wallet);
-  expect(account.provider).toBe(provider);
-  await expect(account.execute(calls)).resolves.toEqual({ transaction_hash: '0xdef' });
-  expect(wallet.request).toHaveBeenLastCalledWith({ type: 'wallet_addInvokeTransaction', params: {
-    calls: [{ contract_address: '0x123', entry_point: 'transfer', calldata: ['0x456', '0x7', '0x0'] }]
-  } });
+  try {
+    const account = await WalletAccount.connect(provider, wallet);
+    expect(account.provider).toBe(provider);
+    expect(account.provider.channel.nodeUrl).toBe('https://rpc.example');
+    expect(info.mock.calls.flat().join(' ')).not.toContain('Using default public node url');
+    await expect(account.execute(calls)).resolves.toEqual({ transaction_hash: '0xdef' });
+    expect(wallet.request).toHaveBeenLastCalledWith({ type: 'wallet_addInvokeTransaction', params: {
+      calls: [{ contract_address: '0x123', entry_point: 'transfer', calldata: ['0x456', '0x7', '0x0'] }]
+    } });
+  } finally {
+    info.mockRestore();
+  }
 });
