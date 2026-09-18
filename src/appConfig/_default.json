@@ -11,6 +11,7 @@
     "verboseLogs": false
   },
   "Api": {
+    "argent": "",
     "avnu": "",
     "banxa": "",
     "ipfs": "",

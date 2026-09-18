@@ -371,7 +371,7 @@ const NotificationsPane = () => {
 };
 
 const GameplayPane = () => {
-  const { authenticated, gameplaySessionReady, prepareGameplaySession, shouldUseSessionKeys } = useSession();
+  const { authenticated, prepareGameplaySession, shouldUseSessionKeys } = useSession();
   const { crew } = useCrewContext();
 
   const crewTutorials = useStore(s => s.crewTutorials);
@@ -409,9 +409,9 @@ const GameplayPane = () => {
 
   const toggleSessionKeys = useCallback(async (which) => {
     dispatchUseSessionsSet(which);
-    if (which !== false && !gameplaySessionReady && await shouldUseSessionKeys(true)) {
+    if (which !== false) {
       try {
-        await prepareGameplaySession(true);
+        if (await shouldUseSessionKeys(true)) await prepareGameplaySession(true);
       } catch (e) {
         console.warn(e);
         dispatchUseSessionsSet(false);
@@ -423,7 +423,7 @@ const GameplayPane = () => {
         });
       }
     }
-  }, [createAlert, dispatchUseSessionsSet, gameplaySessionReady, prepareGameplaySession, shouldUseSessionKeys]);
+  }, [createAlert, dispatchUseSessionsSet, prepareGameplaySession, shouldUseSessionKeys]);
 
   return (
     <StyledSettings>
@@ -493,10 +493,10 @@ const GameplayPane = () => {
             </ControlGroup>
           </StyledDataReadout>
           {(gameplay.useSessions === null || gameplay.useSessions === undefined) && (
-            <HelperText>Use sessions with Cartridge when available</HelperText>
+            <HelperText>Use wallet sessions when available</HelperText>
           )}
           {gameplay.useSessions === true && (
-            <HelperText>Use Cartridge sessions for supported gameplay transactions</HelperText>
+            <HelperText>Use wallet sessions for supported gameplay transactions</HelperText>
           )}
           {gameplay.useSessions === false && (
             <HelperText>Never use sessions</HelperText>

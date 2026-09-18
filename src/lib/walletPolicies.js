@@ -1,4 +1,5 @@
 import { appConfig } from '~/appConfig';
+import { hash, num } from 'starknet';
 
 export const sessionPolicyMethods = [
   { contractAddress: appConfig.get('Starknet.Address.dispatcher'), selector: 'run_system' },
@@ -11,6 +12,13 @@ export const allowedMethods = sessionPolicyMethods.map(({ contractAddress, selec
   'Contract Address': contractAddress,
   selector
 }));
+
+export const areSessionCallsAllowed = (calls, methods = allowedMethods) => (
+  calls.length > 0 && calls.every((call) => methods.some((method) => (
+    num.toBigInt(call.contractAddress) === num.toBigInt(method['Contract Address'])
+    && (call.entrypoint === method.selector || call.entrypoint === hash.getSelectorFromName(method.selector))
+  )))
+);
 
 const contractNames = {
   [appConfig.get('Starknet.Address.dispatcher')]: 'Influence Game Dispatcher',

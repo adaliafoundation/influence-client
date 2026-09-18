@@ -8,6 +8,7 @@
     "node": "22.x"
   },
   "dependencies": {
+    "@argent/x-sessions": "10.0.0",
     "@avnu/avnu-sdk": "^4.2.0",
     "@cartridge/controller": "^0.14.2",
     "@farcaster/mini-app-solana": "^1.1.3",

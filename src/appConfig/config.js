@@ -20,7 +20,7 @@ function flatten(value, prefix = '') {
 const defaultValues = flatten(defaults);
 const REQUIRED_PATHS = ['Api.influence', 'Api.ipfs', 'Api.avnu', 'Starknet.provider', 'Ethereum.provider'];
 const SERVICE_URL_PATHS = [
-  ...REQUIRED_PATHS, 'Api.banxa', 'Starknet.providerBackup',
+  ...REQUIRED_PATHS, 'Api.argent', 'Api.banxa', 'Starknet.providerBackup',
   'Starknet.paymaster', 'Starknet.paymasterProxy'
 ];
 const SUPPORTED_VARIABLES = new Set([CONFIG_ENV_VARIABLE, ...Object.keys(defaultValues).map(configVariableName)]);

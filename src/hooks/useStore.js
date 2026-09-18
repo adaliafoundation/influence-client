@@ -3,7 +3,7 @@ import { persist, subscribeWithSelector } from 'zustand/middleware';
 import produce from 'immer';
 import cloneDeep from 'lodash/cloneDeep';
 import isEqual from 'lodash/isEqual';
-import { Building, Entity, Lot } from '@influenceth/sdk';
+import { Address, Building, Entity, Lot } from '@influenceth/sdk';
 
 import constants from '~/lib/constants';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
@@ -674,6 +674,13 @@ const useStore = create(
           state.lastConnectedWalletId = session.walletId;
           state.sessions[session.accountAddress] = session;
           state.simulationEnabled = false;
+        })),
+
+        dispatchGameplaySessionUpdated: (accountAddress, walletId, gameplaySession) => set(produce(state => {
+          const address = Address.toStandard(accountAddress);
+          if (state.currentSession?.accountAddress !== address || state.currentSession.walletId !== walletId) return;
+          state.currentSession.gameplaySession = gameplaySession;
+          state.sessions[address] = state.currentSession;
         })),
 
         // Unsets the current session but keeps it in the sessions list
