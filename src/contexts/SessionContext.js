@@ -719,7 +719,9 @@ export function SessionProvider({ children }) {
 
         Object.assign(newSession, { walletId, accountAddress: connectedAccount, token: newToken });
 
-        if (await shouldUseSessionKeys()) {
+        const useSessionKeys = await shouldUseSessionKeys();
+        if (authFlowId !== authFlowRef.current) return false;
+        if (useSessionKeys) {
           setAuthPhase(AUTH_PHASES.PREPARING_SESSION);
           await prepareGameplaySession();
           if (authFlowId !== authFlowRef.current) return false;

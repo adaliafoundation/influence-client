@@ -63,6 +63,21 @@ test('requires a supported deployed Ready account with a guardian', async () => 
   await expect(supportsReadySessions(provider, '0xabc')).rejects.toThrow('RPC unavailable');
 });
 
+test.each([
+  ['0.4.0', '0x1234', true],
+  ['0.4.0', '0x0', false],
+  ['0.5.0', '0x1234', true],
+  ['0.5.0', '0x0', false],
+  ['0.3.1', '0x1234', false]
+])('Ready %s with guardian %s has session support: %s', async (version, guardian, supported) => {
+  const { session, provider, wallet, setEnabled } = setup();
+  setEnabled(null);
+  provider.callContract.mockImplementation(async ({ entrypoint }) => entrypoint === 'getVersion'
+    ? [shortString.encodeShortString(version)] : [guardian]);
+  expect(await session.prepare()).toBe(supported);
+  expect(wallet.request).toHaveBeenCalledTimes(supported ? 1 : 0);
+});
+
 test('creates, serializes and restores a Ready session without another prompt', async () => {
   const first = setup();
   expect(first.session.ready).toBe(false);

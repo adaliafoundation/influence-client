@@ -38,7 +38,7 @@ export const supportsReadySessions = async (provider, address) => {
       provider.callContract({ contractAddress: address, entrypoint: 'get_guardian' })
     ]);
     const [major, minor] = shortString.decodeShortString(version[0]).split('.').map(Number);
-    return (major > 0 || minor >= 5) && BigInt(guardian[0]) !== 0n;
+    return (major > 0 || minor >= 4) && BigInt(guardian[0]) !== 0n;
   } catch (error) {
     // Undeployed, legacy and non-Ready accounts cannot authorize these sessions.
     if (/Contract not found|ENTRYPOINT_NOT_FOUND|Entry point.*not found/i.test(error.message)) return false;

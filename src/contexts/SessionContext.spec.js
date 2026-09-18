@@ -4,6 +4,7 @@ import SessionContext, { SessionProvider } from './SessionContext';
 import { AUTH_PHASES } from '~/lib/authFlow';
 import { RpcProvider, WalletAccount } from 'starknet';
 import { createWalletConnectors } from '~/lib/wallets';
+import { createWalletSession } from '~/lib/walletSessions';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 
@@ -22,11 +23,15 @@ jest.mock('~/appConfig', () => ({ appConfig: { get: (key) => ({
 jest.mock('~/components/Reconnecting', () => () => null, { virtual: true });
 jest.mock('~/contexts/PrivyWalletContext', () => ({ usePrivyWallet: () => ({}) }), { virtual: true });
 jest.mock('~/lib/api', () => ({ requestLogin: jest.fn(), verifyLogin: jest.fn() }), { virtual: true });
-jest.mock('~/lib/loginTypedData', () => ({ getLoginTypedData: (value) => value }), { virtual: true });
+jest.mock('~/lib/loginTypedData', () => ({
+  getLoginTypedData: (value) => value,
+  getLoginVerificationParams: (value) => value
+}), { virtual: true });
 jest.mock('~/lib/paymaster', () => ({}), { virtual: true });
 jest.mock('~/lib/priceUtils', () => ({ TOKEN: {} }), { virtual: true });
 jest.mock('~/lib/utils', () => ({ areChainsEqual: (a, b) => a === b, resolveChainId: (value) => value, fireTrackingEvent: jest.fn() }), { virtual: true });
 jest.mock('~/lib/walletPolicies', () => ({ buildGameplaySessionPolicies: () => [] }), { virtual: true });
+jest.mock('~/lib/walletSessions', () => ({ createWalletSession: jest.fn() }), { virtual: true });
 jest.mock('~/lib/wallets', () => ({
   WALLET_IDS: { CONTROLLER: 'controller', PRIVY: 'privy' },
   WALLET_ERROR_CODES: {},
@@ -49,7 +54,7 @@ const deferred = () => {
   const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 };
-let session, connector, provider, state;
+let session, connector, provider, state, walletSession;
 function Probe() {
   session = useContext(SessionContext);
   return null;
@@ -63,11 +68,14 @@ beforeEach(() => {
     dispatchSessionSuspended: jest.fn(), dispatchSessionEnded: jest.fn()
   };
   useStore.mockImplementation((select) => select(state));
+  useStore.getState = () => state;
   provider = { getClassAt: jest.fn() };
   RpcProvider.mockImplementation(() => provider);
   connector = { id: 'controller', wallet: { id: 'controller' }, connect: jest.fn() };
   createWalletConnectors.mockReturnValue({ controller: connector });
-  WalletAccount.connect.mockResolvedValue({ signMessage: jest.fn() });
+  WalletAccount.connect.mockResolvedValue({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) });
+  walletSession = { supported: jest.fn().mockResolvedValue(false), prepare: jest.fn(), ready: false };
+  createWalletSession.mockReturnValue(walletSession);
 });
 afterEach(() => jest.useRealTimers());
 
@@ -127,4 +135,55 @@ test('ignores a login challenge failure after cancellation and retry', async () 
   await act(async () => { challenge.reject(new Error('late API error')); });
   expect(session.authPhase).toBe(AUTH_PHASES.CONNECTING_WALLET);
   expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
+});
+
+test('prepares a supported wallet session on fresh login with Default enabled', async () => {
+  state.gameplay.useSessions = null;
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  walletSession.supported.mockResolvedValue(true);
+  walletSession.prepare.mockResolvedValue(true);
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(walletSession.prepare).toHaveBeenCalledTimes(1);
+  expect(state.dispatchSessionStarted).toHaveBeenCalledWith(expect.objectContaining({ token: 'api-token' }));
+});
+
+test.each(['resolve', 'reject'])('ignores a session approval %s after cancellation', async (settle) => {
+  state.gameplay.useSessions = null;
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  walletSession.supported.mockResolvedValue(true);
+  const approval = deferred();
+  walletSession.prepare.mockReturnValue(approval.promise);
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(session.authPhase).toBe(AUTH_PHASES.PREPARING_SESSION);
+  act(() => session.loginPrompt.cancel());
+  expect(session.loginPrompt.busy).toBe(false);
+  await act(async () => { approval[settle](settle === 'resolve' ? true : new Error('late approval error')); });
+  expect(state.dispatchSessionStarted).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
+  expect(session.gameplaySessionReady).toBe(false);
+});
+
+test.each([true, false])('ignores a session support result of %s after cancellation', async (supported) => {
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  const support = deferred();
+  walletSession.supported.mockReturnValue(support.promise);
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(walletSession.supported).toHaveBeenCalled();
+  act(() => session.loginPrompt.cancel());
+  await act(async () => { support.resolve(supported); });
+  expect(state.dispatchSessionStarted).not.toHaveBeenCalled();
+  expect(walletSession.prepare).not.toHaveBeenCalled();
+  expect(session.loginPrompt.busy).toBe(false);
 });
