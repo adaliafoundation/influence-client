@@ -15,7 +15,7 @@
     "@farcaster/miniapp-sdk": "^0.2.3",
     "@floating-ui/react": "^0.27.19",
     "@influenceth/astro": "^0.2.5",
-    "@influenceth/sdk": "2.5",
+    "@influenceth/sdk": "2.5.2",
     "@popperjs/core": "^2.11.6",
     "@privy-io/react-auth": "^3.38.0",
     "@react-hook/throttle": "^2.2.0",

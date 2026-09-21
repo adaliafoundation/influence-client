@@ -366,13 +366,13 @@ const MarketplaceOrder = ({
   // taker = market order
   const feeRate = useMemo(
     () => (
-      cancellationMakerFee || Order.adjustedFee(
+      cancellationMakerFee ?? Order.adjustedFee(
         exchange?.Exchange?.[type === 'market' ? 'takerFee' : 'makerFee'],
         feeReductionBonus?.totalBonus,
         feeEnforcementBonus?.totalBonus
       )
     ) / Order.FEE_SCALE,
-    [exchange, feeEnforcementBonus, feeReductionBonus, type]
+    [cancellationMakerFee, exchange, feeEnforcementBonus, feeReductionBonus, type]
   );
 
   const feeTotal = useMemo(() => {
@@ -523,7 +523,12 @@ const MarketplaceOrder = ({
         });
       }
     }
-  }, [cancellationInitialCaller, feeTotal, limitPrice, marketFills, quantity, quantityToUnits, resourceId, storage, storageInventory]);
+  }, [
+    cancelBuyOrder, cancelSellOrder, cancellationInitialCaller, cancellationMakerFee,
+    createBuyOrder, createSellOrder, crew?.id, crew?.label, feeTotal, fillBuyOrders, fillSellOrders,
+    isCancellation, limitPrice, marketFills, mode, quantity, quantityToUnits, resourceId,
+    storage, storageInventory, type
+  ]);
 
   // handle auto-closing
   const lastStatus = useRef();

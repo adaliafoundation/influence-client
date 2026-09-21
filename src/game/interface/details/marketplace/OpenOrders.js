@@ -104,6 +104,7 @@ const MarketplaceOpenOrders = ({ asteroid, orders, marketplace = null, marketpla
       type: 'limit',
       resourceId: order.product,
       isCancellation: true,
+      cancellationInitialCaller: order.initialCaller,
       cancellationMakerFee: order.orderType === Order.IDS.LIMIT_BUY ? order.makerFee : undefined,
       preselect: {
         crew: order.crew,
