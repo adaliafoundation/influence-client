@@ -91,7 +91,8 @@ const useMarketplaceManager = (buildingId) => {
       return execute(
         'EscrowWithdrawalAndFillBuyOrders',
         fillOrders.map((order) => ({
-          depositCaller: order.initialCaller || crew?.Crew?.delegatedTo,
+          isCancellation: !!isCancellation,
+          depositCaller: isCancellation ? order.initialCaller : (order.initialCaller || crew?.Crew?.delegatedTo),
           seller_account: crew?.Crew?.delegatedTo,
           exchange_owner_account: exchangeController?.Crew?.delegatedTo,
           makerFee: order.makerFee / Order.FEE_SCALE,
@@ -117,7 +118,7 @@ const useMarketplaceManager = (buildingId) => {
         },
       );
     },
-    [exchangeController, execute, payload]
+    [crew?.Crew?.delegatedTo, exchange?.Location?.location?.id, exchangeController, execute, payload]
   );
 
   const fillSellOrders = useCallback(
@@ -167,7 +168,7 @@ const useMarketplaceManager = (buildingId) => {
             makerFee,
             paymentsUnscaled: {
               toExchange: 0,
-              toPlayer: Order.getBuyOrderDeposit(amount * Math.floor(price * TOKEN_SCALE[TOKEN.SWAY]), makerFee)
+              toPlayer: Order.getBuyOrderCancellationRefund(amount, Math.round(price * TOKEN_SCALE[TOKEN.SWAY]), makerFee)
             },
             fillAmount: amount,
             crew: buyer,

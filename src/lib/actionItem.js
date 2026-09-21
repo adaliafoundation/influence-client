@@ -372,6 +372,7 @@ const formatAsTx = (item) => {
             resourceId: item.vars[0].product,
             isCancellation: true,
             cancellationMakerFee: item.vars[0].makerFee * Order.FEE_SCALE,
+            cancellationInitialCaller: item.vars[0].depositCaller,
             preselect: {
               limitPrice: item.vars[0].price / 1e6,
               quantity: item.vars.reduce((acc, o) => acc + o.amount, 0),

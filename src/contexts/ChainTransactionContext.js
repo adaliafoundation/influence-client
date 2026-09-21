@@ -15,6 +15,7 @@ import { useUsdcPerEth } from '~/hooks/useSwapQuote';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import { useStrkBalance, useSwayBalance, useUSDCBalance } from '~/hooks/useWalletTokenBalance';
 import api from '~/lib/api';
+import { getCancellationRefund } from '~/lib/escrow';
 import { isSponsorshipUnavailable } from '~/lib/paymaster';
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
@@ -1030,8 +1031,20 @@ export function ChainTransactionProvider({ children }) {
                     escrowConfig.withdrawDataKeys
                   );
 
+                  const withdrawals = escrowConfig.getWithdrawals(processedVars);
+                  if (rawVars.isCancellation && escrowConfig.withdrawHook === 'FillBuyOrder') {
+                    withdrawals[0].amount = await getCancellationRefund({
+                      provider,
+                      escrowAddress: appConfig.get('Starknet.Address.escrow'),
+                      tokenAddress: appConfig.get('Starknet.Address.swayToken'),
+                      depositCaller: rawVars.depositCaller,
+                      withdrawHook: withdrawSystemCall,
+                      minimumRefund: withdrawals[0].amount
+                    });
+                  }
+
                   const escrowCall = System.getEscrowWithdrawCall(
-                    escrowConfig.getWithdrawals(processedVars),
+                    withdrawals,
                     rawVars.depositCaller,
                     withdrawSystemCall,
                     withdrawSystemData,
@@ -1174,6 +1187,7 @@ export function ChainTransactionProvider({ children }) {
     gameplay.feesInSway,
     isDeployed,
     prependEventAutoresolve,
+    provider,
     sessionWallet,
     usdcPerEth
   ]);
