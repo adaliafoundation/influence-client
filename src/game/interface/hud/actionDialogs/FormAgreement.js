@@ -186,9 +186,10 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const isAuctionPurchase = useMemo(() => (
     isLotLease &&
     currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID &&
-    !!auctionStatus?.expiredAgreement &&
+    auctionStatus?.isAuctionRequired &&
     !isExpiredLeaseRenewal
-  ), [auctionStatus?.expiredAgreement, currentPolicy?.policyType, isExpiredLeaseRenewal, isLotLease]);
+  ), [auctionStatus?.isAuctionRequired, currentPolicy?.policyType, isExpiredLeaseRenewal, isLotLease]);
+  const isManualAuctionBlocked = isAuctionPurchase && auctionStatus.isManualAuctionBlocked;
   const isLeaseExtension = isExtension || isExpiredLeaseRenewal;
   const starterLotLeaseCandidate = useMemo(() => (
     currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID
@@ -284,7 +285,10 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
             ? `${formatFixed(secondsToDays(paymentAgreement?.noticePeriod || 0), 1)} day${secondsToDays(paymentAgreement?.noticePeriod || 0) === 1 ? '' : 's'}`
             : `${formatFixed(currentPolicy?.policyDetails?.noticePeriod || 0, 1)} day${currentPolicy?.policyDetails?.noticePeriod === 1 ? '' : 's'}`,
         },
-        ...(isAuctionPurchase ? [{
+        ...(isManualAuctionBlocked ? [{
+          label: 'Auction Status',
+          value: 'Awaiting Administrator',
+        }] : isAuctionPurchase ? [{
           label: auctionDetails?.isGracePeriod ? 'Grace Period Remaining' : 'Auction Elapsed',
           value: auctionDetails?.isGracePeriod
             ? formatTimer(auctionDetails.graceRemaining, 2)
@@ -307,7 +311,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
       ];
     }
     return [];
-  }, [auctionDetails, auctionPayment, auctionStatus, crew, currentPolicy, displayedInitialPeriod, isAuctionPurchase, isLeaseExtension, isTermination, paymentAgreement, remainingPeriod]);
+  }, [auctionDetails, auctionPayment, auctionStatus, isManualAuctionBlocked, crew, currentPolicy, displayedInitialPeriod, isAuctionPurchase, isLeaseExtension, isTermination, paymentAgreement, remainingPeriod]);
 
   const term = useMemo(
     () => starterLotLeaseCandidate
@@ -463,14 +467,14 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
       icon: entity.label === Entity.IDS.LOT ? <FormLotAgreementIcon /> : <FormAgreementIcon />,
       label: usingStarterLotLease
         ? 'Use Starter Lot Lease'
-        : (isAuctionPurchase ? 'Lease Auctioned Lot' : `Form ${entity.label === Entity.IDS.LOT ? 'Lot' : 'Asset'} Agreement`),
+        : (isManualAuctionBlocked ? 'Lot Awaiting Auction' : isAuctionPurchase ? 'Lease Auctioned Lot' : `Form ${entity.label === Entity.IDS.LOT ? 'Lot' : 'Asset'} Agreement`),
       status: stage === actionStages.NOT_STARTED
         ? (usingStarterLotLease ? 'Starter Pack' : (policyType === Permission.POLICY_IDS.PREPAID ? 'Prepaid Lease' : 'Custom Contract'))
         : undefined,
       goLabel: usingStarterLotLease || isAuctionPurchase ? 'Lease Lot' : 'Create Agreement',
       onGo: onEnterAgreement
     }
-  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isAuctionPurchase, isExpiredLeaseRenewal, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage, usingStarterLotLease]);
+  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isManualAuctionBlocked, isAuctionPurchase, isExpiredLeaseRenewal, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage, usingStarterLotLease]);
 
   const disableGo = useMemo(() => {
     if (insufficientAssets) return true;
@@ -569,7 +573,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                 </InputLabel>
                 <TextInputWrapper rightLabel="days">
                   <LeasePeriodTextInput
-                    disabled={starterLotLeaseCandidate || stage !== actionStages.NOT_STARTED}
+                    disabled={isManualAuctionBlocked || starterLotLeaseCandidate || stage !== actionStages.NOT_STARTED}
                     $invalid={leasePeriodInvalid}
                     min={minTerm}
                     max={maxTermInput}
@@ -674,7 +678,13 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                         </div>
                       </div>
                     )}
-                    {currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID && (
+                    {isManualAuctionBlocked && (
+                      <Desc>
+                        This lot cannot be leased until the asteroid administrator starts its manual auction.
+                        The auction has not started. Its timer and price will be determined when the start transaction completes.
+                      </Desc>
+                    )}
+                    {currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID && !isManualAuctionBlocked && (
                       <div>
                         <div>
                           {insufficientAssets

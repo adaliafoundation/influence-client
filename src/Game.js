@@ -140,7 +140,7 @@ const LauncherRedirect = () => {
 
 const Game = () => {
   const [ gpuInfo, setGpuInfo ] = useState();
-  const { isInstalling, updateNeeded, onUpdateVersion } = useServiceWorker();
+  const { isInstalling, isUpdating, updateNeeded, onUpdateVersion } = useServiceWorker();
   const [debugUpdateNeeded, setDebugUpdateNeeded] = useState(false);
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
@@ -287,7 +287,7 @@ const Game = () => {
                                       <ScreensizeWarning />
                                       <Interface />
                                       {(updateNeeded || debugUpdateNeeded) && (
-                                        <VersionUpdateDialog onReload={handleUpdateVersion} />
+                                        <VersionUpdateDialog onReload={handleUpdateVersion} isUpdating={isUpdating} />
                                       )}
                                     </CoachmarkProvider>
                                   </ScreensizeProvider>
