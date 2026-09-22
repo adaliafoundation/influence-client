@@ -52,7 +52,7 @@ const Buttons = styled.div`
   justify-content: flex-end;
 `;
 
-const VersionUpdateDialog = ({ onReload }) => (
+const VersionUpdateDialog = ({ onReload, isUpdating }) => (
   <Dialog backdrop="rgba(0, 0, 0, 0.72)">
     <Wrapper>
       <Title>
@@ -64,8 +64,8 @@ const VersionUpdateDialog = ({ onReload }) => (
         with the latest game client.
       </Body>
       <Buttons>
-        <Button onClick={onReload} size="medium">
-          Reload Client
+        <Button disabled={isUpdating} onClick={onReload} size="medium">
+          {isUpdating ? 'Updating Client…' : 'Reload Client'}
         </Button>
       </Buttons>
     </Wrapper>

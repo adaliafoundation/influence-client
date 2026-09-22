@@ -37,6 +37,7 @@ export const getLotLeaseAuctionStatus = ({ asteroid, lot, blockTime }) => {
     now: blockTime
   });
   const hasAuctionableBuilding = !!lot?.building && lot.building?.Building?.status > Building.CONSTRUCTION_STATUSES.UNPLANNED;
+  const isAuctionRequired = !!expiredAgreement && hasAuctionableBuilding;
   const isManual = settings.mode === Permission.AUCTION_MODES.MANUAL;
   const isAuto = settings.mode === Permission.AUCTION_MODES.AUTO;
 
@@ -45,8 +46,9 @@ export const getLotLeaseAuctionStatus = ({ asteroid, lot, blockTime }) => {
     expiredAgreement,
     settings,
     hasAuctionableBuilding,
-    isAuctionAvailable: !!expiredAgreement && hasAuctionableBuilding && (isAuto || status.isAuctionActive),
-    isManualAuctionBlocked: !!expiredAgreement && hasAuctionableBuilding && isManual && !status.isAuctionActive,
+    isAuctionRequired,
+    isAuctionAvailable: isAuctionRequired && (isAuto || status.isAuctionActive),
+    isManualAuctionBlocked: isAuctionRequired && isManual && !status.isAuctionActive,
   };
 };
 
