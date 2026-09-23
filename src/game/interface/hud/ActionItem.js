@@ -378,4 +378,5 @@ const ActionItem = ({ data, getActivityConfig }) => {
   )
 };
 
+export { ActionItemRow, Icon as ActionItemIcon };
 export default ActionItem;

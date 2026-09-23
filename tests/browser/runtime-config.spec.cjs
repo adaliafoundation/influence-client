@@ -16,7 +16,7 @@ test('boots the release bundle with operator configuration and no optional accou
     return route.fulfill({ json: {} });
   });
   await page.goto('/launcher/help');
-  await expect(page.getByRole('heading', { name: 'Game Wiki' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gameplay Guides' })).toBeVisible();
   await expect(page.getByText('Tutorials', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Community Content', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Non-English Content', { exact: true })).toHaveCount(0);

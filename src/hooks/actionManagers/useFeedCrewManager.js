@@ -2,13 +2,15 @@ import { useCallback, useContext, useMemo } from 'react';
 import { Entity } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
+import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useCrewContext from '~/hooks/useCrewContext';
 import actionStages from '~/lib/actionStages';
 import { getStarterFoodSupplySource } from '~/lib/starterPacks';
 
-const useFeedCrewManager = () => {
+const useFeedCrewManager = (missionId) => {
+  const execute = useStarterMissionExecution(missionId);
   const { crew, isLoading } = useCrewContext();
-  const { execute, getPendingTx } = useContext(ChainTransactionContext);
+  const { getPendingTx } = useContext(ChainTransactionContext);
 
   const caller_crew = useMemo(() => ({ id: crew?.id, label: Entity.IDS.CREW }), [crew?.id]);
 

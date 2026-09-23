@@ -1,3 +1,4 @@
+import { useMissionDeliveryTarget } from '~/contexts/MissionActionContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Crewmate, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
@@ -693,6 +694,8 @@ const Wrapper = (props) => {
       return d.status === 'PACKAGING' || d.status === 'DEPARTING';
     });
   }, [deliveryManager.currentVersion, deliveryId, txHash]);
+
+  useMissionDeliveryTarget(currentDeliveryAction?.action?.deliveryId);
 
   const { data: originEntity, isLoading: originLoading } = useEntity(currentDeliveryAction?.action?.origin || props.origin);
   const { data: destEntity, isLoading: destLoading } = useEntity(currentDeliveryAction?.action?.dest || props.destination);

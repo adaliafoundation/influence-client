@@ -1,3 +1,5 @@
+import { useMissionAction } from '~/contexts/MissionActionContext';
+import MissionActionNotice from './MissionActionNotice';
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { createPortal } from 'react-dom';
@@ -5385,6 +5387,9 @@ export const ActionDialogFooter = ({
   waitForCrewReady,
   wide
 }) => {
+  const mission = useMissionAction();
+  const missionBlocked = (mission && !mission.ready) || mission?.checking || (mission?.pending && mission?.selected) || (mission?.selected && (!mission.eligible || mission.unavailable || mission.constructionMissing))
+    || (stage === actionStage.READY_TO_COMPLETE && mission?.unavailable);
   const { crew, isLaunched } = useCrewContext();
   const { data: user, isLoading: userIsLoading } = useUser();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -5434,6 +5439,7 @@ export const ActionDialogFooter = ({
   const isReady = isSequenceable ? crew?._readyToSequence : crew?._ready;
   return (
     <Footer wide={wide}>
+      <MissionActionNotice stage={stage} />
       <SectionBody>
         {showNotificationOption && (
           <NotificationEnabler
@@ -5458,7 +5464,7 @@ export const ActionDialogFooter = ({
               {waitForCrewReady && allowedOrLaunched && !isReady && <CrewBusyButton isSequenceable={isSequenceable} />}
               {(!waitForCrewReady || (isReady && allowedOrLaunched)) && (
                 <Button
-                  disabled={nativeBool(disabled || userIsLoading)}
+                  disabled={nativeBool(disabled || userIsLoading || missionBlocked)}
                   isTransaction
                   loading={reactBool(buttonsLoading)}
                   onClick={onBeforeGo}>
@@ -5489,7 +5495,7 @@ export const ActionDialogFooter = ({
                   {finalizeActions.map((a, i) => (
                     <Button
                       key={i}
-                      disabled={nativeBool(disabled)}
+                      disabled={nativeBool(disabled || missionBlocked)}
                       isTransaction
                       loading={reactBool(buttonsLoading)}
                       onClick={a.onFinalize}>{a.finalizeLabel || 'Accept'}</Button>

@@ -47,7 +47,7 @@ const Button = ({ asteroid, blockTime, crew, lot, processor, onSetAction, simula
   return (
     <>
       <ActionButton
-        ref={simulationActions.includes(`Process:${processor?.processorType}`) ? setCoachmarkRef(COACHMARK_IDS.actionButtonProcess) : undefined}
+        ref={!simulation || simulationActions.includes(`Process:${processor?.processorType}`) ? setCoachmarkRef(COACHMARK_IDS.actionButtonProcess) : undefined}
         {...buttonProps}
         labelAddendum={disabledReason}
         flags={{

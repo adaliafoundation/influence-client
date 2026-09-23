@@ -109,6 +109,10 @@ const useStore = create(
   subscribeWithSelector(
     persist((set, get) => ({
         actionDialog: {},
+        missionParticipation: {},
+        objectivePreferences: {},
+        missionGuidance: null,
+        missionDetails: null,
         launcherDialogOptions: null,
         launcherPage: null,
         launcherSubpage: null,
@@ -170,7 +174,6 @@ const useStore = create(
 
         selectedCrewId: null,
         crewAssignments: {},
-        crewTutorials: {},
 
         cameraNeedsHighAltitude: false,
         cameraNeedsRecenter: false,
@@ -200,7 +203,6 @@ const useStore = create(
 
         gameplay: {
           activeCrewsDisplay: 'all', // selected, delegated, all
-          dismissTutorial: false,
           feeToken: null, // deprecated
           feeTokens: [TOKEN.USDC],
           useSessions: null
@@ -236,7 +238,6 @@ const useStore = create(
 
         effects: {},
 
-        referrer: null,
 
 
         dmPrivateKey: null,
@@ -286,12 +287,34 @@ const useStore = create(
           state.logs.alerts.unshift(alert);
         })),
 
+        dispatchMissionParticipation: (scope, enabled) => set(produce(state => {
+          state.missionParticipation[scope] = enabled;
+        })),
+
+        dispatchObjectivePreferences: (scope, preferences) => set(produce(state => {
+          state.objectivePreferences[scope] = { ...state.objectivePreferences[scope], ...preferences };
+        })),
+
+        dispatchMissionGuidance: (guidance) => set(produce(state => {
+          state.missionGuidance = guidance;
+          if (guidance) {
+            state.missionDetails = null;
+            state.launcherPage = null;
+            state.launcherSubpage = null;
+          }
+        })),
+
+        dispatchMissionDetails: (details) => set(produce(state => {
+          state.missionDetails = details;
+          if (details) state.missionGuidance = null;
+        })),
+
         dispatchActionDialog: (type, params = {}) => set(produce(state => {
           state.actionDialog = { type, params };
         })),
 
         dispatchLauncherPage: (page, subpage, dialogOptions = null) => set(produce(state => {
-          if (['play', 'store', 'help', 'rewards', 'settings', 'inbox', 'bridge'].includes(page)) {
+          if (['play', 'store', 'help', 'missions', 'settings', 'inbox', 'bridge'].includes(page)) {
             state.launcherDialogOptions = dialogOptions;
             state.launcherPage = page;
             state.launcherSubpage = subpage;
@@ -791,10 +814,6 @@ const useStore = create(
           state.hasSeenIntroVideo = which;
         })),
 
-        dispatchReferrerSet: (refCode) => set(produce(state => {
-          state.referrer = refCode;
-        })),
-
         dispatchResourceMapToggle: (which) => set(produce(state => {
           state.asteroids.resourceMap.active = which;
         })),
@@ -943,10 +962,6 @@ const useStore = create(
           state.perProcessLeases.push({ key, endTime });
         })),
 
-        dispatchTutorialDisabled: (which) => set(produce(state => {
-          state.gameplay.dismissTutorial = !!which;
-        })),
-
         dispatchUseSessionsSet: (which) => set(produce(state => {
           state.gameplay.useSessions = which;
         })),
@@ -971,25 +986,6 @@ const useStore = create(
 
         dispatchActiveCrewsDisplaySet: (which) => set(produce(state => {
           state.gameplay.activeCrewsDisplay = which;
-        })),
-
-        dispatchDismissCrewTutorial: (crewId, which) => set(produce(state => {
-          // (resets dismissedSteps either way)
-          state.crewTutorials[crewId] = {
-            dismissed: which,
-            dismissedSteps: []
-          };
-        })),
-        dispatchDismissCrewTutorialStep: (crewId, step) => set(produce(state => {
-          if (!state.crewTutorials[crewId]) {
-            state.crewTutorials[crewId] = {
-              dismissed: false,
-              dismissedSteps: []
-            };
-          }
-          if (!state.crewTutorials[crewId].dismissedSteps.includes(step)) {
-            state.crewTutorials[crewId].dismissedSteps.push(step);
-          }
         })),
 
         dispatchHudMenuState: (menu, menuState) => set(produce(state => {
@@ -1101,6 +1097,8 @@ const useStore = create(
         // TODO: should these be stored elsewhere if ephemeral?
         // TODO: the nested values are not supported by zustand
         'actionDialog',
+        'missionGuidance',
+        'missionDetails',
         'asteroids.hovered',
         'asteroids.lot',
         'asteroids.travelMode',

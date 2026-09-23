@@ -206,7 +206,6 @@ export function SessionProvider({ children }) {
   const currentSession = useStore(s => s.currentSession);
   const gameplay = useStore(s => s.gameplay);
   const lastConnectedWalletId = useStore(s => s.lastConnectedWalletId);
-  const referredBy = useStore(s => s.referrer);
   const sessions = useStore(s => s.sessions);
   const dispatchSessionStarted = useStore(s => s.dispatchSessionStarted);
   const dispatchSessionSuspended = useStore(s => s.dispatchSessionSuspended);
@@ -669,11 +668,10 @@ export function SessionProvider({ children }) {
   const verifyLoginSignature = useCallback((walletId, signature, loginMessage) => {
     return api.verifyLogin(connectedAccount, getLoginVerificationParams({
       signature,
-      referredBy,
       typedData: loginMessage,
       walletId
     }));
-  }, [connectedAccount, referredBy]);
+  }, [connectedAccount]);
 
   const logLoginVerificationHashes = useCallback((walletId, loginMessage) => {
     if (normalizeConnectorId(walletId) !== WALLET_IDS.CONTROLLER) return;
@@ -728,7 +726,7 @@ export function SessionProvider({ children }) {
         }
       } else {
         // If the wallet is not yet deployed, create an insecure session
-        const newToken = await api.verifyLogin(connectedAccount, { signature: 'insecure', referredBy });
+        const newToken = await api.verifyLogin(connectedAccount, { signature: 'insecure' });
         if (authFlowId !== authFlowRef.current) return false;
 
         Object.assign(newSession, { walletId: connectedWalletId, accountAddress: connectedAccount, token: newToken });
@@ -764,7 +762,6 @@ export function SessionProvider({ children }) {
     connectedWalletId,
     createAlert,
     dispatchSessionStarted,
-    referredBy,
     walletAccount,
     disconnect,
     clearWalletConnection,

@@ -2,21 +2,21 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 
-import { BellIcon, CloseIcon, EyeIcon, FinishAllIcon, LoggedEventsIcon } from '~/components/Icons';
+import { BellIcon, EyeIcon, FinishAllIcon, LoggedEventsIcon } from '~/components/Icons';
 import CollapsibleSection from '~/components/CollapsibleSection';
-import IconButton from '~/components/IconButton';
-import ConfirmationDialog from '~/components/ConfirmationDialog';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useActionItems from '~/hooks/useActionItems';
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
-import useTutorialSteps from '~/hooks/useTutorialSteps';
 import { hexToRGB } from '~/theme';
 import ActionItem, { ITEM_WIDTH, TRANSITION_TIME } from './ActionItem';
-import TutorialActionItems from './TutorialActionItems';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
+import useStarterMissionManager from '~/hooks/actionManagers/useStarterMissionManager';
+import { useMissionScope } from '~/hooks/useMissionGuidance';
+import { getMissionObjectiveRows } from '~/lib/missionObjectives';
+import MissionObjective from './MissionObjective';
 
 
 export const SECTION_WIDTH = ITEM_WIDTH + 30;
@@ -160,52 +160,6 @@ const InProgressFilter = styled(PillFilter)`
   }
 `;
 
-const TutorialTab = styled(PillFilter)`
-  background: rgba(${p => p.theme.colors.brightMainRGB}, 0.4);
-  border-color: ${p => p.theme.colors.brightMain};
-  color: white;
-  height: 30px;
-  line-height: 20px;
-  position: relative;
-  text-align: center;
-  text-transform: none;
-  width: 170px;
-  &:before {
-    content: "";
-    border: 2px solid rgba(0, 0, 0, 0.7);
-    border-radius: 16px;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-  }
-  &:after {
-    background: ${p => p.theme.colors.brightMain};
-  }
-`;
-const Skipper = styled.div`
-  align-items: center;
-  color: ${p => p.theme.colors.main};
-  cursor: ${p => p.theme.cursors.active};
-  display: flex;
-  flex-direction: row;
-  font-size: 90%;
-  pointer-events: all;
-  & > button {
-    margin-left: 4px;
-    margin-right: 0;
-  }
-
-  &:hover {
-    color: white;
-    & > button {
-      background: rgba(${p => p.theme.colors.mainRGB}, 0.2);
-      color: white;
-    }
-  }
-`;
-
 const OuterWrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -271,28 +225,23 @@ const UnhideAll = styled(AllAction)`
   }
 `;
 
-const ConfirmBody = styled.div`
-  color: ${p => p.theme.colors.main};
-  font-size: 110%;
-  line-height: 1.6em;
-  padding: 30px;
-`;
-
 const ActionItems = () => {
   const { authenticated } = useSession();
   const { allVisibleItems: allItems } = useActionItems();
-  const { crew, isLaunched } = useCrewContext();
+  const { crew } = useCrewContext();
   const { execute, getStatus } = useContext(ChainTransactionContext);
   const getActivityConfig = useGetActivityConfig();
   const simulationEnabled = useSimulationEnabled();
-  const tutorialSteps = useTutorialSteps();
-
-  const crewTutorial = useStore(s => s.crewTutorials?.[crew?.id]);
-  const dismissAllTutorials = useStore(s => s.gameplay?.dismissTutorial);
   const dispatchUnhideAllActionItems = useStore(s => s.dispatchUnhideAllActionItems);
-  const dispatchDismissCrewTutorial = useStore(s => s.dispatchDismissCrewTutorial);
-
-  const [confirmingTutorialDismissal, setConfirmingTutorialDismissal] = useState();
+  const manager = useStarterMissionManager();
+  const view = manager.data;
+  const scope = useMissionScope(view?.campaign);
+  const preferences = useStore(s => s.objectivePreferences[scope]);
+  const setPreferences = useStore(s => s.dispatchObjectivePreferences);
+  const setDetails = useStore(s => s.dispatchMissionDetails);
+  const openLauncher = useStore(s => s.dispatchLauncherPage);
+  const missionRows = useMemo(() => simulationEnabled ? [] : getMissionObjectiveRows(view, manager.getPending),
+    [simulationEnabled, view, manager.getPending]);
   const [displayItems, setDisplayItems] = useState();
 
   useEffect(() => {
@@ -317,20 +266,21 @@ const ActionItems = () => {
     }
   }, [allItems]);
 
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const selectedFilter = preferences?.filter || 'ready';
+  const setSelectedFilter = useCallback(filter => setPreferences(scope, { filter }), [scope, setPreferences]);
   const [lastClick, setLastClick] = useState();
 
   const onClickFilter = useCallback((filter) => (e) => {
     e.stopPropagation();
     setSelectedFilter(filter);
     setLastClick(Date.now());
-  }, []);
+  }, [setSelectedFilter]);
 
   const onUnhideAll = useCallback(() => {
     dispatchUnhideAllActionItems();
     setSelectedFilter('all');
     setLastClick(Date.now());
-  }, []);
+  }, [dispatchUnhideAllActionItems, setSelectedFilter]);
 
   const isFinishingAll = useMemo(
     () => getStatus('FinishAllReady') === 'pending',
@@ -369,13 +319,13 @@ const ActionItems = () => {
         return acc;
       },
       {
-        all: 0,
-        ready: 0,
-        progress: 0,
+        all: missionRows.length,
+        ready: missionRows.filter(row => row.type === 'ready').length,
+        progress: missionRows.filter(row => row.type === 'progress').length,
         hidden: 0
       }
     )
-  }, [displayItems]);
+  }, [displayItems, missionRows]);
 
   const filteredDisplayItems = useMemo(() => {
     let filter;
@@ -401,23 +351,21 @@ const ActionItems = () => {
     return Object.values(categorized);
   }, [filteredDisplayItems]);
 
-  const onConfirmTutorialDismissal = useCallback(() => {
-    dispatchDismissCrewTutorial(crew?.id, true);
-    setConfirmingTutorialDismissal();
-  }, [crew?.id]);
-
-  const showLoggedInTutorial = authenticated && isLaunched && !simulationEnabled && !dismissAllTutorials && !crewTutorial?.dismissed;
   return (
     <>
       <OuterWrapper>
+        {authenticated && <div style={{ color: 'white', paddingLeft: 32, fontSize: 13 }}>Objectives</div>}
         {authenticated && (
           <CollapsibleSection
+            key={scope}
             borderless
+            initiallyClosed={preferences?.collapsed ?? false}
+            onCollapsedChange={collapsed => setPreferences(scope, { collapsed })}
             collapsibleProps={{
               style: {
                 display: 'flex',
                 flexDirection: 'column',
-                marginBottom: showLoggedInTutorial ? 20 : 40,
+                marginBottom: 40,
                 width: SECTION_WIDTH - 32
               }
             }}
@@ -425,9 +373,9 @@ const ActionItems = () => {
             title={(
               <TitleWrapper>
                 <Filters>
-                  <AllFilter onClick={onClickFilter('all')} selected={selectedFilter === 'all'}><BellIcon /> <b>{(tallies.all || 0).toLocaleString()}</b></AllFilter>
                   <ReadyFilter onClick={onClickFilter('ready')} selected={selectedFilter === 'ready'}><b>{(tallies.ready || 0).toLocaleString()}</b> Ready</ReadyFilter>
                   <InProgressFilter onClick={onClickFilter('progress')} selected={selectedFilter === 'progress'}><b>{(tallies.progress || 0).toLocaleString()}</b> In Progress</InProgressFilter>
+                  <AllFilter title="All objectives" onClick={onClickFilter('all')} selected={selectedFilter === 'all'}><BellIcon /> <b>{(tallies.all || 0).toLocaleString()}</b></AllFilter>
                   {tallies.hidden > 0 && <HiddenFilter onClick={onClickFilter('hidden')} selected={selectedFilter === 'hidden'}><EyeIcon /> <b>{(tallies.hidden || 0).toLocaleString()}</b></HiddenFilter>}
                   <div style={{ flex: 1 }} />
                   <Link to="/listview/eventlog" onClick={(e) => e.stopPropagation()} style={{ paddingRight: 0 }}><LoggedEventsIcon /></Link>
@@ -442,6 +390,12 @@ const ActionItems = () => {
             )}
             <ActionItemWrapper>
               <ActionItemContainer>
+                {missionRows.filter(row => selectedFilter === 'all' || row.type === selectedFilter).map(row => {
+                  return <MissionObjective key={row.mission.id} row={row}
+                    onDetails={() => row.invitation
+                      ? openLauncher('missions', 'starter')
+                      : setDetails({ scope, id: row.mission.id })} />;
+                })}
                 {filteredDisplayCategories.map(({ category, items }) => (
                   <ActionItemCategory key={category}>
                     {items.map((item) => (
@@ -458,53 +412,7 @@ const ActionItems = () => {
           </CollapsibleSection>
         )}
             
-        {showLoggedInTutorial && (
-          <CollapsibleSection
-            borderless
-            collapsibleProps={{
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                flexShrink: 0,
-                marginBottom: 40,
-                width: SECTION_WIDTH - 32
-              }
-            }}
-            openOnChange={tutorialSteps}
-            title={(
-              <TitleWrapper>
-                <Filters>
-                  <TutorialTab selected>Tutorial</TutorialTab>
-                  <div style={{ flex: 1 }} />
-                  <Skipper onClick={() => setConfirmingTutorialDismissal(true)}>
-                    Skip Tutorial
-                    <IconButton scale={0.8}><CloseIcon /></IconButton>
-                  </Skipper>
-                </Filters>
-              </TitleWrapper>
-            )}>
-            <ActionItemWrapper>
-              <TutorialActionItems tutorialSteps={tutorialSteps} />
-            </ActionItemWrapper>
-          </CollapsibleSection>
-        )}
-
       </OuterWrapper>
-
-      {confirmingTutorialDismissal && (
-        <ConfirmationDialog
-          title="Skip Tutorial"
-          body={
-            <ConfirmBody>
-              Are you sure? You may restore the tutorial from the Game Settings menu at any point if you need help.
-            </ConfirmBody>
-          }
-          onConfirm={onConfirmTutorialDismissal}
-          onReject={() => setConfirmingTutorialDismissal()}
-          confirmText="Yes"
-          rejectText="Cancel"
-        />
-      )}
     </>
   );
 };

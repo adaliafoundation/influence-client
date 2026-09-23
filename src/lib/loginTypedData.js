@@ -128,9 +128,8 @@ export const getLoginSessionVerificationHashes = (loginTypedData) => {
   };
 };
 
-export const getLoginVerificationParams = ({ signature, referredBy, typedData, walletId }) => ({
+export const getLoginVerificationParams = ({ signature, typedData, walletId }) => ({
   signature: Array.isArray(signature) ? signature.join(',') : signature,
-  referredBy,
   typedDataRevision: getLoginTypedDataRevision(typedData),
   walletId
 });

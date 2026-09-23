@@ -1,3 +1,4 @@
+import { missionBindingUrl } from './missionBindings';
 import axios from 'axios';
 import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
 import esb from 'elastic-builder';
@@ -94,6 +95,16 @@ const getBridgeWalletAssets = async ({ address, chain, label }) => {
 };
 
 const api = {
+  getMissionBinding: async (query) => {
+    const response = await instance.get(missionBindingUrl(query));
+    return response.data;
+  },
+
+  getStarterMissions: async (crewId) => {
+    const response = await instance.get(`/${apiVersion}/missions/starter/${encodeURIComponent(crewId)}`);
+    return response.data;
+  },
+
   getUser: async ({ includeBlockData = false } = {}) => {
     const response = await instance.get(`/${apiVersion}/user`);
     if (!includeBlockData) return response.data;
@@ -406,11 +417,6 @@ const api = {
 
   unWatchAsteroid: async (i) => {
     const response = await instance.delete(`/${apiVersion}/user/watchlist/${i}`);
-    return response.data;
-  },
-
-  getReferrals: async () => {
-    const response = await instance.get(`/${apiVersion}/user/referrals`);
     return response.data;
   },
 

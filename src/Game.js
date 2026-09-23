@@ -24,8 +24,6 @@ import Audio from '~/game/Audio';
 import ChatListener from '~/game/ChatListener';
 import FundingIntentMonitor from '~/game/FundingIntentMonitor';
 import Interface from '~/game/Interface';
-import LandingPage from '~/game/Landing';
-import Referral from '~/game/Referral';
 import Scene from '~/game/Scene';
 import useSession from '~/hooks/useSession';
 import useServiceWorker from '~/hooks/useServiceWorker';
@@ -244,7 +242,7 @@ const Game = () => {
   }, [isInstalling]);
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
       <GlobalStyle />
 
       {isInstalling && !updateNeeded && <FullpageInterstitial message={`${loadingMessage}...`} />}
@@ -256,15 +254,9 @@ const Game = () => {
               <WebsocketProvider>
               <ChatListener />
               <Router>
-                <Referral />
                 <CrewSwitcher />
                 <FundingIntentMonitor />
                 <Switch>
-
-                  {/* for socialmedia links that need to pull opengraph tags (will redirect to discord or main app) */}
-                  <Route path="/play">
-                    <LandingPage />
-                  </Route>
 
                   {/* for everything else */}
                   <Route>
@@ -281,17 +273,15 @@ const Game = () => {
                           <ChainTransactionProvider>
                             <SyncedTimeProvider>
                               <ActionItemProvider>
-                                <ThemeProvider theme={theme}>
-                                  <ScreensizeProvider>
-                                    <CoachmarkProvider>
-                                      <ScreensizeWarning />
-                                      <Interface />
-                                      {(updateNeeded || debugUpdateNeeded) && (
-                                        <VersionUpdateDialog onReload={handleUpdateVersion} isUpdating={isUpdating} />
-                                      )}
-                                    </CoachmarkProvider>
-                                  </ScreensizeProvider>
-                                </ThemeProvider>
+                                <ScreensizeProvider>
+                                  <CoachmarkProvider>
+                                    <ScreensizeWarning />
+                                    <Interface />
+                                    {(updateNeeded || debugUpdateNeeded) && (
+                                      <VersionUpdateDialog onReload={handleUpdateVersion} isUpdating={isUpdating} />
+                                    )}
+                                  </CoachmarkProvider>
+                                </ScreensizeProvider>
                               </ActionItemProvider>
                             </SyncedTimeProvider>
                           </ChainTransactionProvider>
@@ -314,7 +304,7 @@ const Game = () => {
           </PrivyWalletProvider>
         </WagmiContextProvider>
       )}
-    </>
+    </ThemeProvider>
   );
 };
 

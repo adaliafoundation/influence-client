@@ -1,6 +1,8 @@
+import { verifyMissionAction } from '~/lib/missionBindings';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
 import { isEqual, get } from 'lodash';
+import { useQueryClient } from '@tanstack/react-query';
 import { hash, num, shortString, uint256 } from 'starknet';
 import { getQuotes, quoteToCalls } from '@avnu/avnu-sdk';
 
@@ -17,6 +19,11 @@ import { useStrkBalance, useSwayBalance, useUSDCBalance } from '~/hooks/useWalle
 import api from '~/lib/api';
 import { getCancellationRefund } from '~/lib/escrow';
 import { isSponsorshipUnavailable } from '~/lib/paymaster';
+import {
+  STARTER_MISSION_ACTIONS, STARTER_MISSION_SYSTEMS,
+  assertStarterMissionAction, assertStarterMissionOperation, getMissionCompletionCalls,
+  findPendingMissionTransaction, getMissionAssignmentKey, getStarterMissionActionCall, starterMissionsQueryKey
+} from '~/lib/starterMissions';
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
 import { isWalletAccountLocked } from '~/lib/walletLock';
@@ -36,7 +43,17 @@ const USER_REJECTED_TRANSACTION = /USER_REFUSED_OP|User abort|User rejected|Exec
 //  confirms, equalityTest
 
 // TODO: when equalityTest is ['callerCrew.id'], can't it just be `true`?
+const missionEquality = ['assignment.campaign', 'assignment.subject.label', 'assignment.subject.id', 'assignment.mission'];
 const customConfigs = {
+  AcceptMission: { equalityTest: missionEquality, isUnblockable: true },
+  ClaimMissionReward: { equalityTest: missionEquality, isUnblockable: true },
+  MissionValidate: { equalityTest: missionEquality, isUnblockable: true },
+  CompleteStarterMission: {
+    equalityTest: missionEquality,
+    isUnblockable: true,
+    isVirtual: true,
+    multisystemCalls: getMissionCompletionCalls
+  },
   // customization of Systems configs from sdk
   AcceptDelivery: {
     equalityTest: ['delivery.id'],
@@ -600,6 +617,8 @@ export function ChainTransactionProvider({ children }) {
     walletCapabilities,
     walletId
   } = useSession();
+  const queryClient = useQueryClient();
+  const missionSubmissions = useRef(new Set());
   const activities = useActivitiesContext();
   const { crew } = useCrewContext();
   const { data: walletSource } = useWalletPurchasableBalances();
@@ -1061,7 +1080,9 @@ export function ChainTransactionProvider({ children }) {
                 const [systemCall, vars] = getSystemCallAndProcessedVars(runSystem, rawVars);
                 processedVars = vars;
                 console.log('runSystem', runSystem, processedVars, systemCall);
-                calls.push(systemCall);
+                calls.push(options.missionAssignment && STARTER_MISSION_ACTIONS.has(runSystem)
+                  ? getStarterMissionActionCall(runSystem, vars, options.missionAssignment, appConfig.get('Starknet.Address.dispatcher'))
+                  : systemCall);
               }
 
               if (customConfigs[runSystem]?.getTransferConfig) {
@@ -1243,7 +1264,7 @@ export function ChainTransactionProvider({ children }) {
   // so that we can throw any extension-related or timeout errors needed
   useEffect(() => {
     if (provider && contracts && pendingTransactions?.length) {
-      pendingTransactions.forEach(({ key, vars, txHash }) => {
+      pendingTransactions.forEach(({ key, vars, meta, txHash }) => {
         // (sanity check) this should not be possible since pendingTransaction should not be created
         // without txHash... so we aren't even reporting this error to user since should not happen
         if (!txHash) return dispatchPendingTransactionComplete(txHash);
@@ -1259,6 +1280,11 @@ export function ChainTransactionProvider({ children }) {
               // if a tx just went through and account is not known to be deployed,
               // now is a good time to check again if it is deployed
               if (receipt && !isDeployed) upgradeInsecureSession();
+              if (receipt?.execution_status === 'SUCCEEDED' && (meta?.missionAssignment || STARTER_MISSION_SYSTEMS.has(key))) {
+                if (STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
+                queryClient.invalidateQueries({ queryKey: ['starterMissions'] });
+                queryClient.invalidateQueries({ queryKey: ['missionBindings'] });
+              }
             })
             // .then((receipt) => {
             //   if (receipt) {
@@ -1545,6 +1571,9 @@ export function ChainTransactionProvider({ children }) {
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}, options = {}) => {
     if (simulationEnabled) {
+      if (options.missionAssignment || STARTER_MISSION_SYSTEMS.has(key) || key === 'MissionAction') {
+        throw new Error('Starter missions are unavailable in simulation.');
+      }
       const uuid = `0x${String(performance.now()).replace('.', '')}`;
       dispatchPendingTransaction({
         key,
@@ -1599,9 +1628,30 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
-    // execute
+    const assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
+    let missionKey;
+    let ownsMissionSubmission = false;
     const { execute: contractExecute, onTransactionError } = activeContracts[key];
     try {
+      if (key === 'MissionAction') throw new Error('Use a native action with missionAssignment for starter missions.');
+      if (assignment) {
+        missionKey = getMissionAssignmentKey(assignment);
+        if (missionSubmissions.current.has(missionKey)
+          || findPendingMissionTransaction(useStore.getState().pendingTransactions, assignment)) {
+          throw new Error('A transaction for this mission is already pending.');
+        }
+        missionSubmissions.current.add(missionKey);
+        ownsMissionSubmission = true;
+        if (options.missionAssignment) assertStarterMissionAction(key);
+        const view = await api.getStarterMissions(assignment.subject.id);
+        queryClient.setQueryData(starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), assignment.subject.id), view);
+        assertStarterMissionOperation(view, assignment, key, activeWalletAccount.address);
+        if (options.missionAssignment) {
+          await verifyMissionAction({ key, vars, assignment, view,
+            getBinding: api.getMissionBinding, getEntity: api.getEntityById });
+        }
+        meta = { ...meta, missionAssignment: assignment };
+      }
       await requireExplicitAuthorization(activeWalletAccount, options);
       const tx = await contractExecute(vars, options);
       dispatchPendingTransaction({
@@ -1620,10 +1670,12 @@ export function ChainTransactionProvider({ children }) {
       }
       handleExecutionExeption(e, executeCalls, { key, vars, meta });
       onTransactionError(e, vars);
+    } finally {
+      if (ownsMissionSubmission) missionSubmissions.current.delete(missionKey);
     }
 
     setPromptingTransaction(false);
-  }, [blockTime, createAlert, handleExecutionExeption, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPendingTx = useCallback((key, vars) => {
     // simulation will only ever have one concurrent?

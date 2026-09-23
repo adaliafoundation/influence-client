@@ -10,7 +10,6 @@ import IconButton from '~/components/IconButton';
 import NotificationSettings from '~/components/NotificationSettings';
 import NumberInput from '~/components/NumberInput';
 import Range from '~/components/Range';
-import useCrewContext from '~/hooks/useCrewContext';
 import useScreenSize from '~/hooks/useScreenSize';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
@@ -371,41 +370,13 @@ const NotificationsPane = () => {
 };
 
 const GameplayPane = () => {
-  const { authenticated, prepareGameplaySession, shouldUseSessionKeys } = useSession();
-  const { crew } = useCrewContext();
-
-  const crewTutorials = useStore(s => s.crewTutorials);
+  const { prepareGameplaySession, shouldUseSessionKeys } = useSession();
   const gameplay = useStore(s => s.gameplay);
   const createAlert = useStore(s => s.dispatchAlertLogged);
   
   const dispatchActiveCrewsDisplaySet = useStore(s => s.dispatchActiveCrewsDisplaySet);
-  const dispatchDismissCrewTutorial = useStore(s => s.dispatchDismissCrewTutorial);
-  const dispatchTutorialDisabled = useStore(s => s.dispatchTutorialDisabled);
   const dispatchUseSessionsSet = useStore(s => s.dispatchUseSessionsSet);
   const dispatchFeeTokenToggle = useStore(s => s.dispatchFeeTokenToggle);
-
-  const tutorialIsDisabled = useMemo(() => {
-    if (gameplay.dismissTutorial) {
-      return true;
-    } else if (crewTutorials?.[crew?.id]?.dismissed) {
-      return true;
-    }
-    return false;
-  }, [crew, crewTutorials, gameplay.dismissTutorial]);
-
-  const toggleTutorialDisabled = useCallback((which) => {
-    // disable setting only (i.e. not crew-specific)
-    if (which) {
-      dispatchTutorialDisabled(true);
-
-    // else, to ensure visible, crewTutorial and setting both must be enabled
-    } else {
-      if (crewTutorials?.[crew?.id]?.dismissed) {
-        dispatchDismissCrewTutorial(crew?.id, false);
-      }
-      dispatchTutorialDisabled(false);
-    }
-  }, [crew, crewTutorials, gameplay.dismissTutorial]);
 
   const toggleSessionKeys = useCallback(async (which) => {
     dispatchUseSessionsSet(which);
@@ -460,18 +431,6 @@ const GameplayPane = () => {
               </span>
             </div>
           </CheckboxRow> */}
-
-          {authenticated && (
-            <CheckboxRow>
-              <label>Show Tutorial:</label>
-              <div onClick={() => toggleTutorialDisabled(!tutorialIsDisabled)}>
-                {!tutorialIsDisabled ? <CheckedIcon /> : <UncheckedIcon />}
-                <span>
-                  Shows all completeable steps in the tutorial (if any).
-                </span>
-              </div>
-            </CheckboxRow>
-          )}
 
           <StyledDataReadout label="Use Wallet Sessions">
             <ControlGroup>
@@ -529,7 +488,7 @@ const menuShortcuts = [
   { label: 'Settings Menu', shortcut: 'Ctrl + 1' },
   { label: 'Help Menu', shortcut: 'Ctrl + 2' },
   { label: 'Store Menu', shortcut: 'Ctrl + 3' },
-  { label: 'Rewards Menu', shortcut: 'Ctrl + 4' },
+  { label: 'Missions Menu', shortcut: 'Ctrl + 4' },
   { label: 'Inbox', shortcut: 'Ctrl + 5' },
 ];
 const cameraShortcuts = [

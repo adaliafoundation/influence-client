@@ -2,6 +2,7 @@ import { useCallback, useContext, useMemo } from 'react';
 import { Asteroid, Building, Entity, Lot } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
+import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useBlockTime from '~/hooks/useBlockTime';
 import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -9,8 +10,9 @@ import useLot from '~/hooks/useLot';
 import useAsteroid from '~/hooks/useAsteroid';
 import actionStage from '~/lib/actionStages';
 
-const useConstructionManager = (lotId) => {
-  const { execute, getPendingTx, getStatus } = useContext(ChainTransactionContext);
+const useConstructionManager = (lotId, missionId) => {
+  const execute = useStarterMissionExecution(missionId);
+  const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const blockTime = useBlockTime();
   const { accountCrewIds, crew } = useCrewContext();
   const { data: lot } = useLot(lotId);

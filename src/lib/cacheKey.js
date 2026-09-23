@@ -15,7 +15,6 @@ non-entity based
 - [ 'faucetInfo', account ],
 - [ 'inventoryOrders', inventory, inventorySlot ],
 - [ 'productOrderSummary', entityLabel, entityId ],
-- [ 'referrals', token ],
 - [ 'search', assetType, query ],
 - [ 'walletBalance', 'eth', accountAddress ],
 - [ 'walletBalance', 'strk', accountAddress ],

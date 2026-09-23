@@ -173,11 +173,11 @@ export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString, crewmat
   return imageUrl;
 };
 
-const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmateId, isIn, leftButton, onClose, rightButton, setButtonRef, step, ...props }) => {
+const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmateId, isIn, leftButton, messageRef, onClose, rightButton, setButtonRef, step, ...props }) => {
   const imageUrl = useCrewmateTutorialImageUrl({ crewmateImageOptionString, crewmateId });
 
   return (
-    <TutorialMessageWrapper isIn={reactBool(isIn)} {...props}>
+    <TutorialMessageWrapper ref={messageRef} isIn={reactBool(isIn)} {...props}>
       {step && (
         <>
           <CrewmateWrapper>
@@ -189,7 +189,7 @@ const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmat
           <TutorialContent>
             <h3>
               <span>{step?.title}</span>
-              <IconButton onClick={onClose} scale={0.75}>{closeIconOverride || <CloseIcon />}</IconButton>
+              <IconButton aria-label="Close guidance" onClick={onClose} scale={0.75}>{closeIconOverride || <CloseIcon />}</IconButton>
             </h3>
             <div>
               <div>{step?.content}</div>
