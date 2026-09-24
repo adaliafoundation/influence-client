@@ -8,10 +8,6 @@ const instance = axios.create({ baseURL: `${appConfig.get('Api.influence')}/og/d
 const getOpengraphTags = async (originalUrl, origin) => {
   const urlParts = originalUrl.split('/').slice(1);
 
-  // "play" is landing page prefix (i.e. this was a url generated for sharing)...
-  // strip the "play" prefix, then can determine tags normally
-  if (urlParts[0] === 'play') urlParts.shift();
-
   const tags = {
     'twitter:card': 'summary_large_image',
     'twitter:site': '@influenceth',

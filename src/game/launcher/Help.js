@@ -7,6 +7,7 @@ import { appConfig } from '~/appConfig';
 import { PlayIcon } from '~/components/Icons';
 import LauncherDialog from './components/LauncherDialog';
 import SupportMenu from './components/SupportMenu';
+import GameplayGuides from './components/GameplayGuides';
 
 const Wrapper = styled.div`
   display: flex;
@@ -179,6 +180,7 @@ const YoutubeFeed = ({ playlistId, title }) => {
 };
 
 const panes = [
+  { label: 'Gameplay Guides', pane: <GameplayGuides /> },
   ...(features.tutorials ? [{
     label: 'Tutorials',
     pane: <YoutubeFeed title="Official Tutorial Videos" playlistId="PLEu_4bnIEcK7dt9r_JHReo8n2JdLPpby_" />

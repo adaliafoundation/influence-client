@@ -64,6 +64,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   state = {
     currentSession: {}, gameplay: {}, sessions: {},
+    dispatchLauncherPage: jest.fn(),
     dispatchAlertLogged: jest.fn(), dispatchSessionStarted: jest.fn(),
     dispatchSessionSuspended: jest.fn(), dispatchSessionEnded: jest.fn()
   };
@@ -186,4 +187,41 @@ test.each([true, false])('ignores a session support result of %s after cancellat
   expect(state.dispatchSessionStarted).not.toHaveBeenCalled();
   expect(walletSession.prepare).not.toHaveBeenCalled();
   expect(session.loginPrompt.busy).toBe(false);
+});
+
+
+test('opens login and returns to the requested store tab after authentication', async () => {
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+
+  await act(async () => {
+    session.login(undefined, { page: 'store', subpage: 'crewmates' });
+  });
+  expect(session.loginPrompt.open).toBe(true);
+  expect(state.dispatchLauncherPage).toHaveBeenLastCalledWith('play');
+  await act(async () => { session.loginPrompt.onSelect('controller'); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+
+  expect(state.dispatchSessionStarted).toHaveBeenCalled();
+  expect(state.dispatchLauncherPage).toHaveBeenLastCalledWith('store', 'crewmates');
+});
+
+test('closing a store login does not redirect a later login back to the store', async () => {
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+
+  await act(async () => {
+    session.login(undefined, { page: 'store', subpage: 'packs' });
+  });
+  act(() => session.loginPrompt.close());
+  await startLogin();
+
+  expect(state.dispatchSessionStarted).toHaveBeenCalled();
+  expect(state.dispatchLauncherPage).toHaveBeenCalledTimes(1);
 });

@@ -2,6 +2,7 @@ import { useCallback, useContext, useMemo } from 'react';
 import { Entity, Extractor, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
+import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
@@ -9,9 +10,10 @@ import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 
 // TODO: truly support multiple extractors
-const useExtractionManager = (lotId, slot = 1) => {
+const useExtractionManager = (lotId, slot = 1, missionId) => {
+  const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
-  const { execute, getPendingTx, getStatus } = useContext(ChainTransactionContext);
+  const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const { crew, crewCan } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities(lot?.building);

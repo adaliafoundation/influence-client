@@ -36,7 +36,7 @@ import Settings from './launcher/Settings';
 import Store from './launcher/Store';
 import Help from './launcher/Help';
 import Inbox from './launcher/Inbox';
-import Rewards from './launcher/Rewards';
+import Missions from './launcher/Missions';
 import Bridge from './launcher/Bridge';
 
 const DISABLE_LAUNCH_TRAILER = appConfig.get('App.disableLaunchTrailer');
@@ -448,7 +448,7 @@ const Launcher = (props) => {
   useEffect(() => {
     // NOTE: (currently not disallowing any for logged out users)
     // limit selection if logged out
-    // if (!authenticated && !['play', 'help', 'rewards', 'settings', 'store', 'inbox'].includes(launcherPage)) {
+    // if (!authenticated && !['play', 'help', 'missions', 'settings', 'store', 'inbox'].includes(launcherPage)) {
     //   dispatchLauncherPage('play');
     // }
     // disallow store if no sale available
@@ -524,9 +524,9 @@ const Launcher = (props) => {
               <HelpIcon /> Help
             </NavItem>
             <NavItem
-              onClick={() => dispatchLauncherPage('rewards')}
-              selected={launcherPage === 'rewards'}>
-              <RewardsIcon /> Rewards
+              onClick={() => dispatchLauncherPage('missions')}
+              selected={launcherPage === 'missions'}>
+              <RewardsIcon /> Missions
             </NavItem>
             <NavItem
               onClick={() => dispatchLauncherPage('settings')}
@@ -575,7 +575,7 @@ const Launcher = (props) => {
           {launcherPage === 'play' && <Play />}
           {launcherPage === 'store' && <Store />}
           {launcherPage === 'help' && <Help />}
-          {launcherPage === 'rewards' && <Rewards />}
+          {launcherPage === 'missions' && <Missions />}
           {launcherPage === 'settings' && <Settings />}
           {launcherPage === 'inbox' && <Inbox />}
           {launcherPage === 'bridge' && <Bridge />}

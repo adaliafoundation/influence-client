@@ -2,6 +2,7 @@ import { useCallback, useContext, useMemo, useState } from 'react';
 import { Deposit, Entity } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
+import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
@@ -9,9 +10,10 @@ import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 import { getStarterCoreSampleSource } from '~/lib/starterPacks';
 
-const useCoreSampleManager = (lotId) => {
+const useCoreSampleManager = (lotId, missionId) => {
+  const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
-  const { execute, getPendingTx, getStatus } = useContext(ChainTransactionContext);
+  const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const { accountCrewIds, crew, pendingTransactions } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities({ label: Entity.IDS.LOT, id: lotId });
@@ -20,7 +22,7 @@ const useCoreSampleManager = (lotId) => {
   const payload = useMemo(() => ({
     lot: { id: lotId, label: Entity.IDS.LOT },
     caller_crew: { id: crew?.id, label: Entity.IDS.CREW }
-  }), [lotId]);
+  }), [lotId, crew?.id]);
 
   const [completingSamples, setCompletingSamples] = useState([]);
 

@@ -5,7 +5,6 @@
 
 // import useSession from '~/hooks/useSession';
 // import Button from '~/components/Button';
-// import CopyReferralLink from '~/components/CopyReferralLink';
 // import CrewmateCard from '~/components/CrewmateCard';
 // import CrewTraitIcon from '~/components/CrewTraitIcon';
 // import Details from '~/components/DetailsModal';
@@ -315,7 +314,6 @@
 //         `Join Now:`,
 //       ].join('\n\n'),
 //       hashtags: 'PlayToEarn,NFTGaming',
-//       url: `${document.location.origin}/play/crew-assignment/${sessionId}?r=${accountAddress}`,
 //       //via: 'influenceth'
 //     });
 //     window.open(`https://twitter.com/intent/tweet?${params.toString()}`, '_blank');
@@ -389,12 +387,10 @@
 //                   <TwitterIcon />
 //                 </TwitterButton>
 //               )}
-//               <CopyReferralLink>
 //                 <LinkWithIcon>
 //                   <LinkIcon />
 //                   <span>Copy Recruitment Link</span>
 //                 </LinkWithIcon>
-//               </CopyReferralLink>
 //             </RecruitSection>
 //           </div>
 //           {/* NOTE: the below empty div's are to help with flex spacing on tall screens */}

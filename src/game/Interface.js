@@ -10,6 +10,8 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useScreenSize from '~/hooks/useScreenSize';
 import useStore from '~/hooks/useStore';
 import { openAccessJSTime } from '~/lib/utils';
+import StarterMissionSync from './interface/StarterMissionSync';
+import GameplayGuidance from './interface/hud/GameplayGuidance';
 import Alerts, { useControlledAlert } from './interface/Alerts';
 import Draggables from './interface/Draggables';
 import HUD from './interface/HUD';
@@ -100,7 +102,7 @@ const Interface = () => {
     // ctrl+3
     if (e.ctrlKey && e.which === 51) dispatchLauncherPage('store');
     // ctrl+4
-    if (e.ctrlKey && e.which === 52) dispatchLauncherPage('rewards');
+    if (e.ctrlKey && e.which === 52) dispatchLauncherPage('missions');
     // ctrl+5
     if (e.ctrlKey && e.which === 53) dispatchLauncherPage('inbox');
 
@@ -155,6 +157,8 @@ const Interface = () => {
       {cutscene && <Cutscene />}
       {launcherPage && <Launcher />}
       {showDevTools && <DevToolsViewer />}
+      <StarterMissionSync />
+      <GameplayGuidance />
       <StyledInterface hide={interfaceHidden}>
         {!isMobile && <Tooltip id="globalTooltip" place="left" />}
         <MainContainer>

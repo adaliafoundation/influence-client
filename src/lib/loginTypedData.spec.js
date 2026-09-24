@@ -97,12 +97,10 @@ test('builds Cartridge session verification hashes from revision 1 login typed d
 test('builds login verification params without sending the typed data payload', () => {
   expect(getLoginVerificationParams({
     signature: ['0x1', '0x2'],
-    referredBy: '0xabc',
     typedData: buildRevisionOneLoginTypedData(serverChallenge),
     walletId: 'controller'
   })).toEqual({
     signature: '0x1,0x2',
-    referredBy: '0xabc',
     typedDataRevision: LOGIN_TYPED_DATA_REVISIONS.REVISION_1,
     walletId: 'controller'
   });

@@ -50,8 +50,6 @@ export function WebsocketProvider({ children }) {
     Object.values(connectionHandlers.current).forEach((callback) => callback(isConnected));
   }, []);
 
-  // NOTE: this is currently limited to one callback registered per room b/c that's
-  //  all we need, but it could always be switched to an array of listeners if needed
   const registerMessageHandler = useCallback((callback, room = null) => {
     if (!socket.current) return;
 
@@ -59,7 +57,9 @@ export function WebsocketProvider({ children }) {
     if (room) {
       const [type, id] = room.split('::');
       if (type && id) {
-        socket.current.emit('join-room-request', { type, id: Number(id) });
+        if (!Object.values(messageHandlers.current).some((handler) => handler.room === room)) {
+          socket.current.emit('join-room-request', { type, id });
+        }
         messageHandlers.current[regId] = { room, callback };
       } else {
         console.error('Invalid websocket room! (join)', room);
@@ -74,10 +74,11 @@ export function WebsocketProvider({ children }) {
     if (!socket.current) return;
     const handler = messageHandlers.current[regId];
     if (handler) {
-      if (handler.room !== DEFAULT_ROOM) {
+      delete messageHandlers.current[regId];
+      if (handler.room !== DEFAULT_ROOM && !Object.values(messageHandlers.current).some((other) => other.room === handler.room)) {
         const [type, id] = handler.room.split('::');
         if (type && id) {
-          socket.current.emit('leave-room-request', { type, id: Number(id) });
+          socket.current.emit('leave-room-request', { type, id });
         }
       }
       delete messageHandlers.current[regId];
@@ -101,7 +102,14 @@ export function WebsocketProvider({ children }) {
 
     socket.current = new io(appConfig.get('Api.influence'), config);
     socket.current.onAny(handleMessage);
-    socket.current.on('connect', () => handleConnection(true));
+    socket.current.on('connect', () => {
+      new Set(Object.values(messageHandlers.current).map((handler) => handler.room)).forEach((room) => {
+        if (room === DEFAULT_ROOM) return;
+        const [type, id] = room.split('::');
+        socket.current.emit('join-room-request', { type, id });
+      });
+      handleConnection(true);
+    });
     socket.current.on('disconnect', () => handleConnection(false));
     setWsReady(true);
 

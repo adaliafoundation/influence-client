@@ -15,6 +15,7 @@ import SKUHighlight from './components/SKUHighlight';
 import theme from '~/theme';
 import { barebonesCrewmateAppearance } from '~/hooks/useStarterPacks';
 import useStore from '~/hooks/useStore';
+import useSession from '~/hooks/useSession';
 import formatters from '~/lib/formatters';
 
 const Wrapper = styled.div`
@@ -77,15 +78,20 @@ const Body = styled.div`
 
 const CrewmateSKU = () => {
   const history = useHistory();
+  const { authenticated, login } = useSession(false);
   const { crew, crews } = useCrewContext();
   const selectedCrewId = useStore(s => s.selectedCrewId);
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
   const activeCrew = crew || crews?.find((c) => c.id === selectedCrewId) || null;
 
   const onOpenCrew = useCallback(() => {
+    if (!authenticated) {
+      login(undefined, { page: 'store', subpage: 'crewmates' });
+      return;
+    }
     dispatchLauncherPage();
     history.push(activeCrew?.id ? `/crew/${activeCrew.id}` : '/recruit/0');
-  }, [activeCrew?.id, dispatchLauncherPage, history]);
+  }, [activeCrew?.id, authenticated, dispatchLauncherPage, history, login]);
 
   return (
     <Wrapper>

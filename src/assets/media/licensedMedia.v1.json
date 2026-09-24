@@ -790,6 +790,14 @@
       "family": "stories",
       "storageKey": "assets/client-media/stories/always-leave-a-note/1.jpg"
     },
+    "stories/close-the-production-loop/1.jpg": {
+      "key": "stories/close-the-production-loop/1.jpg",
+      "path": "stories/close-the-production-loop/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/close-the-production-loop/1.jpg"
+    },
     "stories/counterthrust/1.jpg": {
       "key": "stories/counterthrust/1.jpg",
       "path": "stories/counterthrust/1.jpg",
@@ -805,6 +813,14 @@
       "kind": "story-image",
       "family": "stories",
       "storageKey": "assets/client-media/stories/earth-and-the-void/1.jpg"
+    },
+    "stories/establish-storage/1.jpg": {
+      "key": "stories/establish-storage/1.jpg",
+      "path": "stories/establish-storage/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/establish-storage/1.jpg"
     },
     "stories/fly-me-to-the-moon/1.jpg": {
       "key": "stories/fly-me-to-the-moon/1.jpg",

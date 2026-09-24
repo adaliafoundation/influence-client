@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { isExpired } from 'react-jwt';
-import { PaymasterRpc, RpcProvider, WalletAccount } from 'starknet';
+import { RpcProvider, WalletAccount } from 'starknet';
 import { Address } from '@influenceth/sdk';
 import { appConfig } from '~/appConfig';
 import Reconnecting from '~/components/Reconnecting';
@@ -9,7 +9,7 @@ import api from '~/lib/api';
 import { AUTH_PHASES, getAuthPhaseLabel } from '~/lib/authFlow';
 import { usePrivyWallet } from '~/contexts/PrivyWalletContext';
 import { getLoginSessionVerificationHashes, getLoginTypedData, getLoginVerificationParams } from '~/lib/loginTypedData';
-import { createAuthenticatedPaymasterRpc } from '~/lib/paymaster';
+import { createAuthenticatedPaymasterRpc, createPaymasterRpc } from '~/lib/paymaster';
 import { TOKEN } from '~/lib/priceUtils';
 import { areChainsEqual, fireTrackingEvent, resolveChainId } from '~/lib/utils';
 import {
@@ -206,7 +206,6 @@ export function SessionProvider({ children }) {
   const currentSession = useStore(s => s.currentSession);
   const gameplay = useStore(s => s.gameplay);
   const lastConnectedWalletId = useStore(s => s.lastConnectedWalletId);
-  const referredBy = useStore(s => s.referrer);
   const sessions = useStore(s => s.sessions);
   const dispatchSessionStarted = useStore(s => s.dispatchSessionStarted);
   const dispatchSessionSuspended = useStore(s => s.dispatchSessionSuspended);
@@ -219,6 +218,7 @@ export function SessionProvider({ children }) {
   const [connecting, setConnecting] = useState(false);
   const [authPhase, setAuthPhase] = useState(AUTH_PHASES.IDLE);
   const [promptLogin, setPromptLogin] = useState();
+  const loginDestinationRef = useRef();
   const [status, setStatus] = useState(STATUSES.DISCONNECTED);
 
   const [connectedAccount, setConnectedAccount] = useState();
@@ -368,7 +368,7 @@ export function SessionProvider({ children }) {
 
         let paymaster;
         if (appConfig.get('Starknet.paymaster')) {
-          paymaster = new PaymasterRpc({
+          paymaster = createPaymasterRpc({
             nodeUrl: appConfig.get('Starknet.paymaster'),
             // TODO: add x-paymaster-api-key if we are going to sponsor gas
             // headers: { 'api-key': process.env.PAYMASTER_API_KEY },
@@ -510,6 +510,7 @@ export function SessionProvider({ children }) {
   }, [dispatchSessionSuspended, resetAuthFlowState]);
 
   const cancelLogin = useCallback(() => {
+    loginDestinationRef.current = null;
     disconnect();
     setReadyForChildren(true);
   }, [disconnect]);
@@ -669,11 +670,10 @@ export function SessionProvider({ children }) {
   const verifyLoginSignature = useCallback((walletId, signature, loginMessage) => {
     return api.verifyLogin(connectedAccount, getLoginVerificationParams({
       signature,
-      referredBy,
       typedData: loginMessage,
       walletId
     }));
-  }, [connectedAccount, referredBy]);
+  }, [connectedAccount]);
 
   const logLoginVerificationHashes = useCallback((walletId, loginMessage) => {
     if (normalizeConnectorId(walletId) !== WALLET_IDS.CONTROLLER) return;
@@ -728,7 +728,7 @@ export function SessionProvider({ children }) {
         }
       } else {
         // If the wallet is not yet deployed, create an insecure session
-        const newToken = await api.verifyLogin(connectedAccount, { signature: 'insecure', referredBy });
+        const newToken = await api.verifyLogin(connectedAccount, { signature: 'insecure' });
         if (authFlowId !== authFlowRef.current) return false;
 
         Object.assign(newSession, { walletId: connectedWalletId, accountAddress: connectedAccount, token: newToken });
@@ -764,7 +764,6 @@ export function SessionProvider({ children }) {
     connectedWalletId,
     createAlert,
     dispatchSessionStarted,
-    referredBy,
     walletAccount,
     disconnect,
     clearWalletConnection,
@@ -830,6 +829,11 @@ export function SessionProvider({ children }) {
     } else if (status === STATUSES.AUTHENTICATED) {
       setAuthPhase(AUTH_PHASES.AUTHENTICATED);
       setPromptLogin(false);
+      if (loginDestinationRef.current) {
+        const { page, subpage } = loginDestinationRef.current;
+        loginDestinationRef.current = null;
+        useStore.getState().dispatchLauncherPage(page, subpage);
+      }
       fireTrackingEvent('login', { externalId: currentSession?.accountAddress });
     }
   }, [currentSession, status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -897,8 +901,13 @@ export function SessionProvider({ children }) {
     });
   }, [blockTime, queryClient]);
 
-  const login = useCallback(async (enabledConnectors) => {
+  const login = useCallback(async (enabledConnectors, launcherDestination) => {
     if (status === STATUSES.AUTHENTICATING || (status === STATUSES.AUTHENTICATED && walletConnected)) return;
+
+    loginDestinationRef.current = launcherDestination;
+    if (launcherDestination) {
+      useStore.getState().dispatchLauncherPage('play');
+    }
 
     if (enabledConnectors) {
       return connect(false, enabledConnectors);
@@ -919,6 +928,7 @@ export function SessionProvider({ children }) {
 
   const closeLoginPrompt = useCallback(() => {
     if (!connecting && ![STATUSES.CONNECTED, STATUSES.AUTHENTICATING].includes(status)) {
+      loginDestinationRef.current = null;
       setPromptLogin(false);
     }
   }, [connecting, status]);

@@ -14,12 +14,11 @@ import Collection3 from '~/assets/images/crew_collections/3.png';
 import Collection4 from '~/assets/images/crew_collections/4.png';
 import Button from '~/components/ButtonAlt';
 import ConfirmationDialog from '~/components/ConfirmationDialog';
-import CopyReferralLink from '~/components/CopyReferralLink';
 import CrewmateCard from '~/components/CrewmateCard';
 import CrewClassIcon from '~/components/CrewClassIcon';
 import CrewTraitIcon from '~/components/CrewTraitIcon';
 import Details from '~/components/DetailsModal';
-import { CheckedIcon, CheckIcon, CloseIcon, HelpIcon, LinkIcon, UncheckedIcon } from '~/components/Icons';
+import { CheckedIcon, CheckIcon, CloseIcon, HelpIcon, UncheckedIcon } from '~/components/Icons';
 import { CheckboxButton } from '~/components/filters/components';
 import IconButton from '~/components/IconButton';
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';
@@ -1407,7 +1406,6 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   //       `Join Now:`,
   //     ].join('\n\n'),
   //     hashtags: 'PlayToEarn,NFTGaming',
-  //     url: `${document.location.origin}/play/crew-assignment/?r=${account}`,
   //     //via: 'influenceth'
   //   });
   //   window.open(`https://twitter.com/intent/tweet?${params.toString()}`, '_blank');
@@ -1681,7 +1679,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
   const onStripeCheckout = useCallback(async () => {
     if (!authenticated) {
-      login();
+      login(undefined, { page: 'store', subpage: 'crewmates' });
       return;
     }
 
@@ -2155,9 +2153,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
         <div style={{ alignItems: 'center', display: 'flex', height: 'calc(100% - 1px)', width: '100%' }}>
           {finalized && (
             <>
-              <CopyReferralLink>
-                <Button><LinkIcon /> <span style={{ marginLeft: 4 }}>Copy Referral Link</span></Button>
-              </CopyReferralLink>
+
 
               <div style={{ flex: 1 }} />
               <Button onClick={() => history.push(`/crew/${mappedCrewmate?.Control?.controller?.id}`)}>Go to Crew</Button>

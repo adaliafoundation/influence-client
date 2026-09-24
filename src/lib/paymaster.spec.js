@@ -10,7 +10,54 @@ jest.mock('~/hooks/useStore', () => ({
   }
 }), { virtual: true });
 
-const { createAuthenticatedPaymasterRpc, isSponsorshipUnavailable } = require('./paymaster');
+const { createAuthenticatedPaymasterRpc, createPaymasterRpc, isPaymasterUnavailable, isSponsorshipUnavailable } = require('./paymaster');
+
+test.each(['network', '503'])('only retries %s failures before submission', async (failure) => {
+  const originalFetch = global.fetch;
+  global.fetch = failure === 'network'
+    ? jest.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    : jest.fn().mockResolvedValue({ ok: false, status: 503, text: async () => 'Unavailable' });
+  try {
+    const paymaster = createPaymasterRpc({ nodeUrl: 'https://paymaster.example' });
+    const buildError = await paymaster.fetchEndpoint('paymaster_buildTransaction', {}).catch((error) => error);
+    expect(isPaymasterUnavailable(buildError)).toBe(true);
+    const submissionError = await paymaster.fetchEndpoint('paymaster_executeTransaction', {}).catch((error) => error);
+    expect(submissionError.paymasterMethod).toBe('paymaster_executeTransaction');
+    expect(isPaymasterUnavailable(submissionError)).toBe(false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test.each([404, 429, 503])('preserves HTTP %s even when the paymaster returns HTML', async (status) => {
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({ ok: false, status, text: async () => '<html>Unavailable</html>' });
+  try {
+    const paymaster = createPaymasterRpc({ nodeUrl: 'https://paymaster.example' });
+    const error = await paymaster.isAvailable().catch((error) => error);
+    expect(error.status).toBe(status);
+    expect(isPaymasterUnavailable(error)).toBe(true);
+    expect(isSponsorshipUnavailable(error)).toBe(false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('recognizes an exhausted sponsorship returned over HTTP', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: false, status: 400,
+    text: async () => JSON.stringify({ message: 'Starter pack paymaster budget exceeded' })
+  });
+  try {
+    const paymaster = createAuthenticatedPaymasterRpc({ nodeUrl: 'https://paymaster.example' });
+    const error = await paymaster.isAvailable().catch((error) => error);
+    expect(isSponsorshipUnavailable(error)).toBe(true);
+    expect(isPaymasterUnavailable(error)).toBe(false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
 
 test('recognizes explicit end-of-sponsorship responses', () => {
   expect(isSponsorshipUnavailable({ status: 402 })).toBe(true);
