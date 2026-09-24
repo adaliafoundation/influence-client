@@ -86,7 +86,6 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
                 {!view.eligible && <Muted>This crew can no longer progress in the campaign. Completed rewards remain available to claim.</Muted>}
               </Section>
               {!canManage && <Muted>Connect as the current crew delegate to accept missions or claim rewards.</Muted>}
-              {mission.claimable && view.recipient && <Muted style={{ overflowWrap: 'anywhere', fontSize: 12 }}>Reward recipient: {view.recipient}</Muted>}
               {error && <Muted role="alert">{error}</Muted>}
         </Content>
       </HeroLayout>

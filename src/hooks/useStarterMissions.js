@@ -1,5 +1,5 @@
 import { useContext, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import WebsocketContext from '~/contexts/WebsocketContext';
 import { appConfig } from '~/appConfig';
@@ -9,6 +9,7 @@ import api from '~/lib/api';
 import { canonicalCrewId, starterMissionsQueryKey } from '~/lib/starterMissions';
 
 const useStarterMissions = (crewId, { subscribe = false } = {}) => {
+  const queryClient = useQueryClient();
   const { chainId, token } = useSession();
   const simulationEnabled = useSimulationEnabled();
   const id = crewId == null ? null : canonicalCrewId(crewId);
@@ -27,6 +28,9 @@ const useStarterMissions = (crewId, { subscribe = false } = {}) => {
     let dirty = false;
     const refresh = () => { dirty = false; refetch(); };
     const onMessage = ({ type, body }) => {
+      if (type === 'MissionRewardClaimed') {
+        queryClient.invalidateQueries({ queryKey: ['walletBalance', 'sway'] });
+      }
       const relevant = ['ComponentUpdated_Mission', 'MissionAccepted', 'MissionCompleted', 'MissionRewardClaimed', 'ComponentUpdated_Crew', 'ComponentUpdated_Crew_V1'].includes(type)
         || (type === 'ConstantRegistered' && ['STARTER_MISSION_CAMPAIGN', 'STARTER_MISSION_CUTOFF'].includes(body?.event?.returnValues?.name));
       if (relevant) {
@@ -46,7 +50,7 @@ const useStarterMissions = (crewId, { subscribe = false } = {}) => {
       registrations.forEach(unregisterMessageHandler);
       unregisterConnectionHandler(connection);
     };
-  }, [subscribe, enabled, id, wsReady, refetch, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
+  }, [subscribe, enabled, id, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
   return query;
 };
 

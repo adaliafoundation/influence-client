@@ -1316,7 +1316,7 @@ const StarterPackDevTools = ({
 
 const StarterPackSKU = () => {
   const queryClient = useQueryClient();
-  const { accountAddress, authenticated, isDeployed, login, walletCapabilities } = useSession();
+  const { accountAddress, authenticated, isDeployed, login, walletCapabilities } = useSession(false);
   const { crew: selectedCrew, crews, loading: crewsLoading } = useCrewContext();
   const { deployAccount } = useContext(ChainTransactionContext);
   const createAlert = useStore(s => s.dispatchAlertLogged);
@@ -1648,7 +1648,7 @@ const StarterPackSKU = () => {
 
   const onCheckout = useCallback(async (product) => {
     if (!authenticated) {
-      login(getPrimaryNewPlayerLoginOptions());
+      login(getPrimaryNewPlayerLoginOptions(), { page: 'store', subpage: 'packs' });
       return;
     }
 

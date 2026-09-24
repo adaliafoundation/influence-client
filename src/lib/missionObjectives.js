@@ -7,7 +7,9 @@ export const hasStartedCampaign = (view) => view.missions.some(m => m.accepted |
 export const getMissionObjectiveRows = (view, getPending) => {
   if (!view?.active) return [];
   const started = hasStartedCampaign(view);
-  const available = view.eligible && view.missions.find(m => m.canAccept);
+  const available = view.eligible && view.missions.find(m => m.canAccept && (
+    m.prerequisiteId == null || view.missions.some(prerequisite => prerequisite.id === m.prerequisiteId && prerequisite.claimed)
+  ));
   return view.missions.filter(m => (
     !m.claimed && (m.accepted || m.claimable || m === available)
   )).map(mission => {

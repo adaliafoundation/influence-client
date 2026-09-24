@@ -475,7 +475,7 @@ const GameplayPane = () => {
               </Button>
             </ControlGroup>
           </StyledDataReadout>
-          <HelperText>STRK is used first. Selected AVNU fee tokens are used as fallbacks.</HelperText>
+          <HelperText>Selected AVNU fee tokens are used first, with STRK as a fallback.</HelperText>
         </div>
       </Section>
     </StyledSettings>

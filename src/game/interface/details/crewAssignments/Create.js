@@ -1679,7 +1679,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
   const onStripeCheckout = useCallback(async () => {
     if (!authenticated) {
-      login();
+      login(undefined, { page: 'store', subpage: 'crewmates' });
       return;
     }
 

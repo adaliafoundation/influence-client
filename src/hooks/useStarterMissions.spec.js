@@ -3,7 +3,7 @@ global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 const React = require('react');
 const { renderHook, act } = require('@testing-library/react');
-jest.mock('@tanstack/react-query', () => ({ useQuery: jest.fn() }));
+jest.mock('@tanstack/react-query', () => ({ useQuery: jest.fn(), useQueryClient: jest.fn() }));
 jest.mock('~/contexts/WebsocketContext', () => ({ __esModule: true, default: require('react').createContext() }), { virtual: true });
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: () => ({ chainId: 'sepolia', token: 'token' }) }), { virtual: true });
 jest.mock('~/hooks/useSimulationEnabled', () => ({ __esModule: true, default: () => false }), { virtual: true });
@@ -11,13 +11,15 @@ jest.mock('~/appConfig', () => ({ appConfig: { get: () => 'api' } }), { virtual:
 jest.mock('~/lib/api', () => ({ __esModule: true, default: { getStarterMissions: jest.fn() } }), { virtual: true });
 jest.mock('~/lib/starterMissions', () => jest.requireActual('../lib/starterMissions'), { virtual: true });
 const WebsocketContext = require('~/contexts/WebsocketContext').default;
-const { useQuery } = require('@tanstack/react-query');
+const { useQuery, useQueryClient } = require('@tanstack/react-query');
 const useStarterMissions = require('./useStarterMissions').default;
-let socket, refetch;
+let socket, refetch, invalidateQueries;
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   refetch = jest.fn();
+  invalidateQueries = jest.fn();
+  useQueryClient.mockReturnValue({ invalidateQueries });
   useQuery.mockReturnValue({ refetch });
   socket = { wsReady: true, registerMessageHandler: jest.fn((handler, room) => room || 'global'), unregisterMessageHandler: jest.fn(),
     registerConnectionHandler: jest.fn(() => 'connection'), unregisterConnectionHandler: jest.fn() };
@@ -29,6 +31,15 @@ test('dialog consumers share the query without duplicating the background subscr
   renderHook(() => useStarterMissions(501), { wrapper });
   expect(useQuery.mock.calls[0][0]).toMatchObject({ queryKey: ['starterMissions', 'sepolia', 'api', '501'], enabled: true });
   expect(socket.registerMessageHandler).not.toHaveBeenCalled();
+});
+
+test('reward claims refresh SWAY while objective completion alone does not', () => {
+  renderHook(() => useStarterMissions(501, { subscribe: true }), { wrapper });
+  const onMessage = socket.registerMessageHandler.mock.calls[0][0];
+  act(() => onMessage({ type: 'MissionCompleted' }));
+  expect(invalidateQueries).not.toHaveBeenCalled();
+  act(() => onMessage({ type: 'MissionRewardClaimed' }));
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['walletBalance', 'sway'] });
 });
 
 test('the background subscriber switches crew rooms and refetches after reconnect and catch-up', () => {

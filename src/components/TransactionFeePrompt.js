@@ -44,7 +44,7 @@ const copy = {
         <p>The Prime Council underwrote the network clearance for your crew's first operations. Those provisions are now complete.</p>
         <p>
           Your crew now operates independently. There is no subscription—you only pay a small network fee when your crew acts.
-          Influence uses STRK first, followed by the AVNU fee tokens you authorize.
+          Influence uses the AVNU fee tokens you authorize, with STRK as a fallback.
         </p>
       </>
     )
@@ -57,7 +57,7 @@ const copy = {
         <p>Your crew's starter provisions covered the network clearance for its first operations.</p>
         <p>
           From here, each order carries a small network fee. There is no subscription—you only pay when your crew acts.
-          Allow Influence to pay those fees from your USDC balance through AVNU when STRK is unavailable?
+          Allow Influence to pay those fees from your USDC balance through AVNU?
         </p>
       </>
     )
@@ -69,9 +69,23 @@ const copy = {
       <>
         <p>Your crew needs network clearance to continue this operation.</p>
         <p>
-          Allow Influence to pay the small per-action fee from your SWAY balance through AVNU when STRK and USDC
-          are unavailable?
+          Allow Influence to pay the small per-action fee from your SWAY balance through AVNU when USDC is unavailable?
         </p>
+      </>
+    )
+  },
+  PAYMASTER_UNAVAILABLE: {
+    confirmText: 'Continue with STRK',
+    title: 'Sponsored Fees Unavailable',
+    body: <p>The paymaster is temporarily unavailable. You can continue by paying network fees from your STRK balance.</p>
+  },
+  TOP_UP_STRK: {
+    confirmText: 'OK',
+    title: 'STRK Required for Network Fees',
+    body: (
+      <>
+        <p>We could not complete this transaction with native STRK fees. Gasless fee payment is currently unavailable.</p>
+        <p>Check your balance and transfer STRK to your account on Starknet to pay network fees, then try again.</p>
       </>
     )
   },
@@ -80,14 +94,14 @@ const copy = {
     title: 'Operational Reserve Required',
     body: (
       <>
-        <p>Your crew has moved beyond its starter provisions and now funds its own network clearance.</p>
-        <p>Top up your USDC wallet balance to continue playing. There is no subscription—you only pay when your crew acts.</p>
+        <p>We could not complete this transaction using the available network fee payment methods.</p>
+        <p>Check your balance and top up your account with USDC or STRK to pay network fees. There is no subscription—you only pay when your crew acts.</p>
       </>
     )
   }
 };
 
-const TransactionFeePrompt = ({ onConfirm, onReject, type }) => {
+const TransactionFeePrompt = ({ accountAddress, onConfirm, onReject, type }) => {
   const prompt = copy[type];
   if (!prompt) return null;
 
@@ -95,7 +109,12 @@ const TransactionFeePrompt = ({ onConfirm, onReject, type }) => {
     <Dialog>
       <Wrapper>
         <h4>{prompt.title}</h4>
-        <article>{prompt.body}</article>
+        <article>
+          {prompt.body}
+          {type === 'TOP_UP_STRK' && accountAddress && (
+            <p>Account address: <code style={{ overflowWrap: 'anywhere' }}>{accountAddress}</code></p>
+          )}
+        </article>
         <footer>
           <Button onClick={onReject}>Not Now</Button>
           <Button onClick={onConfirm}>{prompt.confirmText}</Button>
