@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useHistory, useParams } from 'react-router-dom';
+import { Redirect, useHistory, useParams } from 'react-router-dom';
 
 import { appConfig } from '~/appConfig';
 import SelectHabitatDialog from '~/components/SelectHabitatDialog';
@@ -7,6 +7,7 @@ import SelectUninitializedCrewmateDialog from '~/components/SelectUninitializedC
 import CrewAssignmentCreate from '~/game/interface/details/crewAssignments/Create';
 import CrewAssignment from '~/game/interface/details/crewAssignments/Assignment';
 import useSession from '~/hooks/useSession';
+import usePendingCrewmatePurchases from '~/hooks/usePendingCrewmatePurchases';
 
 // /recruit/:crewId -- select location IF crew is 0
 // /recruit/:crewId/:locationId -- select crewmate credit
@@ -16,12 +17,7 @@ const RecruitCrewmate = () => {
   const { authenticated } = useSession();
   const history = useHistory();
   const { locationId, crewId, crewmateId, page } = useParams();
-
-  // TODO: validate...
-  // - crewId is 0 or is owned by account
-  // - crewId is 0 or is at locationId
-  // - if crewId > 0, crewId is not full
-  // - if locationId > 0, locationId is a habitat
+  const pendingPurchases = usePendingCrewmatePurchases();
 
   const onSelectAssignedHabitat = useCallback((locationId) => {
     history.push(`/recruit/0/${locationId}/`)
@@ -52,6 +48,10 @@ const RecruitCrewmate = () => {
     return <SelectHabitatDialog onAccept={onSelectAssignedHabitat} onReject={onRejectAssignedHabitat} />;
   }
   if (crewmateId === undefined) {
+    if (pendingPurchases.enabled && pendingPurchases.isPending) return null;
+    if (pendingPurchases.purchases.length > 0) {
+      return <Redirect to={`/recruit/${crewId}/${locationId}/0/create`} />;
+    }
     return <SelectUninitializedCrewmateDialog arvadiansDisallowed={Number(locationId) > 100} onSelect={onSelectCrewmate} />;
   }
   if (page === 'create') {

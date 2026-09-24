@@ -19,6 +19,11 @@ export const CREWMATE_PURCHASE_STATUSES = {
 export const CREWMATE_PURCHASE_CHECKOUT_PARAM = 'crewmate_session_id';
 export const CREWMATE_PURCHASE_TRAIT_TALLY = STARTER_PACK_CREWMATE_TRAIT_TALLY;
 
+export const isCrewmatePurchaseCustomizable = (purchase) => [
+  CREWMATE_PURCHASE_STATUSES.PAID_PENDING_CUSTOMIZATION,
+  CREWMATE_PURCHASE_STATUSES.GRANT_FAILED
+].includes(purchase?.status);
+
 export const isCrewmatePurchaseCheckoutActive = (status) => [
   CREWMATE_PURCHASE_STATUSES.CHECKOUT_CREATED,
   CREWMATE_PURCHASE_STATUSES.PAID_PENDING_CUSTOMIZATION,

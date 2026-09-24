@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { FaCaretRight } from 'react-icons/fa';
 
@@ -12,6 +12,7 @@ import {
 } from '~/components/Icons';
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
+import usePendingCrewmatePurchases from '~/hooks/usePendingCrewmatePurchases';
 import useStore from '~/hooks/useStore';
 import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
 import useAccountFormatted from '~/hooks/useAccountFormatted';
@@ -220,6 +221,7 @@ const CopyLink = styled.div`
 const SystemControls = () => {
   const { accountAddress, authenticated, logout } = useSession(false);
   const { adalianRecruits, arvadianRecruits } = useCrewContext();
+  const { purchases: pendingCrewmatePurchases } = usePendingCrewmatePurchases();
 
   const { data: swayBalance, refetch: refetchSwayBalance } = useSwayBalance();
 
@@ -229,7 +231,9 @@ const SystemControls = () => {
 
   const [showAuthedButton, setShowAuthedButton] = useState(!(authenticated && launcherPage));
 
-  const totalRecruitCredits = useMemo(() => (adalianRecruits?.length + arvadianRecruits?.length), [adalianRecruits, arvadianRecruits])
+  const totalRecruitCredits = (adalianRecruits?.length || 0)
+    + (arvadianRecruits?.length || 0)
+    + pendingCrewmatePurchases.length;
   const formattedAccount = useAccountFormatted({ address: accountAddress, truncate: true, doNotReplaceYou: true });
 
   const onToggleLauncher = useCallback(() => {
