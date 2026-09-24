@@ -1003,7 +1003,7 @@ const api = {
     return response.data;
   },
 
-  getPendingCrewmatePurchase: async () => {
+  getPendingCrewmatePurchases: async () => {
     const response = await instance.get(`/${apiVersion}/crewmate-purchases/pending`);
     return response.data;
   },

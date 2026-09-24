@@ -15,6 +15,7 @@ import Draggables from './interface/Draggables';
 import HUD from './interface/HUD';
 import MainMenu from './interface/MainMenu';
 import RecruitCrewmate from './interface/RecruitCrewmate';
+import PendingCrewmatePurchases from './interface/PendingCrewmatePurchases';
 import ListView from './interface/details/ListView';
 import AsteroidDetails from './interface/details/AsteroidDetails';
 // import CrewAssignment from './interface/details/crewAssignments/Assignment';
@@ -149,6 +150,7 @@ const Interface = () => {
   return (
     <>
       <Alerts />
+      <PendingCrewmatePurchases />
       {!DISABLE_INTRO_ANIMATION && <Intro />}
       {cutscene && <Cutscene />}
       {launcherPage && <Launcher />}

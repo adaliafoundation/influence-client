@@ -19,7 +19,7 @@ import CrewmateCard from '~/components/CrewmateCard';
 import CrewClassIcon from '~/components/CrewClassIcon';
 import CrewTraitIcon from '~/components/CrewTraitIcon';
 import Details from '~/components/DetailsModal';
-import { CheckedIcon, CheckIcon, CloseIcon, LinkIcon, UncheckedIcon } from '~/components/Icons';
+import { CheckedIcon, CheckIcon, CloseIcon, HelpIcon, LinkIcon, UncheckedIcon } from '~/components/Icons';
 import { CheckboxButton } from '~/components/filters/components';
 import IconButton from '~/components/IconButton';
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';
@@ -32,6 +32,8 @@ import StripeEmbeddedCheckout, { stripePromise } from '~/game/launcher/store/com
 import useBookSession, { bookIds, getBookCompletionImage } from '~/hooks/useBookSession';
 import useCrewManager from '~/hooks/actionManagers/useCrewManager';
 import useCrewContext from '~/hooks/useCrewContext';
+import useCrewmatePurchaseCheckout from '~/hooks/useCrewmatePurchaseCheckout';
+import usePendingCrewmatePurchases from '~/hooks/usePendingCrewmatePurchases';
 import useNameAvailability from '~/hooks/useNameAvailability';
 import usePriceConstants from '~/hooks/usePriceConstants';
 import usePriceHelper from '~/hooks/usePriceHelper';
@@ -46,7 +48,7 @@ import {
   buildCrewmatePurchaseReturnUrl,
   clearCrewmatePurchaseCheckoutSessionIdFromUrl,
   getCrewmatePurchaseCheckoutSessionIdFromUrl,
-  isCrewmatePurchaseCheckoutActive,
+  isCrewmatePurchaseCustomizable,
   normalizeCrewmatePurchaseProducts
 } from '~/lib/crewmatePurchases';
 import { getRandomAdalianAppearance } from '~/lib/crewmateDesign';
@@ -545,6 +547,7 @@ const NameMessage = styled.div`
     margin-left: 8px;
   }
 `;
+
 const NameError = styled(NameMessage)`
   color: ${p => p.theme.colors.error};
 `;
@@ -738,7 +741,6 @@ const mouseoverPaneProps = (visible, isEditor, zIndex) => ({
 
 const onCloseDestination = `/crew`;
 
-const crewmatePurchaseCheckoutPollMs = 5000;
 const noop = () => {};
 
 const PopperWrapper = (props) => {
@@ -1187,7 +1189,21 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   const [stripeCheckoutOpen, setStripeCheckoutOpen] = useState(false);
   const [stripeSubmitting, setStripeSubmitting] = useState(false);
   const [awaitingStripePayment, setAwaitingStripePayment] = useState(false);
-  const submittedStripePurchaseRef = useRef();
+  const [checkoutCustomization, setCheckoutCustomization] = useState(null);
+  const pendingPurchases = usePendingCrewmatePurchases();
+  const crewmatePurchaseCheckoutQuery = useCrewmatePurchaseCheckout(stripeCheckoutSessionId, checkoutCustomization);
+  const stripePurchase = crewmatePurchaseCheckoutQuery.data?.purchase || null;
+  const { automaticSubmissionError, submitCustomization } = crewmatePurchaseCheckoutQuery;
+  const stripeCanCustomize = isCrewmatePurchaseCustomizable(stripePurchase);
+  const paidPurchaseAvailable = crewmateId === 0 && pendingPurchases.purchases.length > 0;
+  const usingStripePurchase = !!stripeCheckoutSessionId || paidPurchaseAvailable;
+  const stripeBusy = stripeSubmitting || crewmatePurchaseCheckoutQuery.isSubmitting;
+
+  useEffect(() => {
+    if (!stripeCheckoutSessionId && paidPurchaseAvailable) {
+      setStripeCheckoutSessionId(pendingPurchases.purchases[0].stripeCheckoutSessionId);
+    }
+  }, [stripeCheckoutSessionId, paidPurchaseAvailable, pendingPurchases.purchases]);
 
   const [appearanceOptions, setAppearanceOptions] = useState([]);
   const [appearanceSelection, setAppearanceSelection] = useState();
@@ -1257,7 +1273,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       }
     };
 
-    if (c.id === 0 && adalianRecruits?.length > 0) {
+    if (c.id === 0 && !usingStripePurchase && adalianRecruits?.length > 0) {
       console.warn('OVERRIDING ID -- should only happen if starter pack was purchased in creation flow');
       c.id = adalianRecruits?.[0]?.id || 0;
     }
@@ -1317,6 +1333,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     return c;
   }, [
     adalianRecruits?.length,
+    usingStripePurchase,
     appearanceOptions,
     appearanceSelection,
     crewId,
@@ -1524,9 +1541,9 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   }, []);
 
   const recruitTally = useMemo(() => {
-    if (crewmate?.Crewmate?.coll === Crewmate.COLLECTION_IDS.ADALIAN) return adalianRecruits?.length || 0;
-    return 0;
-  }, [adalianRecruits, crewmate?.Crewmate?.coll]);
+    if (crewmate?.Crewmate?.coll !== Crewmate.COLLECTION_IDS.ADALIAN) return 0;
+    return (adalianRecruits?.length || 0) + pendingPurchases.purchases.length;
+  }, [adalianRecruits?.length, crewmate?.Crewmate?.coll, pendingPurchases.purchases.length]);
 
   const disableChanges = pendingCrewmate || traitsLocked || promptingTransaction;
 
@@ -1575,15 +1592,6 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
   const crewmatePurchaseProduct = useMemo(() => crewmatePurchaseProducts?.[0] || null, [crewmatePurchaseProducts]);
 
-  const crewmatePurchaseCheckoutQuery = useQuery({
-    queryKey: ['crewmatePurchaseCheckout', stripeCheckoutSessionId],
-    queryFn: () => api.getCrewmatePurchaseCheckout(stripeCheckoutSessionId),
-    enabled: !!stripePromise && !!authenticated && !!stripeCheckoutSessionId,
-    refetchInterval: (query) => isCrewmatePurchaseCheckoutActive(query.state.data?.purchase?.status) ? crewmatePurchaseCheckoutPollMs : false
-  });
-
-  const stripePurchase = crewmatePurchaseCheckoutQuery.data?.purchase || null;
-
   useEffect(() => {
     if (crewmatePurchaseCheckoutQuery.data?.clientSecret) {
       setStripeClientSecret(crewmatePurchaseCheckoutQuery.data.clientSecret);
@@ -1610,55 +1618,47 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   ]);
 
   useEffect(() => {
-    if (!stripePurchase?.id || !crewmate || submittedStripePurchaseRef.current === stripePurchase.id) return;
-    if (
-      stripePurchase.status !== CREWMATE_PURCHASE_STATUSES.PAID_PENDING_CUSTOMIZATION &&
-      !stripePurchase.canCustomize
-    ) return;
+    if (stripeCanCustomize && (!checkoutCustomization || automaticSubmissionError)) {
+      setAwaitingStripePayment(false);
+      setPurchaseAcknowledged(false);
+      setConfirming(false);
+    }
+  }, [automaticSubmissionError, checkoutCustomization, stripeCanCustomize, stripePurchase?.id]);
 
-    submittedStripePurchaseRef.current = stripePurchase.id;
-    setStripeSubmitting(true);
-    api.submitCrewmatePurchaseCustomization({
-      purchaseId: stripePurchase.id,
-      grantRequest: buildCrewmatePurchaseGrantRequestFromCrewmate(crewmate)
-    })
-      .then((response) => {
-        queryClient.setQueryData(['crewmatePurchaseCheckout', stripeCheckoutSessionId], (current = {}) => ({
-          ...current,
-          purchase: response.purchase
-        }));
-        queryClient.invalidateQueries({ queryKey: ['crewmatePurchaseCheckout', stripeCheckoutSessionId] });
-      })
-      .catch((e) => {
-        submittedStripePurchaseRef.current = undefined;
-        createAlert({
-          type: 'GenericAlert',
-          level: 'warning',
-          data: { content: e?.response?.data?.error || e.message || 'Unable to submit crewmate customization.' },
-          duration: 10000
-        });
-      })
-      .finally(() => {
-        setStripeSubmitting(false);
+  useEffect(() => {
+    if (!automaticSubmissionError) return;
+    createAlert({
+      type: 'GenericAlert',
+      level: 'warning',
+      data: { content: automaticSubmissionError?.response?.data?.error || automaticSubmissionError.message || 'Unable to submit crewmate customization.' },
+      duration: 10000
+    });
+  }, [automaticSubmissionError, createAlert]);
+
+  const submitStripeCustomization = useCallback(async () => {
+    if (!readyForSubmission || nameError !== null || !purchaseAcknowledged || stripeBusy) return;
+    if (!await isNameValid(name, 0)) return;
+    try {
+      await submitCustomization(buildCrewmatePurchaseGrantRequestFromCrewmate(crewmate));
+    } catch (e) {
+      createAlert({
+        type: 'GenericAlert',
+        level: 'warning',
+        data: { content: e?.response?.data?.error || e.message || 'Unable to submit crewmate customization.' },
+        duration: 10000
       });
-  }, [
-    createAlert,
-    crewmate,
-    queryClient,
-    stripeCheckoutSessionId,
-    stripePurchase?.canCustomize,
-    stripePurchase?.id,
-    stripePurchase?.status
-  ]);
+    }
+  }, [readyForSubmission, nameError, purchaseAcknowledged, stripeBusy, isNameValid, name,
+    submitCustomization, crewmate, createAlert]);
 
   useEffect(() => {
     if (!stripePurchase?.id || stripePurchase.status !== CREWMATE_PURCHASE_STATUSES.GRANT_CONFIRMED) return;
 
+    queryClient.invalidateQueries({ queryKey: ['pendingCrewmatePurchases', accountAddress] });
     queryClient.invalidateQueries({ queryKey: ['entities', Entity.IDS.CREWMATE] });
     queryClient.invalidateQueries({ queryKey: ['entity', Entity.IDS.CREW, crewId] });
     setStripeCheckoutOpen(false);
     setStripeClientSecret(undefined);
-    setStripeCheckoutSessionId(null);
     setAwaitingStripePayment(false);
     setConfirming(false);
     createAlert({
@@ -1669,6 +1669,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     });
     history.push(`/crew/${stripePurchase.grantedCrew?.id || crewId}`);
   }, [
+    accountAddress,
     createAlert,
     crewId,
     history,
@@ -1716,6 +1717,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
     setStripeSubmitting(true);
     try {
+      const grantRequest = buildCrewmatePurchaseGrantRequestFromCrewmate(crewmate);
       const response = await api.createCrewmatePurchaseCheckout({
         productId: crewmatePurchaseProduct.productId,
         recipient: accountAddress,
@@ -1727,6 +1729,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       }
 
       setStripeCheckoutSessionId(response.checkoutSessionId);
+      setCheckoutCustomization({ accountAddress, checkoutSessionId: response.checkoutSessionId, grantRequest });
       setStripeClientSecret(response.clientSecret);
       setAwaitingStripePayment(false);
       setStripeCheckoutOpen(true);
@@ -1744,6 +1747,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     accountAddress,
     authenticated,
     createAlert,
+    crewmate,
     crewmatePurchaseProduct,
     login
   ]);
@@ -1762,11 +1766,30 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     setStripeCheckoutOpen(false);
     setAwaitingStripePayment(true);
     if (stripeCheckoutSessionId) {
-      queryClient.invalidateQueries({ queryKey: ['crewmatePurchaseCheckout', stripeCheckoutSessionId] });
+      queryClient.invalidateQueries({ queryKey: ['crewmatePurchaseCheckout', accountAddress, stripeCheckoutSessionId] });
     }
-  }, [queryClient, stripeCheckoutSessionId]);
+  }, [accountAddress, queryClient, stripeCheckoutSessionId]);
 
   const confirmationProps = useMemo(() => {
+    if (usingStripePurchase) {
+      if (stripePurchase?.status === CREWMATE_PURCHASE_STATUSES.CHECKOUT_CREATED) {
+        return {
+          mode: 'stripePending',
+          disabled: awaitingStripePayment || !stripeClientSecret || stripeBusy,
+          onConfirm: () => setStripeCheckoutOpen(true),
+          confirmText: awaitingStripePayment ? 'Waiting for Payment...' : 'Resume Checkout'
+        };
+      }
+      const canCustomize = isCrewmatePurchaseCustomizable(stripePurchase);
+      return {
+        mode: 'paid',
+        disabled: !canCustomize || !purchaseAcknowledged || stripeBusy || !readyForSubmission || nameError !== null,
+        confirmButtonProps: { loading: stripeBusy },
+        onConfirm: submitStripeCustomization,
+        confirmText: canCustomize ? 'Confirm Recruitment' : 'Processing...',
+        rejectButtonProps: { disabled: stripeBusy }
+      };
+    }
     if (!priceConstants?.ADALIAN_PURCHASE_PRICE || !priceConstants?.ADALIAN_PURCHASE_TOKEN) return;
     const price = priceHelper.from(priceConstants.ADALIAN_PURCHASE_PRICE, priceConstants.ADALIAN_PURCHASE_TOKEN);
     const targetUsdcValue = getUsdcValue(price);
@@ -1823,7 +1846,13 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       )
     };
   }, [
-    crewmate,
+    usingStripePurchase,
+    stripeClientSecret,
+    stripePurchase,
+    stripeBusy,
+    readyForSubmission,
+    nameError,
+    submitStripeCustomization,
     finalize,
     onStripeCheckout,
     openAdvancedFunding,
@@ -1833,9 +1862,11 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     purchaseAcknowledged,
     awaitingStripePayment,
     stripeSubmitting,
-    stripePurchase?.status,
     usdcBalance
   ]);
+
+  const purchaseRecoveryUnavailable = crewmateId === 0 && pendingPurchases.enabled
+    && (pendingPurchases.isPending || pendingPurchases.isError);
 
   if (!crewmate) return null;
   return (
@@ -2137,9 +2168,27 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
               <Button disabled={!!pendingCrewmate} onClick={handleBack}>Back</Button>
               <div style={{ flex: 1 }} />
               <div style={{ alignItems: 'center', display: 'flex', flexDirection: 'row' }}>
-                {recruitTally > 0 && <RecruitTally>Credits Remaining: <b>{recruitTally}</b></RecruitTally>}
+                {pendingPurchases.enabled && pendingPurchases.isError && (
+                  <Button onClick={() => pendingPurchases.refetch()}>Retry purchase recovery</Button>
+                )}
+                {crewmatePurchaseCheckoutQuery.isError && (
+                  <Button onClick={() => crewmatePurchaseCheckoutQuery.refetch()}>Retry purchase recovery</Button>
+                )}
+                {recruitTally > 0 && (
+                  <RecruitTally>
+                    Credits Remaining: <b>{recruitTally}</b>
+                    <span
+                      aria-label="About crewmate credits"
+                      data-tooltip-id="globalTooltip"
+                      data-tooltip-content="Purchase already completed, no additional purchase necessary for this crewmate."
+                      style={{ cursor: 'help', display: 'inline-flex', fontSize: 20, marginLeft: 6, verticalAlign: 'middle' }}
+                      tabIndex={0}>
+                      <HelpIcon />
+                    </span>
+                  </RecruitTally>
+                )}
                 <Button
-                  disabled={!readyForSubmission || !!pendingCrewmate || nameError !== null || (crewId !== 0 && crew?.Crew?.roster?.length >= 5)}
+                  disabled={!readyForSubmission || !!pendingCrewmate || stripeBusy || purchaseRecoveryUnavailable || nameError !== null || (crewId !== 0 && crew?.Crew?.roster?.length >= 5)}
                   loading={!!pendingCrewmate}
                   isTransaction
                   onClick={confirmFinalize}>Recruit</Button>
@@ -2167,6 +2216,10 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
           title={`Confirm Crewmate Creation`}
           body={(
             <PromptBody highlight>
+              {confirmationProps?.mode === 'stripePending' && <>Your payment has not yet been confirmed. Resume checkout or wait for payment confirmation.</>}
+              {confirmationProps?.mode === 'paid' && (
+                <>This crewmate has already been paid for. Confirm to recruit <b>{name}</b> with the appearance, class, and traits shown. No additional payment is required.</>
+              )}
               {!crewmate.id && confirmationProps?.mode === 'crypto' && (
                 <>
                   Crewmate recruitment is <b>5.00 USDC</b>. To continue, you are authorizing your wallet to submit
@@ -2213,7 +2266,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
             </PromptBody>
           )}
           {...confirmationProps}
-          disabled={confirmationProps?.disabled || stripeSubmitting}
+          disabled={confirmationProps?.disabled || stripeBusy}
           onReject={() => {
             setPurchaseAcknowledged(false);
             setConfirming(false);
@@ -2237,6 +2290,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 //  for page-state so doesn't reload
 
 const Wrapper = ({ backLocation, crewId, crewmateId, locationId }) => {
+  const { accountAddress } = useSession();
   const { book, bookSession, bookError } = useBookSession(crewId, crewmateId || 0);
   const { crews, crewmateMap, loading: crewIsLoading } = useCrewContext();
   const { getPendingCrewmate } = useCrewManager();
@@ -2289,6 +2343,7 @@ const Wrapper = ({ backLocation, crewId, crewmateId, locationId }) => {
       )}
       {!(bookSessionIsLoading || crewIsLoading) && (
         <CrewAssignmentCreate
+          key={`${accountAddress}_${crewId}_${crewmateId}`}
           backLocation={backLocation}
           coverImage={coverImage}
           crewId={crewId}
