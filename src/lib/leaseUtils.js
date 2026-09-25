@@ -61,6 +61,17 @@ export const isLeaseHolderOrBuildingController = ({ accountCrewIds = [], lot, pr
   );
 };
 
+export const canRestoreExpiredLotLease = ({ crewId, lot, expiredAgreement }) => (
+  !!expiredAgreement &&
+  !lot?._activeUseLotAgreement &&
+  lot?.building?.Building?.status > Building.CONSTRUCTION_STATUSES.UNPLANNED &&
+  isLeaseHolderOrBuildingController({ accountCrewIds: [crewId], lot, previousAgreement: expiredAgreement })
+);
+
+export const canExtendAgreement = ({ agreement, blockTime, isExpiredLeaseRenewal }) => (
+  !!isExpiredLeaseRenewal || !!(agreement?.endTime > blockTime)
+);
+
 export const getLotLeasePayment = ({ agreement, isExtension, rate, term, now }) => {
   if (!term) return 0n;
   if (isExtension && !agreement) return 0n;

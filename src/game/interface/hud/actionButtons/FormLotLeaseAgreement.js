@@ -7,7 +7,7 @@ import { daysToSeconds, formatFixed } from '~/lib/utils';
 import { STARTER_LOT_LEASE_TERM, isStarterLotLeaseCandidate } from '~/lib/starterPacks';
 import {
   getLotLeaseAuctionStatus,
-  isLeaseHolderOrBuildingController,
+  canRestoreExpiredLotLease,
   toSway
 } from '~/lib/leaseUtils';
 import ActionButton from './ActionButton';
@@ -17,7 +17,7 @@ import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import theme from '~/theme';
 
 // TODO: arguably, it would be more consistent to show this button in a disabled state, at least in some conditions
-const isVisible = ({ accountCrewIds, asteroid, lot, blockTime, crew }) => {
+const isVisible = ({ asteroid, lot, blockTime, crew }) => {
   let visible = false;
 
   const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
@@ -36,10 +36,10 @@ const isVisible = ({ accountCrewIds, asteroid, lot, blockTime, crew }) => {
   if (visible && isExpiredAuctionLease) {
     visible = (
       !auctionStatus.isManualAuctionBlocked ||
-      isLeaseHolderOrBuildingController({
-        accountCrewIds,
+      canRestoreExpiredLotLease({
+        crewId: crew?.id,
         lot,
-        previousAgreement: auctionStatus.expiredAgreement
+        expiredAgreement: auctionStatus.expiredAgreement
       })
     );
   }
@@ -47,7 +47,7 @@ const isVisible = ({ accountCrewIds, asteroid, lot, blockTime, crew }) => {
   return visible;
 };
 
-const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, crew, lot, simulation, simulationActions, _disabled }) => {
+const FormLotLeaseAgreement = ({ asteroid, blockTime, crew, lot, simulation, simulationActions, _disabled }) => {
   const { currentPolicy, pendingChange } = useAgreementManager(lot, Permission.IDS.USE_LOT);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -72,10 +72,10 @@ const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, crew, lot,
     const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
 
     if (lot?.building && auctionStatus?.expiredAgreement) {
-      if (isLeaseHolderOrBuildingController({
-        accountCrewIds,
+      if (canRestoreExpiredLotLease({
+        crewId: crew?.id,
         lot,
-        previousAgreement: auctionStatus.expiredAgreement
+        expiredAgreement: auctionStatus.expiredAgreement
       })) {
         return {
           label: (
@@ -109,7 +109,7 @@ const FormLotLeaseAgreement = ({ accountCrewIds, asteroid, blockTime, crew, lot,
     return {
       label: <>Lease Lot (<SwayIcon />{leaseRate} / day)</>,
     };
-  }, [accountCrewIds, asteroid, blockTime, crew, currentPolicy?.policyDetails?.initialTerm, currentPolicy?.policyDetails?.rate, currentPolicy?.policyType, lot]);
+  }, [asteroid, blockTime, crew, currentPolicy?.policyDetails?.initialTerm, currentPolicy?.policyDetails?.rate, currentPolicy?.policyType, lot]);
 
   return (
     <ActionButton
