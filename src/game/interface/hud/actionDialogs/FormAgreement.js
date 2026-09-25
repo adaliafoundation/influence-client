@@ -47,7 +47,8 @@ import {
   getEntityCrew,
   getLotLeaseAuctionStatus,
   getLotLeasePayment,
-  isLeaseHolderOrBuildingController,
+  canRestoreExpiredLotLease,
+  canExtendAgreement,
   toSway
 } from '~/lib/leaseUtils';
 
@@ -158,7 +159,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const { currentAgreement, currentAgreementRaw, currentPolicy, cancelAgreement, enterAgreement, extendAgreement, pendingChange } = agreementManager;
   const { data: asteroid } = useAsteroid(locationsArrToObj(entity?.Location?.locations || []).asteroidId);
   const blockTime = useBlockTime();
-  const { accountCrewIds, crew } = useCrewContext();
+  const { crew } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
   const location = useHydratedLocation(locationsArrToObj(entity?.Location?.locations || []));
@@ -176,13 +177,12 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const isExpiredLeaseRenewal = useMemo(() => (
     isLotLease &&
     currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID &&
-    !!auctionStatus?.expiredAgreement &&
-    isLeaseHolderOrBuildingController({
-      accountCrewIds,
+    canRestoreExpiredLotLease({
+      crewId: crew?.id,
       lot: entity,
-      previousAgreement: auctionStatus.expiredAgreement
+      expiredAgreement: auctionStatus?.expiredAgreement
     })
-  ), [accountCrewIds, auctionStatus?.expiredAgreement, currentPolicy?.policyType, entity, isLotLease]);
+  ), [crew?.id, auctionStatus?.expiredAgreement, currentPolicy?.policyType, entity, isLotLease]);
   const isAuctionPurchase = useMemo(() => (
     isLotLease &&
     currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID &&
@@ -190,7 +190,9 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
     !isExpiredLeaseRenewal
   ), [auctionStatus?.isAuctionRequired, currentPolicy?.policyType, isExpiredLeaseRenewal, isLotLease]);
   const isManualAuctionBlocked = isAuctionPurchase && auctionStatus.isManualAuctionBlocked;
-  const isLeaseExtension = isExtension || isExpiredLeaseRenewal;
+  const extensionAllowed = canExtendAgreement({ agreement: currentAgreementRaw, blockTime, isExpiredLeaseRenewal });
+  const isLeaseExtension = (isExtension && extensionAllowed) || isExpiredLeaseRenewal;
+  const isExpiredExtension = isExtension && !extensionAllowed;
   const starterLotLeaseCandidate = useMemo(() => (
     currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID
     && !isLeaseExtension
@@ -417,8 +419,12 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
 
   const onExtendAgreement = useCallback(() => {
     const recipient = controller?.Crew?.delegatedTo;
-    extendAgreement({ recipient, term, termPrice });
-  }, [controller?.Crew?.delegatedTo, extendAgreement, term, termPrice]);
+    if (!extensionAllowed) return;
+    extendAgreement({
+      recipient, term, termPrice,
+      ...(isExpiredLeaseRenewal ? { permitted: getEntityCrew(crew?.id) } : {})
+    });
+  }, [controller?.Crew?.delegatedTo, crew?.id, extendAgreement, extensionAllowed, isExpiredLeaseRenewal, term, termPrice]);
 
   const onTerminateAgreement = useCallback(() => {
     cancelAgreement({
@@ -445,12 +451,14 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
         onGo: onTerminateAgreement
       };
     }
-    if (isExtension) {
+    if (isExtension && !isExpiredLeaseRenewal) {
       return {
         icon: <ExtendAgreementIcon />,
         label: `Extend ${entity.label === Entity.IDS.LOT ? 'Lot' : 'Asset'} Agreement`,
         status: stage === actionStages.NOT_STARTED ? 'Prepaid Lease' : undefined,
-        goLabel: 'Update Agreement',
+        goLabel: isExpiredExtension
+          ? (isLotLease ? 'Lease expired — reopen Lease Lot' : 'Agreement expired')
+          : 'Update Agreement',
         onGo: onExtendAgreement
       };
     }
@@ -474,16 +482,17 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
       goLabel: usingStarterLotLease || isAuctionPurchase ? 'Lease Lot' : 'Create Agreement',
       onGo: onEnterAgreement
     }
-  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isManualAuctionBlocked, isAuctionPurchase, isExpiredLeaseRenewal, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage, usingStarterLotLease]);
+  }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isLotLease, isManualAuctionBlocked, isAuctionPurchase, isExpiredLeaseRenewal, isExpiredExtension, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage, usingStarterLotLease]);
 
   const disableGo = useMemo(() => {
+    if (isExpiredExtension) return true;
     if (insufficientAssets) return true;
     if (isAuctionPurchase && !auctionStatus?.isAuctionAvailable) return true;
     if (auctionRecipientsLoading) return true;
     if (isTermination && currentAgreement?._canGiveNoticeStart > blockTime) return true;
     if (!starterLotLeaseCandidate && (initialPeriod === '' || initialPeriod <= 0)) return true;
     return false;
-  }, [auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
+  }, [isExpiredExtension, auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
   const leasePeriodInvalid = !starterLotLeaseCandidate && !isTermination && (isLeaseExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (initialPeriod === '' || initialPeriod <= 0);
   return (
     <>
