@@ -4,6 +4,7 @@ import { Building, Deposit, DryDock, Entity, Extractor, Inventory, Lot, Order, P
 import useSimulationState from '~/hooks/useSimulationState';
 import SIMULATION_CONFIG from './simulationConfig';
 import { useEffect, useMemo, useState } from 'react';
+import { PLANNING_COMPONENTS } from '~/lib/planningEligibility';
 import { entitiesCacheKey } from '~/lib/cacheKey';
 import { entityToAgreements } from '~/lib/utils';
 import { statuses as walletBuildingStatuses } from '~/hooks/useWalletBuildings';
@@ -209,6 +210,12 @@ const MockDataManager = () => {
         
         const lot = {
           ...lotEntity,
+          UseLot: { tenant: myCrewEntity },
+          PublicPolicies: [],
+          WhitelistAgreements: [],
+          WhitelistAccountAgreements: [],
+          ContractAgreements: [],
+          ContractPolicies: [],
           Location: { location: asteroidEntity, locations: [asteroidEntity] },
           PrepaidAgreements: [{
             permission: Permission.IDS.USE_LOT,
@@ -230,6 +237,11 @@ const MockDataManager = () => {
           transformer: (data) => {
             return data ? { ...data, ...lot } : { ...lot }
           }
+        });
+
+        configs.push({
+          queryKey: ['entity', Entity.IDS.LOT, lotId, { components: [...PLANNING_COMPONENTS].sort() }],
+          transformer: () => lot
         });
 
         // if building id

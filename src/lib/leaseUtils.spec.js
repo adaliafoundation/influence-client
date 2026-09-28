@@ -100,3 +100,12 @@ test('owning another eligible crew does not allow the selected unrelated crew to
     expiredAgreement: { ...agreement, permitted: { id: 2493 } }
   })).toBe(false);
 });
+
+test('active and expired lot lease helpers share the inclusive notice boundary', () => {
+  const { getActiveUseLotAgreement, getExpiredUseLotAgreement } = require('./leaseUtils');
+  const lease = { permission: Permission.IDS.USE_LOT, endTime: 90, noticeTime: 80, noticePeriod: 20 };
+  expect(getActiveUseLotAgreement([lease], 100)).toBe(lease);
+  expect(getExpiredUseLotAgreement([lease], 100)).toBeNull();
+  expect(getActiveUseLotAgreement([lease], 101)).toBeNull();
+  expect(getExpiredUseLotAgreement([lease], 101)).toBe(lease);
+});

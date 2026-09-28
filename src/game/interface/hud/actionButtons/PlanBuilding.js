@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import { Permission } from '@influenceth/sdk';
 
 import { PlanBuildingIcon } from '~/components/Icons';
 import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
@@ -24,25 +23,24 @@ const isVisible = ({ constructionStatus, accountCrewIds, crew, lot, ship }) => {
 };
 
 const PlanBuilding = ({ asteroid, blockTime, crew, lot, onSetAction, simulation, simulationActions, _disabled }) => {
-  const { constructionStatus } = useConstructionManager(lot?.id);
+  const { constructionStatus, planningEligibility } = useConstructionManager(lot?.id);
   const setCoachmarkRef = useCoachmarkRefSetter();
   const handleClick = useCallback(() => {
     onSetAction('PLAN_BUILDING');
   }, [onSetAction]);
 
   const disabledReason = useMemo(() => {
-    const isControlledByMe = crew && lot && Permission.isPermitted(crew, Permission.IDS.USE_LOT, lot, blockTime);
-
     if (_disabled) return 'loading...';
     if (constructionStatus === 'READY_TO_PLAN') {
+      if (planningEligibility.status !== 'allowed') return planningEligibility.reason;
       return getCrewDisabledReason({
         asteroid,
         crew,
         isAllowedInSimulation: simulationActions.includes('PlanBuilding'),
-        requireReady: !isControlledByMe
+        requireReady: false
       });
     }
-  }, [_disabled, asteroid, blockTime, constructionStatus, crew, lot, simulationActions]);
+  }, [_disabled, asteroid, constructionStatus, crew, planningEligibility, simulationActions]);
 
   return (
     <ActionButton

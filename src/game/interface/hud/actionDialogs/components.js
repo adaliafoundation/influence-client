@@ -3960,23 +3960,12 @@ export const FlexSectionBlock = ({ bodyStyle, children, style = {}, title, title
 };
 
 export const LotControlWarning = ({ lot }) => {
-  const { accountCrewIds, crew } = useCrewContext();
-  const { isAtRisk } = useConstructionManager(lot?.id);
-
-  const warning = useMemo(() => {
-    if (!(crew && lot)) return null;
-    if (isAtRisk) {
-      return <>Construction Site is vulnerable to any crew.</>;
-    }
-    if (!accountCrewIds?.includes(lot?.Control?.controller?.id)) {
-      return <>Lot Not Controlled. Construction Site is vulnerable to <EntityName {...(lot?.Control?.controller || {})} /></>;
-    }
-  }, [accountCrewIds, crew, isAtRisk, lot?.building]);
-
-  if (!warning) return null;
+  if (!lot) return null;
   return (
     <ControlWarning>
-      <WarningIcon /> <span>{warning}</span>
+      <WarningIcon />
+      <span>USE_LOT permission allows building but does not grant land ownership or permanent tenancy.
+        Existing site abandonment and repossession rules still apply.</span>
     </ControlWarning>
   );
 }

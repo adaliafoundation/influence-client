@@ -7,6 +7,7 @@ import useBlockTime from '~/hooks/useBlockTime';
 import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
+import usePlanningEligibility from '~/hooks/usePlanningEligibility';
 import useAsteroid from '~/hooks/useAsteroid';
 import actionStage from '~/lib/actionStages';
 
@@ -16,6 +17,7 @@ const useConstructionManager = (lotId, missionId) => {
   const blockTime = useBlockTime();
   const { accountCrewIds, crew } = useCrewContext();
   const { data: lot } = useLot(lotId);
+  const { eligibility: planningEligibility, recheck } = usePlanningEligibility(lot);
 
   const asteroidId = useMemo(() => Lot.toPosition(lotId)?.asteroidId, [lotId]);
   const { data: asteroid } = useAsteroid(asteroidId);
@@ -142,19 +144,21 @@ const useConstructionManager = (lotId, missionId) => {
       isAtRisk,
       stages
     ];
-  }, [accountCrewIds, actionItems, asteroid, getPendingTx, getStatus, payload, planPayload, lot?.building]);
+  }, [accountCrewIds, actionItems, asteroid, blockTime, getPendingTx, getStatus, payload, planPayload, lot?.building]);
 
   const txMeta = useMemo(() => ({ asteroidId, lotId }), [asteroidId, lotId]);
 
-  const planConstruction = useCallback((buildingType) => {
-    execute(
+  const planConstruction = useCallback(async (buildingType) => {
+    const eligibility = await recheck({ lotId, crewId: planPayload.caller_crew.id });
+    if (eligibility.status !== 'allowed') return eligibility;
+    return execute(
       'ConstructionPlan',
       {
         building_type: buildingType,
         ...planPayload
       }
     )
-  }, [execute, planPayload]);
+  }, [execute, lotId, planPayload, recheck]);
 
   const unplanConstruction = useCallback(() => {
     execute(
@@ -181,6 +185,7 @@ const useConstructionManager = (lotId, missionId) => {
   }, [execute, payload]);
 
   return {
+    planningEligibility,
     planConstruction,
     unplanConstruction,
     startConstruction,
