@@ -251,8 +251,9 @@ const activities = {
   BuildingRepossessed: {
     // TODO: need to invalidate for the original crew (through asteroid ws?) AND trigger alert for them
     getInvalidations: ({ event: { returnValues } }, { building = {} }) => {
-      const _location = locationsArrToObj(building?.locations || []) || {};
+      const _location = locationsArrToObj(building?.Location?.locations || []) || {};
       return [
+        ...(_location.lotId ? [{ label: Entity.IDS.LOT, id: _location.lotId }] : []),
         {
           ...returnValues.building,
           newGroupEval: {
@@ -392,6 +393,7 @@ const activities = {
         }
         : {};
       return [
+        returnValues.lot,
         {
           ...returnValues.building,
           newGroupEval: {
@@ -418,21 +420,13 @@ const activities = {
         </>
       ),
     }),
-    getBusyItem: ({ event: { returnValues } }, { building = {} }) => ({
-      icon: <PlanBuildingIcon />,
-      label: `Plan ${Building.TYPES[building?.Building?.buildingType]?.name || 'Building'} Site`,
-    }),
-    getVisitedLot: ({}, { building = {} }) => {
-      const _location = locationsArrToObj(building?.Location?.locations || []) || {};
-      return _location.lotId;
-    },
-    requiresCrewTime: true
   },
 
   ConstructionAbandoned: {
     getInvalidations: ({ event: { returnValues } }, { building = {} }) => {
       const { asteroidId, lotId } = locationsArrToObj(building?.Location?.locations || []) || {};
       return [
+        ...(lotId ? [{ label: Entity.IDS.LOT, id: lotId }] : []),
         {
           ...returnValues.building,
           newGroupEval: {
@@ -2382,6 +2376,13 @@ const activities = {
   PrepaidMerklePolicyRemoved: getPolicyAndAgreementConfig(),
   PrepaidAgreementAuctionConfigured: {
     getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.asteroid }]
+  },
+  ComponentUpdated_Unique: {
+    getInvalidations: ({ event: { returnValues } }) => (
+      returnValues.entity?.label === Entity.IDS.LOT
+        ? [returnValues.entity, ['planningEligibility']]
+        : []
+    )
   },
   ComponentUpdated_PrepaidAgreementAuctionSet: {
     getInvalidations: ({ event: { returnValues } }) => [{ ...returnValues.entity }]

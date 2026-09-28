@@ -6,6 +6,7 @@ import useBlockTime from '~/hooks/useBlockTime';
 import useEntity from '~/hooks/useEntity';
 import api from '~/lib/api';
 import { entitiesCacheKey } from '~/lib/cacheKey';
+import { PLANNING_COMPONENTS } from '~/lib/planningEligibility';
 import { getActiveUseLotAgreement, getExpiredUseLotAgreement } from '~/lib/leaseUtils';
 
 
@@ -30,7 +31,7 @@ const useLot = (rawLotId) => {
   // console.log('lotId', { lotId, lotEntity });
 
   const { data: lot, isLoading: lotIsLoading, dataUpdatedAt: lUpdatedAt } = useEntity(lotId ? { id: lotId, label: Entity.IDS.LOT } : undefined);
-  // console.log({ lot: lot.PrepaidAgreements?.length })
+  const { data: lotPermissions } = useEntity({ id: lotId, label: Entity.IDS.LOT, components: PLANNING_COMPONENTS });
 
   // prepop all the entities on the lot in the cache (so can do in a single query)
   const { data: lotDataPrepopped, isLoading: lotDataIsLoading } = useQuery({
@@ -65,6 +66,8 @@ const useLot = (rawLotId) => {
   // (presuming this is already loaded so doesn't cause any overhead)
   const { data: asteroid, isLoading: asteroidLoading } = useEntity(lotId ? { label: Entity.IDS.ASTEROID, id: Number(Lot.toPosition(lotId)?.asteroidId) } : undefined);
 
+  const { data: asteroidPermissions } = useEntity({ label: Entity.IDS.ASTEROID, id: lotId ? Number(Lot.toPosition(lotId)?.asteroidId) : undefined, components: PLANNING_COMPONENTS });
+
   // we try to prepop all the below in a single call above so the
   // below queries only get refreshed invididually when invalidated
   const { data: buildings, isLoading: buildingsLoading, dataUpdatedAt: bUpdatedAt } = useLotEntities(lotId, Entity.IDS.BUILDING, !!lotDataPrepopped);
@@ -77,11 +80,10 @@ const useLot = (rawLotId) => {
     if (isLoading || !lotEntity?.uuid) return undefined;
 
     const { asteroidId, lotIndex } = Lot.toPosition(lotId) || {};
-    // TODO: do we need Whitelist*Agreements here?
     const prepaidAgreements = lot?.PrepaidAgreements || [];
     const activePrepaidAgreement = getActiveUseLotAgreement(prepaidAgreements, blockTime);
     const expiredPrepaidAgreement = getExpiredUseLotAgreement(prepaidAgreements, blockTime);
-    const agreement = activePrepaidAgreement || (lot?.ContractAgreements || []).find((a) => a.permission === Permission.IDS.USE_LOT);
+    const tenant = lotPermissions?.UseLot?.tenant;
     const building = (buildings || []).find((e) => e.Building.status > 0);
     const depositsToShow = (deposits || []).filter((e) => e.Deposit.status > 0);// && !(e.Deposit.status === Deposit.STATUSES.USED && e.Deposit.remainingYield === 0));
     const shipsToShow = (ships || []).filter((s) => [Ship.STATUSES.UNDER_CONSTRUCTION, Ship.STATUSES.AVAILABLE].includes(s.Ship.status));
@@ -90,6 +92,9 @@ const useLot = (rawLotId) => {
     return {
       ...lotEntity,
       ...lot,
+      UseLot: lotPermissions?.UseLot,
+      _permissionTargets: { lot: lotPermissions, asteroid: asteroidPermissions },
+      _planningOccupants: Array.isArray(buildings) && Array.isArray(ships) ? [...buildings, ...ships] : undefined,
       Location: {
         location: { label: Entity.IDS.ASTEROID, id: asteroidId },
         locations: [
@@ -104,9 +109,9 @@ const useLot = (rawLotId) => {
       _activeUseLotAgreement: activePrepaidAgreement,
       _expiredUseLotAgreement: expiredPrepaidAgreement,
 
-      Control: agreement?.permitted?.id
+      Control: tenant?.id
         ? {
-          controller: { id: agreement.permitted.id, label: Entity.IDS.CREW },
+          controller: { id: tenant.id, label: Entity.IDS.CREW },
           _superController: asteroid?.control,
           _isExplicit: true,
         }
@@ -126,10 +131,8 @@ const useLot = (rawLotId) => {
         }
         return p;
       }),
-      // 'ContractAgreement', 'PrepaidAgreement' should be on lot record
-      // unclear what happens to 'WhitelistAgreement' or PublicPolicies
     };
-  }, [lotEntity?.uuid, isLoading, asteroid, blockTime, buildings, deposits, ships, objArrDataUpdatedAt]);
+  }, [lotEntity, lotId, lot, lotPermissions, asteroidPermissions, isLoading, asteroid, blockTime, buildings, deposits, ships, objArrDataUpdatedAt]);
 
   return useMemo(() => ({ data, isLoading }), [data, isLoading]);
 };

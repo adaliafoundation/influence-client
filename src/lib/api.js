@@ -54,12 +54,8 @@ const buildQuery = (queryObj) => {
 };
 
 const getEntityById = async ({ label, id, components }) => {
-  return new Promise((resolve, reject) => {
-    getEntities({ label, ids: [id], components }).then(entities => {
-      if (entities[0]) resolve(entities[0]);
-      resolve(null);
-    });
-  });
+  const entities = await getEntities({ label, ids: [id], components });
+  return entities[0] || null;
 };
 
 const getEntities = async ({ ids, match, label, components }) => {

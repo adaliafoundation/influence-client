@@ -1,5 +1,6 @@
 import { Building, Entity, Permission } from '@influenceth/sdk';
 
+import { prepaidPermissionEnd } from './planningEligibility';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
 
@@ -13,13 +14,13 @@ export const getLatestUseLotAgreement = (agreements = []) => {
 
 export const getActiveUseLotAgreement = (agreements = [], blockTime) => {
   return (agreements || [])
-    .filter((agreement) => isUseLotLease(agreement) && agreement?.endTime > blockTime)
+    .filter((agreement) => isUseLotLease(agreement) && prepaidPermissionEnd(agreement) >= blockTime)
     .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))[0] || null;
 };
 
 export const getExpiredUseLotAgreement = (agreements = [], blockTime) => {
   return (agreements || [])
-    .filter((agreement) => isUseLotLease(agreement) && agreement?.endTime <= blockTime)
+    .filter((agreement) => isUseLotLease(agreement) && prepaidPermissionEnd(agreement) < blockTime)
     .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))[0] || null;
 };
 

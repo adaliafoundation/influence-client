@@ -196,6 +196,9 @@ export function ActivitiesProvider({ children }) {
 
               // invalidate `entity` entry
               activityInvalidations.push(['entity', label, Number(id)]);
+              if ([Entity.IDS.LOT, Entity.IDS.ASTEROID, Entity.IDS.CREW, Entity.IDS.BUILDING, Entity.IDS.SHIP].includes(label)) {
+                activityInvalidations.push(['planningEligibility']);
+              }
               activityInvalidations.push(['activities', label, Number(id)]);
 
               // walk through `entities` entries of label type

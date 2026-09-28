@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Building, Crewmate, Lot, Permission } from '@influenceth/sdk';
+import { Building } from '@influenceth/sdk';
 
 import { PlanBuildingIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
 import theme from '~/theme';
 import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
-import { reactBool, formatTimer, getCrewAbilityBonuses } from '~/lib/utils';
+import { reactBool, formatTimer } from '~/lib/utils';
 
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import {
@@ -16,17 +16,14 @@ import {
   ActionDialogHeader,
   ActionDialogStats,
 
-  getBonusDirection,
   FlexSection,
   FlexSectionInputBlock,
   BuildingImage,
   EmptyBuildingImage,
   SitePlanSelectionDialog,
   ProgressBarSection,
-  TravelBonusTooltip,
   ActionDialogBody,
   getBuildingRequirements,
-  getTripDetails,
   LotControlWarning,
   formatTimeRequirements
 } from './components';
@@ -40,66 +37,27 @@ const MouseoverWarning = styled.span`
 `;
 
 const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) => {
-  const { currentConstructionAction, planConstruction } = constructionManager;
-  const { crew, crewCan } = useCrewContext();
+  const { currentConstructionAction, planConstruction, planningEligibility } = constructionManager;
+  const { crew } = useCrewContext();
 
   const [buildingType, setBuildingType] = useState();
 
-  const crewTravelBonus = useMemo(() => {
-    if (!crew) return {};
-    return getCrewAbilityBonuses(Crewmate.ABILITY_IDS.HOPPER_TRANSPORT_TIME, crew) || {};
-  }, [crew]);
-
-  const crewDistBonus = useMemo(() => {
-    if (!crew) return {};
-    return getCrewAbilityBonuses(Crewmate.ABILITY_IDS.FREE_TRANSPORT_DISTANCE, crew) || {};
-  }, [crew]);
-
-  const lotIsControlled = useMemo(() => crewCan(Permission.IDS.USE_LOT, lot), [crewCan, lot]);
-
-  const { totalTime: crewTravelTime, tripDetails } = useMemo(() => {
-    if (!asteroid?.id || !crew?._location?.lotId || !lot?.id) return {};
-    if (lotIsControlled) return { totalTime: 0, tripDetails: null };
-    const crewLotIndex = Lot.toIndex(crew?._location?.lotId);
-    return getTripDetails(asteroid.id, crewTravelBonus, crewDistBonus, crewLotIndex, [
-      { label: 'Travel to Construction Site', lotIndex: Lot.toIndex(lot.id) },
-      { label: 'Return to Crew Station', lotIndex: crewLotIndex },
-    ], crew?._timeAcceleration);
-  }, [asteroid?.id, lot, crew?._location?.lotId, crew?._timeAcceleration, crewTravelBonus, crewDistBonus, lotIsControlled]);
-
-  const crewTimeRequirement = useMemo(() => {
-    const oneWayCrewTravelTime = crewTravelTime / 2;
-    return formatTimeRequirements([
-      [oneWayCrewTravelTime, 'Travel to Site'],
-      [0, 'Initiate Building Plan'],
-      [oneWayCrewTravelTime, 'Return to Station']
-    ]);
-  }, [crewTravelTime]);
-
-  const stats = useMemo(() => {
-    if (!asteroid?.id || !lot?.id) return [];
-    const taskTime = 0;
-    return [
-      {
-        label: 'Crew Travel Time',
-        value: formatTimer(crewTravelTime),
-        isTimeStat: true,
-        direction: crewTravelTime ? getBonusDirection(crewTravelBonus) : 0,
-        tooltip: (
-          <TravelBonusTooltip
-            bonus={crewTravelTime ? crewTravelBonus : {}}
-            totalTime={crewTravelTime}
-            tripDetails={tripDetails}
-            crewRequired="start" />
-        )
-      },
-      {
-        label: 'Task Duration',
-        value: formatTimer(taskTime),
-        isTimeStat: true
-      },
-    ];
-  }, [crewTravelTime, tripDetails]);
+  const crewTimeRequirement = useMemo(() => formatTimeRequirements([[0, 'Initiate Building Plan']]), []);
+  const stats = [{ label: 'Task Duration', value: formatTimer(0), isTimeStat: true }];
+  const [submissionReason, setSubmissionReason] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const onPlan = async () => {
+    setSubmitting(true);
+    setSubmissionReason(null);
+    try {
+      const result = await planConstruction(buildingType);
+      if (result?.reason) setSubmissionReason(result.reason);
+    } catch (error) {
+      setSubmissionReason('Unable to verify planning permission. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (currentConstructionAction?.buildingType) setBuildingType(currentConstructionAction.buildingType)
@@ -185,14 +143,15 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
         />
       </ActionDialogBody>
 
+      {(submissionReason || planningEligibility.reason) && <p role="status">{submissionReason || planningEligibility.reason}</p>}
       <ActionDialogFooter
+        {...props}
         crewAvailableTime={crewTimeRequirement}
-        disabled={!buildingType}
+        disabled={!buildingType || submitting || planningEligibility.status !== 'allowed'}
         goLabel="Create Site"
-        onGo={() => planConstruction(buildingType)}
+        onGo={onPlan}
         stage={stage}
-        waitForCrewReady={!lotIsControlled}
-        {...props} />
+        waitForCrewReady={false} />
 
       {stage === actionStage.NOT_STARTED && (
         <SitePlanSelectionDialog
