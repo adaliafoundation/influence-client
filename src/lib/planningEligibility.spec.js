@@ -2,7 +2,9 @@ const { TextDecoder, TextEncoder } = require('util');
 global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
 const { Entity, Lot, Permission } = require('@influenceth/sdk');
-const { getPlanningEligibility, hasUseLotPermission, checkContractPolicy, loadPlanningEligibility } = require('./planningEligibility');
+const { getPlanningEligibility, loadPlanningEligibility } = require('./planningEligibility');
+const { resolvePermission, checkContractPolicy } = require('./lotUsageAuthorization');
+const hasUseLotPermission = (params) => resolvePermission({ ...params, permitted: params.crew, permission: Permission.IDS.USE_LOT });
 
 const crew = (id, delegate = '0x123') => ({ label: Entity.IDS.CREW, id, Crew: { delegatedTo: delegate, roster: [1] } });
 const target = (label, id) => ({ label, id, UseLot: { tenant: null }, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
@@ -137,10 +139,10 @@ test('missing permission data and controller delegates remain checking', async (
 
 test('calls the contract policy ABI with the exact target and crew', async () => {
   const provider = { callContract: jest.fn(async () => ['0x1']) };
-  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1))).toBe(true);
+  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT)).toBe(true);
   expect(provider.callContract).toHaveBeenCalledWith({ contractAddress: '0x789', entrypoint: 'can', calldata: [lot.label, lot.id, Permission.IDS.USE_LOT, Entity.IDS.CREW, 1].map(String) });
   provider.callContract.mockResolvedValue(['0x0']);
-  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1))).toBe(false);
+  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT)).toBe(false);
 });
 
 test('permissions on an unrelated target cannot authorize the supplied target', async () => {

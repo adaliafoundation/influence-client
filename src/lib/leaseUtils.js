@@ -1,6 +1,6 @@
 import { Building, Entity, Permission } from '@influenceth/sdk';
 
-import { prepaidPermissionEnd } from './planningEligibility';
+import { prepaidPermissionEnd } from './lotUsageAuthorization';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
 

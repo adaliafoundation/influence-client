@@ -1,89 +1,14 @@
-import { Address, Building, Entity, Lot, Permission } from '@influenceth/sdk';
+import { Building, Entity, Lot } from '@influenceth/sdk';
+import { PERMISSION_COMPONENTS, checkingLotUsage, resolveLotUsage, sameAccount, checkContractPolicy } from './lotUsageAuthorization';
 
-export const PLANNING_COMPONENTS = [
-  'Control', 'UseLot', 'PublicPolicy', 'WhitelistAgreement',
-  'WhitelistAccountAgreement', 'PrepaidAgreement', 'ContractAgreement', 'ContractPolicy'
-];
-
-export const checkingPlanning = { status: 'checking', reason: 'Checking USE_LOT permission' };
-const allowed = { status: 'allowed', reason: null };
+export const PLANNING_COMPONENTS = PERMISSION_COMPONENTS;
+export const checkingPlanning = checkingLotUsage;
 const isOccupied = (lot) => lot?.building?.Building?.status > 0 || !!lot?.surfaceShip;
 const blocked = (reason) => ({ status: 'blocked', reason });
-const sameCrew = (a, b) => a?.label === Entity.IDS.CREW && b?.label === Entity.IDS.CREW && Number(a.id) === Number(b.id);
-const sameAccount = (a, b) => !!a && !!b && Address.areEqual(a, b);
-const isUseLotPermission = (record) => Number(record.permission) === Permission.IDS.USE_LOT;
 
-export const prepaidPermissionEnd = (agreement) => Math.max(
-  Number(agreement.endTime || 0), Number(agreement.noticeTime || 0) + Number(agreement.noticePeriod || 0)
-);
-
-// null means a required component or policy result is still unknown.
-export const hasUseLotPermission = async ({ target, crew, blockTime, loadCrew, checkPolicy }) => {
-  if (!target || !crew?.Crew || blockTime == null) return null;
-  const arrays = ['PublicPolicies', 'WhitelistAgreements', 'WhitelistAccountAgreements', 'PrepaidAgreements', 'ContractAgreements'];
-  if (arrays.some((key) => !Array.isArray(target[key]))) return null;
-  if (target.PublicPolicies.some(isUseLotPermission)) return true;
-  const matches = (record) => isUseLotPermission(record) && sameCrew(record.permitted, crew);
-  if (target.WhitelistAgreements.some(matches)) return true;
-  if (target.WhitelistAccountAgreements.some((record) => isUseLotPermission(record) && sameAccount(record.permitted, crew.Crew.delegatedTo))) return true;
-  if (target.PrepaidAgreements.some((record) => matches(record) && blockTime <= prepaidPermissionEnd(record))) return true;
-
-  let unresolved = !crew.Crew.delegatedTo;
-  const controller = target.Control?.controller;
-  if (controller) {
-    if (sameCrew(controller, crew)) return true;
-    const controllerCrew = await loadCrew(controller.id);
-    if (!controllerCrew?.Crew?.delegatedTo) unresolved = true;
-    else if (sameAccount(controllerCrew.Crew.delegatedTo, crew.Crew.delegatedTo)) return true;
-  }
-  const agreement = target.ContractAgreements.find(matches);
-  if (agreement) {
-    const approved = await checkPolicy(agreement, target, crew);
-    if (approved === true) return true;
-    if (approved == null) unresolved = true;
-  }
-  return unresolved ? null : false;
-};
-
-export const getPlanningEligibility = async ({ lot, asteroid, crew, blockTime, loadCrew, checkPolicy }) => {
-  if (isOccupied(lot)) return blocked('Lot occupied');
-  if (!lot || !asteroid || !crew || !lot.UseLot || !Object.prototype.hasOwnProperty.call(lot.UseLot, 'tenant')) return checkingPlanning;
-  const permission = async (target, permitted) => {
-    try {
-      return await hasUseLotPermission({ target, crew: permitted, blockTime, loadCrew, checkPolicy });
-    } catch (error) {
-      // A failed read is unresolved, not a rejection or approval.
-      return null;
-    }
-  };
-  const tenant = lot.UseLot.tenant;
-  if (tenant !== null && (!tenant?.id || tenant.label !== Entity.IDS.CREW)) return checkingPlanning;
-  if (tenant) {
-    let tenantCrew;
-    try {
-      tenantCrew = sameCrew(tenant, crew) ? crew : await loadCrew(tenant.id);
-    } catch (error) {
-      return checkingPlanning;
-    }
-    const active = await permission(lot, tenantCrew);
-    if (active == null) return checkingPlanning;
-    if (active) return sameCrew(tenant, crew) ? allowed : blocked('Another crew holds active tenancy');
-  }
-  const grants = await Promise.all([permission(lot, crew), permission(asteroid, crew)]);
-  if (grants.includes(true)) return allowed;
-  return grants.includes(null) ? checkingPlanning : blocked('USE_LOT permission required');
-};
-
-export const checkContractPolicy = async (provider, agreement, target, crew) => {
-  if (!provider || !agreement.address) return null;
-  const result = await provider.callContract({
-    contractAddress: agreement.address,
-    entrypoint: 'can',
-    calldata: [target.label, target.id, Permission.IDS.USE_LOT, crew.label, crew.id].map(String)
-  });
-  if (result?.length !== 1) return null;
-  return BigInt(result[0]) === 1n;
-};
+export const getPlanningEligibility = (params) => isOccupied(params.lot)
+  ? Promise.resolve(blocked('Lot occupied'))
+  : resolveLotUsage(params);
 
 // Always bypass the UI cache immediately before submitting.
 export const loadPlanningEligibility = async ({ api, provider, lotId, crewId, blockTime, accountAddress, snapshot }) => {
@@ -126,6 +51,6 @@ export const loadPlanningEligibility = async ({ api, provider, lotId, crewId, bl
   return getPlanningEligibility({
     lot: planningLot,
     asteroid, crew, blockTime, loadCrew,
-    checkPolicy: (agreement, target, permitted) => checkContractPolicy(provider, agreement, target, permitted)
+    checkPolicy: (agreement, target, permitted, permission) => checkContractPolicy(provider, agreement, target, permitted, permission)
   });
 };
