@@ -159,8 +159,12 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, originLotIndex, destinationLotIndex);
     const effBonus = Math.max(crewTravelBonus.totalBonus, 1); // no penalty for food resupply
     const distBonus = Math.max(crewDistBonus.totalBonus, 1); // no penalty for food resupply
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(asteroid?.id, originLotIndex, destinationLotIndex, effBonus, distBonus),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      originLotIndex,
+      destinationLotIndex,
+      effBonus,
+      distBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, transportTime];
@@ -355,7 +359,7 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
                 stage={stage}
                 title="Origin"
                 titleDetails={transportDistance !== undefined && (
-                  <TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />
+                  <TransferDistanceDetails distance={transportDistance} timeBonus={Math.max(crewTravelBonus.totalBonus, 1)} distanceBonus={Math.max(crewDistBonus.totalBonus, 1)} />
                 )}
                 transferMass={-totalMass}
                 transferVolume={-totalVolume} />

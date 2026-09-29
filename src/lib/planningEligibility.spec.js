@@ -3,12 +3,11 @@ global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
 const { Entity, Lot, Permission } = require('@influenceth/sdk');
 const { getPlanningEligibility, loadPlanningEligibility } = require('./planningEligibility');
-const { resolvePermission, checkContractPolicy } = require('./lotUsageAuthorization');
-const hasUseLotPermission = (params) => resolvePermission({ ...params, permitted: params.crew, permission: Permission.IDS.USE_LOT });
+const { checkContractPolicy } = require('./lotUsageAuthorization');
 
 const crew = (id, delegate = '0x123') => ({ label: Entity.IDS.CREW, id, Crew: { delegatedTo: delegate, roster: [1] } });
-const target = (label, id) => ({ label, id, UseLot: { tenant: null }, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
-const grant = (permitted = crew(1), extra = {}) => ({ permission: Permission.IDS.USE_LOT, permitted, ...extra });
+const target = (label, id) => ({ label, id, Control: null, UseLot: { tenant: null }, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
+const grant = (permitted = crew(1), extra = {}) => ({ permission: Permission.IDS.USE_LOT, permitted, noticeTime: 0, noticePeriod: 0, ...extra });
 let lot, asteroid, params;
 beforeEach(() => {
   lot = target(Entity.IDS.LOT, Lot.toId(1, 1));
@@ -85,7 +84,7 @@ test('cleared tenancy is not reconstructed from an active historical agreement',
   expect(lot.UseLot.tenant).toBeNull();
 });
 
-test.each([undefined, null, {}, { tenant: undefined }])('unknown tenancy %p remains checking', async (tenancy) => {
+test.each([undefined, {}, { tenant: undefined }])('unknown tenancy %p remains checking', async (tenancy) => {
   lot.UseLot = tenancy;
   asteroid.PublicPolicies = [grant()];
   expect((await eligibility()).status).toBe('checking');
@@ -139,16 +138,10 @@ test('missing permission data and controller delegates remain checking', async (
 
 test('calls the contract policy ABI with the exact target and crew', async () => {
   const provider = { callContract: jest.fn(async () => ['0x1']) };
-  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT)).toBe(true);
-  expect(provider.callContract).toHaveBeenCalledWith({ contractAddress: '0x789', entrypoint: 'can', calldata: [lot.label, lot.id, Permission.IDS.USE_LOT, Entity.IDS.CREW, 1].map(String) });
+  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT, 123)).toBe(true);
+  expect(provider.callContract).toHaveBeenCalledWith({ contractAddress: '0x789', entrypoint: 'can', calldata: [lot.label, lot.id, Permission.IDS.USE_LOT, Entity.IDS.CREW, 1].map(String) }, 123);
   provider.callContract.mockResolvedValue(['0x0']);
-  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT)).toBe(false);
-});
-
-test('permissions on an unrelated target cannot authorize the supplied target', async () => {
-  const otherLot = { ...lot, id: lot.id + 1, PublicPolicies: [grant()] };
-  expect(await hasUseLotPermission({ ...params, target: lot })).toBe(false);
-  expect(await hasUseLotPermission({ ...params, target: otherLot })).toBe(true);
+  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT, 123)).toBe(false);
 });
 
 describe('fresh submission reads', () => {
@@ -168,7 +161,7 @@ describe('fresh submission reads', () => {
     expect((await loadPlanningEligibility(input)).status).toBe('allowed');
     asteroid.PublicPolicies = [];
     expect((await loadPlanningEligibility(input)).status).toBe('blocked');
-    lot.UseLot = null;
+    lot.UseLot = undefined;
     expect((await loadPlanningEligibility(input)).status).toBe('checking');
     expect(api.getEntityById).toHaveBeenCalledWith(expect.objectContaining({ components: expect.arrayContaining(['UseLot', 'WhitelistAccountAgreement', 'ContractAgreement']) }));
   });
@@ -213,10 +206,16 @@ describe('fresh submission reads', () => {
 });
 
 
-test('an unavailable policy stays checking but does not negate another known grant', async () => {
+test('an unresolved earlier policy cannot be bypassed by an asteroid grant', async () => {
   lot.ContractAgreements = [grant(crew(1), { address: '0x789' })];
   params.checkPolicy.mockRejectedValue(new Error('RPC unavailable'));
   expect((await eligibility()).status).toBe('checking');
   asteroid.PublicPolicies = [grant()];
-  expect((await eligibility()).status).toBe('allowed');
+  expect((await eligibility()).status).toBe('checking');
+});
+
+test('policy reads without an explicit block remain unresolved', async () => {
+  const provider = { callContract: jest.fn(async () => ['0x0']) };
+  expect(await checkContractPolicy(provider, { address: '0x789' }, lot, crew(1), Permission.IDS.USE_LOT)).toBe(null);
+  expect(provider.callContract).not.toHaveBeenCalled();
 });

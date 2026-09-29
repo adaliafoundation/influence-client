@@ -123,7 +123,7 @@ const useActionButtons = () => {
   const { accountAddress } = useSession();
 
   // crew
-  const { accountCrewIds, crew } = useCrewContext();
+  const { accountCrewIds, crew, crewControls } = useCrewContext();
 
   // asteroid-level
   const { data: asteroid, isLoading: asteroidIsLoading } = useAsteroid(asteroidId);
@@ -151,12 +151,6 @@ const useActionButtons = () => {
     // if my crew is on a ship on this lot
     else if (crewedShip && crewedShip._location?.lotId === lot?.id) ship = crewedShip;
 
-    // // if there is only one owned ship on the lot
-    // if (!ship) {
-    //   const lotOwnedShips = (lot?.ships || []).filter((s) => accountCrewIds?.includes(s.Control.controller.id));
-    //   if (lotOwnedShips?.length === 1) ship = lotOwnedShips[0]; // if only one owned ship, show it
-    // }
-
     // some of these sources don't have location set
     if (ship && !ship._location) {
       ship = cloneDeep(ship);
@@ -173,6 +167,7 @@ const useActionButtons = () => {
       .filter((k) => !actionButtons[k].isVisible || actionButtons[k].isVisible({
         account: accountAddress,
         accountCrewIds,
+        crewControls,
         asteroid,
         blockTime,
         crew,
@@ -189,7 +184,7 @@ const useActionButtons = () => {
       }))
       .sort((a, b) => (buttonOrder[a] || 100) - (buttonOrder[b] || 100))
       .map((k) => actionButtons[k].Component || actionButtons[k]);
-  }, [asteroid, blockTime, constructionStatus, crew, crewedShip, lot, openHudMenu, resourceMap?.active, !!resourceMap?.selected, targetShip, simulation, zoomScene, zoomStatus]);
+  }, [accountAddress, accountCrewIds, crewControls, asteroidIsLoading, lotIsLoading, crewedShipIsLoading, zoomedShipIsLoading, isAtRisk, asteroid, blockTime, constructionStatus, crew, crewedShip, lot, openHudMenu, resourceMap?.active, !!resourceMap?.selected, targetShip, simulation, zoomScene, zoomStatus]);
 
   // TODO: within each action button, should memoize whatever is passed to flags
   // (because always a new object, will always re-render the underlying button)

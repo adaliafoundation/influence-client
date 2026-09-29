@@ -1,5 +1,5 @@
 import { useCallback, useContext, useMemo } from 'react';
-import { Entity, Permission, Processor } from '@influenceth/sdk';
+import { Entity, Processor } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
@@ -55,10 +55,7 @@ const useProcessManager = (lotId, slot, missionId) => {
         current.origin = actionItem.event.returnValues.origin;
         current.originSlot = actionItem.event.returnValues.originSlot;
         current.startTime = actionItem._startTime || actionItem.event.timestamp;
-        current._isAccessible = (
-          (actionItem.event.returnValues.callerCrew.id === crew?.id)
-          || crewCan(Permission.IDS.RUN_PROCESS, lot.building)
-        );
+        current._isAccessible = !!crew;
       }
       current.destination = processor?.destination;
       current.destinationSlot = processor?.destinationSlot;

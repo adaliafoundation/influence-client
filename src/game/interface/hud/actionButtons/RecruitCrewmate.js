@@ -1,10 +1,10 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Building, Permission } from '@influenceth/sdk';
 
 import { RecruitCrewmateIcon } from '~/components/Icons';  // TODO: sergey's
 import useCrewManager from '~/hooks/actionManagers/useCrewManager';
-import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import { reactBool } from '~/lib/utils';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
@@ -14,9 +14,9 @@ const isVisible = ({ account, building }) => {
 };
 
 const RecruitCrewmate = ({ asteroid, blockTime, crew, lot, simulation, _disabled }) => {
+  const { crewAuthorization } = useCrewContext();
   const { getPendingCrewmate } = useCrewManager();
   const history = useHistory();
-  const { accountAddress } = useSession();
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
@@ -58,7 +58,7 @@ const RecruitCrewmate = ({ asteroid, blockTime, crew, lot, simulation, _disabled
       });
     }
     history.push(`/recruit/${recruitToCrew || 0}/${lot?.building?.id}`)
-  }, [recruitToCrew, clickWarning, lot?.building?.id]);
+  }, [crewAuthorization, recruitToCrew, clickWarning, lot?.building?.id]);
 
   const pendingCrewmate = useMemo(getPendingCrewmate, [getPendingCrewmate]);
 
@@ -67,15 +67,12 @@ const RecruitCrewmate = ({ asteroid, blockTime, crew, lot, simulation, _disabled
     if (pendingCrewmate) return 'recruiting...';
     if (simulation) return 'simulation restricted';
 
-    // if recruiting to new crew, there is no crew to check permissions on, so just check if public
-    if (recruitToCrew === 0) {
-      const policy = Permission.getPolicyDetails(lot?.building)[Permission.IDS.RECRUIT_CREWMATE];
-      if (policy.policyType === Permission.POLICY_IDS.PUBLIC) return '';
-      if (policy.accountAllowlist.includes(accountAddress)) return '';
-    }
+    // This opens setup, not a transaction. The contract creates the new identity;
+    // existing crew grants cannot establish that new crew's recruitment rights.
+    if (recruitToCrew === 0) return '';
 
     // else, check for crew permission
-    return getCrewDisabledReason({
+    return getCrewDisabledReason({ crewAuthorization,
       asteroid,
       blockTime,
       crew,
@@ -83,13 +80,13 @@ const RecruitCrewmate = ({ asteroid, blockTime, crew, lot, simulation, _disabled
       permissionTarget: lot?.building,
       requireReady: false
     });
-  }, [accountAddress, asteroid, blockTime, crew, lot?.building, pendingCrewmate, recruitToCrew]);
+  }, [crewAuthorization, _disabled, simulation, asteroid, blockTime, crew, lot?.building, pendingCrewmate, recruitToCrew]);
 
   // TODO: attention always?
   return (
     <ActionButton
       label={`Recruit Crewmate${tooltipExtra}`}
-      labelAddendum={disabledReason}
+      labelAddendum={disabledReason || (recruitToCrew === 0 ? 'new crew access checked on creation' : null)}
       enablePrelaunch
       flags={{
         disabled: disabledReason,

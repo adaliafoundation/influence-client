@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Building, Crewmate, Entity, Inventory, Lot, Permission, Process, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Building, Crewmate, Entity, Inventory, Lot, Permission, Process, Product } from '@influenceth/sdk';
 
 import {
   CheckedIcon,
@@ -416,10 +416,12 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
           selectedAmounts[row.buildingId] = 0;
           maxTravelTime = Math.max(
             maxTravelTime,
-            Time.toRealDuration(
-              Asteroid.getLotTravelTime(
-                asteroid?.id, Lot.toIndex(row.lotId), Lot.toIndex(destinationLot?.id), crewBonuses?.hopperTransport.totalBonus, crewBonuses?.freeTransport.totalBonus
-              ),
+            Asteroid.getLotTravelTimeReal(
+              asteroid?.id,
+              Lot.toIndex(row.lotId),
+              Lot.toIndex(destinationLot?.id),
+              crewBonuses?.hopperTransport.totalBonus,
+              crewBonuses?.freeTransport.totalBonus,
               crew?._timeAcceleration
             )
           );

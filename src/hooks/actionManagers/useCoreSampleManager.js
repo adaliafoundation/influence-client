@@ -1,5 +1,5 @@
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Deposit, Entity } from '@influenceth/sdk';
+import { Deposit, Entity, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
@@ -14,7 +14,7 @@ const useCoreSampleManager = (lotId, missionId) => {
   const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
   const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
-  const { accountCrewIds, crew, pendingTransactions } = useCrewContext();
+  const { accountCrewIds, crew, pendingTransactions, recheckAuthorization } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities({ label: Entity.IDS.LOT, id: lotId });
 
@@ -172,8 +172,14 @@ const useCoreSampleManager = (lotId, missionId) => {
     })
   }, [crew, execute, payload]);
 
-  const startImproving = useCallback((depositId, coreDrillSource, depositOwnerCrew) => {
+  const startImproving = useCallback(async (depositId, coreDrillSource, depositOwnerCrew) => {
     const sample = (lot?.deposits || []).find((c) => c.id === depositId);
+    const permission = await recheckAuthorization('can', [crew, sample, Permission.IDS.USE_DEPOSIT], [crew, sample]);
+    if (permission.status === 'unresolved' || (permission.status === 'denied' && !depositOwnerCrew)) return permission;
+    if (coreDrillSource?.id) {
+      const originPermission = await recheckAuthorization('can', [crew, coreDrillSource, Permission.IDS.REMOVE_PRODUCTS], [crew, coreDrillSource]);
+      if (originPermission.status !== 'allowed') return originPermission;
+    }
     execute(
       depositOwnerCrew ? 'PurchaseDepositAndImprove' : 'SampleDepositImprove',
       {
@@ -189,7 +195,7 @@ const useCoreSampleManager = (lotId, missionId) => {
         resource: sample?.Deposit?.resource
       }
     )
-  }, [execute, lotId, payload]);
+  }, [execute, lotId, payload, recheckAuthorization, crew, lot?.deposits]);
 
   const finishSampling = useCallback((sampleId) => {
     const selectedAction = currentSamplings.find((c) => c.action?.sampleId === sampleId);

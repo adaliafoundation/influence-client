@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useMemo, useState } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import styled, { css, keyframes } from 'styled-components';
-import { Permission } from '@influenceth/sdk';
 
 import ClipCorner from '~/components/ClipCorner';
 import useSyncedTime from '~/hooks/useSyncedTime';
@@ -452,6 +451,7 @@ export const getCrewDisabledReason = ({
 isSequenceable = false,
   permission,
   permissionTarget,
+  crewAuthorization,
   requireAsteroid = true,
   requireSurface = true,
   requireReady = true
@@ -459,7 +459,8 @@ isSequenceable = false,
   if (crew?._isSimulation && !isAllowedInSimulation) return 'simulation restricted';
   if (permission && permissionTarget) {
     if (!crew) return 'access restricted';
-    if (!Permission.isPermitted(crew, permission, permissionTarget, blockTime) && !prepaidLeaseConfig) return 'access restricted';
+    const decision = crewAuthorization?.(permission, permissionTarget);
+    if (decision?.status !== 'allowed' && !prepaidLeaseConfig) return decision?.status === 'denied' ? 'access restricted' : 'checking permissions';
   }
   if (asteroid && requireAsteroid) {
     if (crew?._location?.asteroidId !== asteroid?.id) {

@@ -7,13 +7,13 @@ import { checkingShipEjection, isForceLaunch, isLandedShip, loadShipEjectionElig
 
 const useShipEjectionEligibility = (ship) => {
   const { crew } = useCrewContext();
-  const { accountAddress, blockTime, provider } = useSession();
-  const params = { api, provider, shipId: ship?.id, crewId: crew?.id, accountAddress, blockTime };
+  const { accountAddress, blockTime, blockNumber, provider } = useSession();
+  const params = { api, provider, shipId: ship?.id, crewId: crew?.id, accountAddress, blockTime, blockNumber };
   const current = useRef(params);
   current.current = params;
   const enabled = isForceLaunch(crew, ship) && isLandedShip(ship) && blockTime != null;
   const query = useQuery({
-    queryKey: ['shipEjectionEligibility', ship?.id, crew?.id, accountAddress, blockTime, ship?.Location, ship?.Control, crew?.Crew, crew?.Location],
+    queryKey: ['shipEjectionEligibility', ship?.id, crew?.id, accountAddress, blockTime, blockNumber, ship?.Location, ship?.Control, crew?.Crew, crew?.Location],
     queryFn: () => loadShipEjectionEligibility(params),
     enabled,
     retry: false
@@ -23,7 +23,7 @@ const useShipEjectionEligibility = (ship) => {
     if (expected.shipId !== start.shipId || expected.crewId !== start.crewId) return checkingShipEjection;
     const result = await loadShipEjectionEligibility(start);
     const latest = current.current;
-    if (start.shipId !== latest.shipId || start.crewId !== latest.crewId || start.accountAddress !== latest.accountAddress || start.blockTime !== latest.blockTime) return checkingShipEjection;
+    if (start.shipId !== latest.shipId || start.crewId !== latest.crewId || start.accountAddress !== latest.accountAddress || start.blockTime !== latest.blockTime || start.blockNumber !== latest.blockNumber || start.provider !== latest.provider) return checkingShipEjection;
     return result;
   }, []);
   return {

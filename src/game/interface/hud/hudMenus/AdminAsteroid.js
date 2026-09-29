@@ -1,3 +1,4 @@
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useCallback, useState } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
@@ -36,7 +37,7 @@ const ButtonArea = styled.div`
 
 const AdminAsteroid = ({}) => {
   const asteroidId = useStore(s => s.asteroids.origin);
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
   const { data: asteroid } = useAsteroid(asteroidId);
   const { data: controller } = useCrew(asteroid?.Control?.controller?.id);
   const webWorkerPool = useWebWorker();
@@ -56,17 +57,21 @@ const AdminAsteroid = ({}) => {
     });
   }, [asteroid, exportingModel, webWorkerPool]);
 
+  const authorization = authorize('controls', [crew, asteroid], [crew, asteroid]);
+
   return (
     <>
       <Scrollable>
         <AsteroidTitleArea asteroid={asteroid} />
 
-        {crew?.id !== asteroid?.Control?.controller?.id && (
+        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
+
+        {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={asteroid} />
         )}
 
-        {crew?.id && crew.id === asteroid?.Control?.controller?.id && (
-          <>
+        {asteroid && authorization.status !== 'denied' && (
+          <fieldset disabled={authorization.status !== 'allowed'} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <HudMenuCollapsibleSection titleText="Update Name" collapsed>
               <EntityNameForm
                 entity={asteroid ? { id: asteroid.id, label: Entity.IDS.ASTEROID } : null}
@@ -108,7 +113,7 @@ const AdminAsteroid = ({}) => {
                 </Button>
               </ButtonArea>
             </HudMenuCollapsibleSection>
-          </>
+          </fieldset>
         )}
       </Scrollable>
     </>

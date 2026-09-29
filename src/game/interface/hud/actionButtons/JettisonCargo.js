@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Inventory, Permission } from '@influenceth/sdk';
 
@@ -13,12 +14,13 @@ const isVisible = ({ crew, lot, ship }) => false;
 };*/
 
 const JettisonCargo = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogProps = {}, _disabled, _disabledReason }) => {
+  const { crewAuthorization } = useCrewContext();
   const origin = useMemo(() => ship || lot?.surfaceShip || lot?.building, [ship, lot]);
   const { currentJettison } = useJettisonCargoManager(origin);
 
   const handleClick = useCallback(() => {
     onSetAction('JETTISON_CARGO', { origin, ...dialogProps });
-  }, [dialogProps, origin]);
+  }, [crewAuthorization, dialogProps, origin]);
 
   const disabledReason = useMemo(() => {
     if (_disabledReason) return _disabledReason;
@@ -28,7 +30,7 @@ const JettisonCargo = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dial
     const hasMass = (origin.Inventories || []).find((i) => i.status === Inventory.STATUSES.AVAILABLE && i.mass > 0);
     if (!hasMass) return 'inventory empty';
 
-    return getCrewDisabledReason({
+    return getCrewDisabledReason({ crewAuthorization,
       asteroid,
       blockTime,
       crew,
@@ -36,7 +38,7 @@ const JettisonCargo = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dial
       permissionTarget: origin,
       requireReady: false
     });
-  }, [asteroid, blockTime, crew, _disabled, _disabledReason, currentJettison]);
+  }, [crewAuthorization, asteroid, blockTime, crew, _disabled, _disabledReason, currentJettison]);
 
   return (
     <ActionButton

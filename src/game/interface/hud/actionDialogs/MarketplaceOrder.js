@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Crewmate, Inventory, Lot, Order, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Inventory, Lot, Order, Permission, Product } from '@influenceth/sdk';
 
 import { InventoryIcon, SwayIcon, MarketBuyIcon, MarketSellIcon, LimitBuyIcon, LimitSellIcon, CancelLimitOrderIcon, LocationIcon, CloseIcon } from '~/components/Icons';
 import Button from '~/components/ButtonAlt';
@@ -283,10 +283,12 @@ const MarketplaceOrder = ({
     const exchangeLotIndex = Lot.toIndex(exchange?.Location?.location?.id);
     const storageLotIndex = Lot.toIndex(storageLot?.id);
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, exchangeLotIndex, storageLotIndex);
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid?.id, exchangeLotIndex, storageLotIndex, hopperTransportBonus?.totalBonus, distBonus?.totalBonus
-      ),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      exchangeLotIndex,
+      storageLotIndex,
+      hopperTransportBonus?.totalBonus,
+      distBonus?.totalBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, transportTime];
@@ -816,7 +818,7 @@ const MarketplaceOrder = ({
 
           <InventoryInputBlock
             title={mode === 'buy' ? 'Deliver To' : 'Source From'}
-            titleDetails={<TransferDistanceDetails distance={transportDistance} crewDistBonus={distBonus} />}
+            titleDetails={<TransferDistanceDetails distance={transportDistance} timeBonus={hopperTransportBonus.totalBonus} distanceBonus={distBonus.totalBonus} />}
             disabled={isCancellation || stage !== actionStages.NOT_STARTED}
             entity={storage}
             inventorySlot={storageInventory?.slot}

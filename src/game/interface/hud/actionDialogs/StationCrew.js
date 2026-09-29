@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import cloneDeep from 'lodash/cloneDeep';
-import { Asteroid, Building, Crewmate, Entity, Permission, Station, Time } from '@influenceth/sdk';
+import { Asteroid, Building, Crewmate, Entity, Permission, Station } from '@influenceth/sdk';
 
 import { StationCrewIcon, StationPassengersIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -54,7 +54,6 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
     const newOrigin = cloneDeep(rawOrigin);
     newOrigin._location = locationsArrToObj(newOrigin?.Location?.locations || []);
     newOrigin._inOrbit = !newOrigin?._location.lotId;
-    newOrigin._crewOwned = accountCrewIds?.includes(newOrigin?.Control?.controller?.id);
     return newOrigin;
   }, [rawOrigin]);
 
@@ -63,7 +62,6 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
     const newDestination = cloneDeep(rawDestination);
     newDestination._location = locationsArrToObj(newDestination?.Location?.locations || []);
     newDestination._inOrbit = !newDestination?._location.lotId;
-    newDestination._crewOwned = accountCrewIds?.includes(newDestination?.Control?.controller?.id);
     return newDestination;
   }, [rawDestination]);
 
@@ -81,14 +79,12 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
     return [
       Asteroid.getLotDistance(asteroid?.id, origin._location.lotIndex || 0, destination._location.lotIndex || 0),
       formatTimeRequirements(
-        Time.toRealDuration(
-          Asteroid.getLotTravelTime(
-            asteroid?.id,
-            origin._location.lotIndex || 0,
-            destination._location.lotIndex || 0,
-            crewTravelBonus.totalBonus,
-            crewDistBonus.totalBonus
-          ),
+        Asteroid.getLotTravelTimeReal(
+          asteroid?.id,
+          origin._location.lotIndex || 0,
+          destination._location.lotIndex || 0,
+          crewTravelBonus.totalBonus,
+          crewDistBonus.totalBonus,
           crew?._timeAcceleration
         )
       )
@@ -190,7 +186,7 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
                 titleDetails={
                   origin._location.lotIndex === 0 && destination._location.lotIndex === 0
                     ? <TransferDistanceTitleDetails><label>Orbital Transfer</label></TransferDistanceTitleDetails>
-                    : <TransferDistanceDetails distance={travelDistance} crewDistBonus={crewDistBonus} />
+                    : <TransferDistanceDetails distance={travelDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />
                 }
                 ship={destination}
                 disabled={stage !== actionStages.NOT_STARTED} />
@@ -201,7 +197,7 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
                 titleDetails={
                   origin._location.lotIndex === 0 && destination._location.lotIndex === 0
                     ? <TransferDistanceTitleDetails><label>Orbital Transfer</label></TransferDistanceTitleDetails>
-                    : <TransferDistanceDetails distance={travelDistance} crewDistBonus={crewDistBonus} />
+                    : <TransferDistanceDetails distance={travelDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />
                 }
                 lot={destinationLot}
                 disabled={stage !== actionStages.NOT_STARTED} />

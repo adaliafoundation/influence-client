@@ -1,3 +1,4 @@
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { Building, Entity } from '@influenceth/sdk';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -13,20 +14,24 @@ import SwitchToAdministratingCrew from './components/SwitchToAdministratingCrew'
 
 const AdminBuilding = ({}) => {
   const lotId = useStore(s => s.asteroids.lot);
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
   const { data: lot } = useLot(lotId);
+
+  const authorization = authorize('controls', [crew, lot?.building], [crew, lot?.building]);
 
   return (
     <>
       <Scrollable>
         <LotTitleArea lot={lot} />
 
-        {crew?.id !== lot?.building?.Control?.controller?.id && (
+        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
+
+        {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={lot?.building} />
         )}
 
-        {crew?.id && crew.id === lot?.building?.Control?.controller?.id && (
-          <>
+        {lot?.building && authorization.status !== 'denied' && (
+          <fieldset disabled={authorization.status !== 'allowed'} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <HudMenuCollapsibleSection titleText="Update Name" collapsed>
               <EntityNameForm
                 entity={lot.building}
@@ -51,7 +56,7 @@ const AdminBuilding = ({}) => {
                 <MarketplaceSettings marketplace={lot.building} />
               </HudMenuCollapsibleSection>
             )}
-          </>
+          </fieldset>
         )}
       </Scrollable>
     </>

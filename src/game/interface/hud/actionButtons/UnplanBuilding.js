@@ -10,9 +10,9 @@ const labelDict = {
   CANCELING: 'Removing Site...'
 };
 
-const isVisible = ({ accountCrewIds, constructionStatus, crew, lot }) => {
+const isVisible = ({ crewControls, constructionStatus, crew, lot }) => {
   return crew && lot && lot.building
-    && accountCrewIds?.includes(lot.building.Control?.controller?.id)
+    && crewControls(lot.building)
     && ['PLANNED', 'CANCELING'].includes(constructionStatus);
 };
 

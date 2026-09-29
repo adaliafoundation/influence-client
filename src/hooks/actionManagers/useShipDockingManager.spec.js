@@ -15,14 +15,15 @@ const useCrewContext = require('~/hooks/useCrewContext');
 const useShip = require('~/hooks/useShip');
 const useShipEjectionEligibility = require('~/hooks/useShipEjectionEligibility');
 const useShipDockingManager = require('./useShipDockingManager').default;
-let ship, execute, recheck, getPendingTx;
+let ship, execute, recheck, recheckAuthorization, getPendingTx;
 const wrapper = ({ children }) => <Context.Provider value={{ execute, getPendingTx }}>{children}</Context.Provider>;
 beforeEach(() => {
-  ship = { id: 9, Control: { controller: { id: 2 } }, Location: { location: { label: Entity.IDS.LOT, id: 5 }, locations: [{ label: Entity.IDS.ASTEROID, id: 1 }, { label: Entity.IDS.LOT, id: 5 }] } };
+  ship = { label: Entity.IDS.SHIP, id: 9, Control: { controller: { id: 2 } }, Location: { location: { label: Entity.IDS.LOT, id: 5 }, locations: [{ label: Entity.IDS.ASTEROID, id: 1 }, { label: Entity.IDS.LOT, id: 5 }] } };
   execute = jest.fn();
   getPendingTx = jest.fn(() => null);
   recheck = jest.fn(async () => ({ status: 'allowed', ship }));
-  useCrewContext.mockReturnValue({ crew: { id: 1 }, accountCrewIds: [1, 2] });
+  recheckAuthorization = jest.fn(async (method, args) => ({ status: Number(args[0].id) === Number(ship.Control?.controller?.id) ? 'denied' : 'allowed', entities: [ship] }));
+  useCrewContext.mockReturnValue({ crew: { id: 1 }, accountCrewIds: [1, 2], recheckAuthorization });
   useShip.mockReturnValue({ data: ship });
   useShipEjectionEligibility.mockReturnValue({ eligibility: { status: 'allowed' }, recheck });
 });
@@ -51,7 +52,7 @@ test('failed preflight reads cannot submit', async () => {
 });
 
 test('self launch retains its chosen propulsion and does not use eviction prerequisites', async () => {
-  useCrewContext.mockReturnValue({ crew: { id: 2 } });
+  useCrewContext.mockReturnValue({ crew: { id: 2 }, recheckAuthorization });
   const { result } = renderHook(() => useShipDockingManager(9), { wrapper });
   await result.current.undockShip(false);
   expect(recheck).not.toHaveBeenCalled();
@@ -63,5 +64,13 @@ test('unknown ship control cannot submit through the self-launch path', async ()
   delete ship.Control;
   const { result } = renderHook(() => useShipDockingManager(9), { wrapper });
   expect((await result.current.undockShip(true)).status).toBe('checking');
+  expect(execute).not.toHaveBeenCalled();
+});
+
+test('a controller change cannot silently turn self launch into forced cleanup', async () => {
+  useCrewContext.mockReturnValue({ crew: { id: 2 }, recheckAuthorization });
+  recheckAuthorization.mockResolvedValue({ status: 'allowed', entities: [{ ...ship, Control: { controller: { id: 3, label: Entity.IDS.CREW } } }] });
+  const { result } = renderHook(() => useShipDockingManager(9), { wrapper });
+  expect((await result.current.undockShip(true)).status).toBe('blocked');
   expect(execute).not.toHaveBeenCalled();
 });

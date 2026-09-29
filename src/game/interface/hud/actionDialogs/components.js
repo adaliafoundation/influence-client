@@ -1,3 +1,4 @@
+import { getInstantTransferDetails, getTripTiming } from '~/lib/transport';
 import { useMissionAction } from '~/contexts/MissionActionContext';
 import MissionActionNotice from './MissionActionNotice';
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1725,7 +1726,7 @@ const SelectionTableToggle = styled.div`
 `;
 
 export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, onClose, onSelected, open }) => {
-  const { accountCrewIds } = useCrewContext();
+  const { accountCrewIds, crewCan } = useCrewContext();
   const [selection, setSelection] = useState(initialSelection);
   const [showForSale, setShowForSale] = useState(true);
   const [showUsed, setShowUsed] = useState(true);
@@ -1748,7 +1749,7 @@ export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, on
 
   const samples = useMemo(() => {
     return options
-      .filter((s) => (showForSale || !s.PrivateSale?.amount || accountCrewIds?.includes(s.Control?.controller?.id)) && (showUsed || (s.Deposit.remainingYield === s.Deposit.initialYield)))
+      .filter((s) => (showForSale || !s.PrivateSale?.amount || crewCan(Permission.IDS.USE_DEPOSIT, s)) && (showUsed || (s.Deposit.remainingYield === s.Deposit.initialYield)))
       .sort((a, b) => {
         // sort mine above others'
         if (accountCrewIds?.includes(a.Control?.controller?.id) !== accountCrewIds?.includes(b.Control?.controller?.id)) {
@@ -1758,7 +1759,7 @@ export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, on
         // sort by deposit size
         return b.Deposit.remainingYield - a.Deposit.remainingYield;
       })
-  }, [accountCrewIds, options, showForSale, showUsed]);
+  }, [crewCan, accountCrewIds, options, showForSale, showUsed]);
 
   return (
     <SelectionDialog
@@ -1816,9 +1817,9 @@ export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, on
                   {accountCrewIds?.includes(sample.Control?.controller?.id) ? <label style={{ color: theme.colors.main }}> (Me)</label> : null}
                 </td>
                 <td>
-                  {!accountCrewIds?.includes(sample.Control?.controller?.id) && sample.PrivateSale?.amount > 0
+                  {!crewCan(Permission.IDS.USE_DEPOSIT, sample) && sample.PrivateSale?.amount > 0
                     ? <><SwayIcon /> {formatFixed(sample.PrivateSale?.amount / 1e6, 0)}</>
-                    : <span style={{ opacity: 0.5 }}>N / A</span>
+                    : <span style={{ opacity: 0.5 }}>{crewCan(Permission.IDS.USE_DEPOSIT, sample) ? 'Access granted' : 'Checking access'}</span>
                   }
                 </td>
               </SelectionTableRow>
@@ -2013,21 +2014,23 @@ export const LandingSelectionDialog = ({ asteroid, deliveryMode, initialSelectio
   const shipConfig = Ship.TYPES[ship?.Ship?.shipType];
 
   const { data: lotData } = useAsteroidLotData(asteroid?.id);
-  const { data: unorderedSpaceports } = useAsteroidBuildings(asteroid?.id, 'Dock', Permission.IDS.DOCK_SHIP);
-  const { crew } = useCrewContext();
+  const { data: unorderedSpaceports } = useAsteroidBuildings(asteroid?.id, 'Dock');
+  const { crew, authorize } = useCrewContext();
 
   const spaceports = useMemo(
-    () => unorderedSpaceports
+    () => (unorderedSpaceports || [])
       .map((a) => {
         const { lotIndex } = locationsArrToObj(a?.Location?.locations);
         return {
           ...a,
+          _authorization: authorize('spaceportProtection', [crew, ship, a], [crew, ship, a]),
           _lotIndex: lotIndex,
           _distance: Math.round(Asteroid.getLotDistance(asteroid?.id, originLotIndex, lotIndex))
         };
       })
+      .filter((port) => port._authorization.status !== 'denied')
       .sort((a, b) => a._distance - b._distance),
-    [asteroid?.id, originLotIndex, unorderedSpaceports]
+    [asteroid?.id, originLotIndex, unorderedSpaceports, authorize, crew, ship]
   );
 
   const onComplete = useCallback(() => {
@@ -2092,9 +2095,10 @@ export const LandingSelectionDialog = ({ asteroid, deliveryMode, initialSelectio
                 {spaceports.map((entity) => (
                   <SelectionTableRow
                     key={entity._lotIndex}
-                    onClick={() => setSelection(entity._lotIndex)}
+                    onClick={() => entity._authorization.status === 'allowed' && setSelection(entity._lotIndex)}
+                    disabledRow={entity._authorization.status !== 'allowed'}
                     selectedRow={entity._lotIndex === selection}>
-                    <td>{formatters.buildingName(entity)}</td>
+                    <td>{formatters.buildingName(entity)}{entity._authorization.status !== 'allowed' ? ' — Checking access' : ''}</td>
                     <td>{Building.TYPES[entity.Building?.buildingType].name}</td>
                     <td><LocationIcon /> {formatters.lotName(entity._lotIndex)}</td>
                     <td>{formatTimer(Time.toRealDuration(entity?.Dock ? Dock.Entity.getGroundDelay(entity) : 0, crew?._timeAcceleration))}</td>
@@ -2462,7 +2466,7 @@ export const InventorySelectionDialog = ({
   open,
   requirePresenceOfItemIds
 }) => {
-  const { accountCrewIds, crew } = useCrewContext();
+  const { crew, authorize, crewAuthorization } = useCrewContext();
 
   const simulationEnabled = useSimulationEnabled();
   const setCoachmarkRef = useCoachmarkRefSetter();
@@ -2501,6 +2505,9 @@ export const InventorySelectionDialog = ({
     const display = [];
     allInventoryEntities.forEach((entity) => {
       if (!entity.Inventories) return;
+      const access = entity._authorization || crewAuthorization(permission, entity);
+      const control = entity._controlAuthorization || authorize('controls', [crew, entity], [crew, entity]);
+      if (access.status === 'denied') return;
       entity.Inventories.forEach((inv) => {
         // (can't send to same entity and slot)
         if (otherEntity) {
@@ -2510,7 +2517,7 @@ export const InventorySelectionDialog = ({
         }
 
         // filter uncontrolled if limitToControlled
-        if (limitToControlled && !accountCrewIds?.includes(entity.Control.controller.id)) return;
+        if (limitToControlled && control.status === 'denied') return;
 
         // skip if locked (or inventory type is 0, which should not happen but has in staging b/c of dev bugs)
         if (inv.status !== Inventory.STATUSES.AVAILABLE || inv.inventoryType === 0) return;
@@ -2550,10 +2557,11 @@ export const InventorySelectionDialog = ({
           key: JSON.stringify({ id: entity.id, label: entity.label, lotId: entityLotId, asteroidId, lotIndex: entityLotIndex, slot: inv.slot }),
 
           entity,
-          disabled: (requirePresenceOfItemIds && !itemTally) || (isSourcing && inv.mass === 0),
+          authorization: limitToControlled ? control : access,
+          disabled: access.status !== 'allowed' || (limitToControlled && control.status !== 'allowed') || (requirePresenceOfItemIds && !itemTally) || (isSourcing && inv.mass === 0),
           distance: Asteroid.getLotDistance(asteroidId, entityLotIndex, otherLocation.lotIndex), // distance to source + distance to destination
-          isControlled: accountCrewIds?.includes(entity.Control.controller.id),
-          isPermitted: !(entity.PublicPolicies || []).find((p) => p.permission === permission),
+          isControlled: control.status === 'allowed',
+          isPermitted: access.status === 'allowed' && access.reason !== 'public-policy',
 
           contentsObj,
           name: entity.Ship ? formatters.shipName(entity) : formatters.buildingName(entity),
@@ -2568,12 +2576,13 @@ export const InventorySelectionDialog = ({
     });
 
     return display;
-  }, [crewedShip, inventoryData, itemIds, otherLocation, sort]);
+  }, [crewedShip, inventoryData, itemIds, otherLocation, sort, authorize, crewAuthorization, crew, permission, limitToPrimary, limitToControlled, otherEntity, otherInvSlot, excludeSites, itemIdsRequireAllAllowed, isSourcing, requirePresenceOfItemIds, asteroidId]);
 
   const onComplete = useCallback(() => {
+    if (selection && !inventories.some((inventory) => inventory.key === selection && !inventory.disabled)) return;
     onSelected(selection ? JSON.parse(selection) : null);
     onClose();
-  }, [onClose, onSelected, selection]);
+  }, [onClose, onSelected, selection, inventories]);
 
   const specifiedItems = !!filterItemIds;
   const soloItem = itemIds?.length === 1 ? itemIds[0] : null;
@@ -2622,7 +2631,7 @@ export const InventorySelectionDialog = ({
         key: 'permission',
         label: 'Permission',
         sortField: 'isControlled',
-        selector: (row) => <PermType type={row.isControlled ? 'Controller' : (row.isPermitted ? 'Permitted' : 'Public')}></PermType>,
+        selector: (row) => <PermType type={row.authorization?.status !== 'allowed' ? 'Checking access' : row.isControlled ? 'Controller' : (row.isPermitted ? 'Permitted' : 'Public')}></PermType>,
         noMinWidth: true,
       },
       (
@@ -2715,13 +2724,13 @@ export const InventorySelectionDialog = ({
         };
       })
       .filter((inv) => {
-        if (inv.disabled) return false;
+        if (inv.disabled && inv.authorization?.status !== 'unresolved') return false;
         if (filterValue) {
           const lcFilterValue = (filterValue || '').toLowerCase();
           if (!inv.name.toLowerCase().includes(lcFilterValue)) return false;
         }
         if (!showPermittedInventories && !inv.isControlled && inv.isPermitted) return false;
-        if (!showPublicInventories && !inv.isControlled && !inv.isPermitted) return false;
+        if (inv.authorization?.status === 'allowed' && !showPublicInventories && !inv.isControlled && !inv.isPermitted) return false;
         if (filterProductIds?.length > 0 && inv.filteredItemTally === 0) return false;
         return true;
       })
@@ -2729,12 +2738,13 @@ export const InventorySelectionDialog = ({
   }, [filterItemIds, filterValue, inventories, isSourcing, showPermittedInventories, showPublicInventories, sort]);
 
   const isCompletable = useMemo(() => {
+    if (!inventories.some((inventory) => inventory.key === selection && !inventory.disabled)) return false;
     if (selection && simulationEnabled) {
       const selObj = inventories.find((i) => i.key === selection);
       return simulationActions.includes(`SelectInventory:${selObj?.entity?.label}.${selObj?.entity?.id}.${selObj?.slot}`);
     }
     return !!selection;
-  }, [selection, simulationEnabled, simulationActions])
+  }, [selection, simulationEnabled, simulationActions, inventories])
 
   return (
     <SelectionDialog
@@ -3026,10 +3036,12 @@ export const OrderSelectionDialog = ({ asteroidId, otherEntity, maxAmount, onClo
 
     return exchanges.reduce((aggOrders, row) => {
       const exchangeDistance = Asteroid.getLotDistance(asteroidId, Lot.toIndex(row.lotId), Lot.toIndex(destLotId));
-      const exchangeTravelTime = Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroidId, Lot.toIndex(row.lotId), Lot.toIndex(destLotId), crewBonuses?.hopperTransport.totalBonus, crewBonuses?.freeTransport.totalBonus
-        ),
+      const exchangeTravelTime = Asteroid.getLotTravelTimeReal(
+        asteroidId,
+        Lot.toIndex(row.lotId),
+        Lot.toIndex(destLotId),
+        crewBonuses?.hopperTransport.totalBonus,
+        crewBonuses?.freeTransport.totalBonus,
         crew?._timeAcceleration
       );
 
@@ -3229,10 +3241,12 @@ export const ExchangeSelectionDialog = ({
         selectedAmounts[row.buildingId] = 0;
         maxTravelTime = Math.max(
           maxTravelTime,
-          Time.toRealDuration(
-            Asteroid.getLotTravelTime(
-              asteroidId, Lot.toIndex(row.lotId), Lot.toIndex(destLotId), crewBonuses?.hopperTransport.totalBonus, crewBonuses?.freeTransport.totalBonus
-            ),
+          Asteroid.getLotTravelTimeReal(
+            asteroidId,
+            Lot.toIndex(row.lotId),
+            Lot.toIndex(destLotId),
+            crewBonuses?.hopperTransport.totalBonus,
+            crewBonuses?.freeTransport.totalBonus,
             crew?._timeAcceleration
           )
         );
@@ -4175,21 +4189,21 @@ export const ItemSelectionSection = ({ columns = 7, label, items, onClick, stage
     );
 };
 
-export const TransferDistanceDetails = ({ distance, crewDistBonus }) => {
-  const crewFreeTransferRadius = Asteroid.FREE_TRANSPORT_RADIUS * (crewDistBonus?.totalBonus || 1);
+export const TransferDistanceDetails = ({ distance, timeBonus, distanceBonus }) => {
+  if (distance == null) return null;
+  const { radius, isInstant } = getInstantTransferDetails(distance, timeBonus, distanceBonus);
   return (
     <TransferDistanceTitleDetails>
-      {distance && distance < crewFreeTransferRadius ? (
+      {isInstant ? (
         <Mouseoverable tooltip={(
           <FreeTransferNote>
             <div>Instant Transfer Radius</div>
-            <div>Transfers less than {crewFreeTransferRadius.toFixed(1)}km in distance are instantaneous.</div>
+            <div>Transfers up to {radius.toFixed(1)}km are instantaneous, including your transport speed and distance bonuses.</div>
           </FreeTransferNote>
         )}>
           <label><SurfaceTransferIcon /> {Math.round(distance)}km Away</label>
         </Mouseoverable>
-      ) : ''}
-      {distance && distance >= crewFreeTransferRadius ? `${Math.round(distance)}km Away` : ''}
+      ) : `${Math.round(distance)}km Away`}
     </TransferDistanceTitleDetails>
   );
 };
@@ -5869,31 +5883,12 @@ export const getBonusDirection = ({ totalBonus } = {}, biggerIsBetter = true) =>
 };
 
 export const getTripDetails = (asteroidId, crewTravelBonus, crewDistBonus, originLotIndex, steps, timeAcceleration) => {
-  let currentLotIndex = originLotIndex;
-  let totalDistance = 0;
-  let totalTime = 0;
-
-  const tripDetails = steps.map(({ label, lotIndex, skipToLotIndex }) => {
-    const stepDistance = Asteroid.getLotDistance(asteroidId, currentLotIndex, lotIndex) || 0;
-    const stepTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroidId, currentLotIndex, lotIndex, crewTravelBonus.totalBonus, crewDistBonus.totalBonus
-      ) || 0,
-      timeAcceleration
-    );
-    currentLotIndex = skipToLotIndex || lotIndex;
-
-    // agg
-    totalDistance += stepDistance;
-    totalTime += stepTime;
-
-    // format
-    return [
-      `${label}:`,
-      `${Math.round(stepDistance)}km`,
-      formatTimer(stepTime)
-    ];
-  });
+  const { totalDistance, totalTime, legs } = getTripTiming(
+    asteroidId, originLotIndex, steps, crewTravelBonus.totalBonus, crewDistBonus.totalBonus, timeAcceleration
+  );
+  const tripDetails = legs.map(({ label, distance, duration }) => [
+    `${label}:`, `${Math.round(distance)}km`, formatTimer(duration)
+  ]);
   return { totalDistance, totalTime, tripDetails };
 };
 

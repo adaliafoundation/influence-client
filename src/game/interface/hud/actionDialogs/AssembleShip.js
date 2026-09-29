@@ -1,3 +1,4 @@
+import useProductionAuthorization from '~/hooks/useProductionAuthorization';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Building, Crewmate, Entity, Lot, Permission, Product, Ship, Time } from '@influenceth/sdk';
 import { CrewCaptainCardFramed } from '~/components/CrewmateCardFramed';
@@ -35,7 +36,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
 
   const crew = useActionCrew(currentAssembly);
   const blockTime = useBlockTime();
-  const { crewCan } = useCrewContext();
+  const { crewAuthorization, authorize, crew: selectedCrew } = useCrewContext();
 
   const { data: buildingOwner } = useCrew(lot?.building?.Control?.controller?.id);
 
@@ -54,6 +55,10 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
   const { data: destinationLot } = useLot(destinationLotId);
   const destination = destinationLot?.building || destinationLot;
 
+  const assembledShip = currentAssembly?.shipId ? { id: currentAssembly.shipId, label: Entity.IDS.SHIP } : null;
+  const destinationAccess = destination?.label === Entity.IDS.BUILDING
+    ? authorize('spaceportProtection', [selectedCrew, assembledShip, destination], [selectedCrew, assembledShip, destination]).status === 'allowed'
+    : !!destination;
   const amount = 1;
   const [shipType, setShipType] = useState(currentAssembly?.shipType);
   const [destinationSelectorOpen, setDestinationSelectorOpen] = useState(false);
@@ -88,8 +93,8 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
   const [assemblyTime, setupTime] = useMemo(() => {
     if (!shipConstruction) return [0, 0];
     return [
-      Time.toRealDuration(shipConstruction?.constructionTime / assemblyTimeBonus.totalBonus, crew?._timeAcceleration),
-      Time.toRealDuration(shipConstruction?.setupTime / assemblyTimeBonus.totalBonus, crew?._timeAcceleration)
+      Time.toRealDurationCeil(shipConstruction?.constructionTime / assemblyTimeBonus.totalBonus, crew?._timeAcceleration),
+      Time.toRealDurationCeil(shipConstruction?.setupTime / assemblyTimeBonus.totalBonus, crew?._timeAcceleration)
     ];
   }, [amount, crew?._timeAcceleration, assemblyTimeBonus, shipConstruction]);
 
@@ -106,14 +111,12 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
     if (!originLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(originLot?.id), Lot.toIndex(lot?.id)) || 0,
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid?.id,
-          Lot.toIndex(originLot?.id),
-          Lot.toIndex(lot?.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ) || 0,
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        Lot.toIndex(originLot?.id),
+        Lot.toIndex(lot?.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -123,14 +126,12 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
     if (!lot?.id || !destinationLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(lot?.id), Lot.toIndex(destinationLot?.id)) || 0,
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid?.id,
-          Lot.toIndex(lot?.id),
-          Lot.toIndex(destinationLot?.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ) || 0,
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        Lot.toIndex(lot?.id),
+        Lot.toIndex(destinationLot?.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -152,7 +153,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
       [
         [oneWayCrewTravelTime, 'Travel to Shipyard'],
         inputTransportTime > oneWayCrewTravelTime ? [inputTransportTime - oneWayCrewTravelTime, 'Delay for Input Arrival'] : null,
-        [(setupTime + assemblyTime) / 8, 'On-site Crew Labor'],
+        [Time.getCrewLaborDuration(setupTime + assemblyTime), 'On-site Crew Labor'],
         [oneWayCrewTravelTime, 'Return to Station'],
       ],
       [
@@ -212,8 +213,8 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
   ]), [assemblyTime, assemblyTimeBonus, crewTravelTime, crewTravelBonus, tripDetails, inputTransportDistance, inputTransportTime]);
 
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.ASSEMBLE_SHIP, crew, blockTime);
-  }, [blockTime, crew, lot?.building]);
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.ASSEMBLE_SHIP, crew, blockTime, crewAuthorization(Permission.IDS.ASSEMBLE_SHIP, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building]);
 
   const { leasePayment, desiredLeaseTerm, actualLeaseTerm } = useMemo(() => {
     return getProcessorLeaseSelections(
@@ -224,7 +225,13 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
     );
   }, [blockTime, crew?.Crew?.readyAt, prepaidLeaseConfig, taskTimeRequirement?.total]);
 
-  const onStart = useCallback(() => {
+  const productionAuthorization = useProductionAuthorization({
+    kind: 'assemble', crew, facility: lot?.building, origin,
+    duration: taskTimeRequirement?.total, lease: leasePayment > 0 && { recipient: buildingOwner?.Crew?.delegatedTo, term: actualLeaseTerm, termPrice: leasePayment }
+  });
+
+  const onStart = useCallback(async () => {
+    if ((await productionAuthorization.recheck()).status !== 'allowed') return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
     startShipAssembly(
       shipType,
@@ -236,7 +243,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
         termPrice: leasePayment,
       }
     );
-  }, [
+  }, [productionAuthorization,
     actualLeaseTerm,
     buildingOwner,
     leasePayment,
@@ -345,7 +352,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
           <div style={{ width: 350 }}>
             <InventoryInputBlock
               title="Input Inventory"
-              titleDetails={<TransferDistanceDetails distance={inputTransportDistance} crewDistBonus={crewDistBonus} />}
+              titleDetails={<TransferDistanceDetails distance={inputTransportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
               disabled={!shipType || stage !== actionStages.NOT_STARTED}
               entity={origin}
               inventorySlot={selectedOrigin?.slot}
@@ -369,7 +376,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
             {['READY_TO_COMPLETE', 'COMPLETING', 'COMPLETED'].includes(stage) && (
               <LotInputBlock
                 title="Delivery Destination"
-                titleDetails={<TransferDistanceDetails distance={outputTransportDistance} crewDistBonus={crewDistBonus} />}
+                titleDetails={<TransferDistanceDetails distance={outputTransportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
                 disabled={stage !== actionStages.READY_TO_COMPLETE}
                 lot={destinationLot}
                 isSelected={stage === actionStages.READY_TO_COMPLETE}
@@ -444,6 +451,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
 
       </ActionDialogBody>
 
+      {stage === actionStages.NOT_STARTED && productionAuthorization.message && <p role="status">{productionAuthorization.message}</p>}
       <ActionDialogFooter
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
@@ -453,11 +461,12 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
             && process
             && originInventory
             && isOriginSufficient
-            && (crewCan(Permission.IDS.ASSEMBLE_SHIP, lot.building) || leasePayment > 0)
+            && productionAuthorization.allowed
           )
           || (
             stage === actionStages.READY_TO_COMPLETE
-            && destination
+            && destinationAccess
+            && currentAssembly?._isAccessible
           )
         )}
         finalizeLabel="Deliver Ship"
@@ -502,7 +511,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
           onSelected={setSelectedDestinationIndex}
           originLotIndex={Lot.toIndex(lot?.id)}
           open={destinationSelectorOpen}
-          ship={{ Ship: { shipType }}}
+          ship={{ ...assembledShip, Ship: { shipType } }}
         />
       )}
     </>

@@ -1,3 +1,4 @@
+import useProductionAuthorization from '~/hooks/useProductionAuthorization';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Building, Crewmate, Lot, Permission, Process, Processor, Product, Time } from '@influenceth/sdk';
 
@@ -38,7 +39,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
   );
   const crew = useActionCrew(currentProcess);
   const blockTime = useBlockTime();
-  const { crewCan } = useCrewContext();
+  const { crewAuthorization } = useCrewContext();
 
   const { data: buildingOwner } = useCrew(lot?.building?.Control?.controller?.id);
 
@@ -128,8 +129,8 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
   const [setupTime, processingTime] = useMemo(() => {
     if (!process) return [0, 0];
     return [
-      Time.toRealDuration(Process.getSetupTime(processId, processingTimeBonus.totalBonus), crew?._timeAcceleration),
-      Time.toRealDuration(Process.getProcessingTime(processId, amount, processingTimeBonus.totalBonus), crew?._timeAcceleration),
+      Process.getSetupTimeReal(processId, processingTimeBonus.totalBonus, crew?._timeAcceleration),
+      Process.getProcessingTimeReal(processId, amount, processingTimeBonus.totalBonus, crew?._timeAcceleration),
     ];
   }, [amount, crew?._timeAcceleration, process, processingTimeBonus]);
 
@@ -146,14 +147,12 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
     if (!originLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(originLot?.id), Lot.toIndex(lot?.id)) || 0,
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid?.id,
-          Lot.toIndex(originLot?.id),
-          Lot.toIndex(lot?.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ) || 0,
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        Lot.toIndex(originLot?.id),
+        Lot.toIndex(lot?.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -163,14 +162,12 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
     if (!destinationLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(lot?.id), Lot.toIndex(destinationLot?.id)) || 0,
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid?.id,
-          Lot.toIndex(lot?.id),
-          Lot.toIndex(destinationLot?.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ) || 0,
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        Lot.toIndex(lot?.id),
+        Lot.toIndex(destinationLot?.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -198,7 +195,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
       [
         [oneWayCrewTravelTime, `Travel to ${buildingType}`],
         inputTransportTime > oneWayCrewTravelTime ? [inputTransportTime - oneWayCrewTravelTime, 'Delay for Input Arrival'] : null,
-        [(setupTime + processingTime) / 8, 'On-site Crew Labor'],
+        [Time.getCrewLaborDuration(setupTime + processingTime), 'On-site Crew Labor'],
         [oneWayCrewTravelTime, 'Return to Station'],
       ],
       [
@@ -281,8 +278,8 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
     tripDetails
   ]);
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.RUN_PROCESS, crew, blockTime);
-  }, [blockTime, crew, lot?.building]);
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.RUN_PROCESS, crew, blockTime, crewAuthorization(Permission.IDS.RUN_PROCESS, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building]);
 
   const { leasePayment, desiredLeaseTerm, actualLeaseTerm } = useMemo(() => {
     return getProcessorLeaseSelections(
@@ -297,7 +294,13 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
     finishProcess();
   }, [finishProcess]);
 
-  const onStartProcess = useCallback(() => {
+  const productionAuthorization = useProductionAuthorization({
+    kind: 'process', crew, facility: lot?.building, origin, destination,
+    duration: taskTimeRequirement?.total, lease: leasePayment > 0 && { recipient: buildingOwner?.Crew?.delegatedTo, term: actualLeaseTerm, termPrice: leasePayment }
+  });
+
+  const onStartProcess = useCallback(async () => {
+    if ((await productionAuthorization.recheck()).status !== 'allowed') return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
     startProcess({
       processId,
@@ -313,7 +316,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
         termPrice: leasePayment,
       }
     });
-  }, [
+  }, [productionAuthorization,
     amount,
     destination,
     destinationInventory,
@@ -456,7 +459,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
 
           <InventoryInputBlock
             title="Input Inventory"
-            titleDetails={<TransferDistanceDetails distance={inputTransportDistance} crewDistBonus={crewDistBonus} />}
+            titleDetails={<TransferDistanceDetails distance={inputTransportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
             disabled={!process || stage !== actionStages.NOT_STARTED}
             entity={origin}
             inventorySlot={selectedOrigin?.slot}
@@ -503,7 +506,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
 
           <InventoryInputBlock
             title="Output Inventory"
-            titleDetails={<TransferDistanceDetails distance={outputTransportDistance} crewDistBonus={crewDistBonus} />}
+            titleDetails={<TransferDistanceDetails distance={outputTransportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
             disabled={!process || stage !== actionStages.NOT_STARTED}
             entity={destination}
             inventorySlot={selectedDestination?.slot}
@@ -567,6 +570,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
 
       </ActionDialogBody>
 
+      {stage === actionStages.NOT_STARTED && productionAuthorization.message && <p role="status">{productionAuthorization.message}</p>}
       <ActionDialogFooter
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
@@ -578,7 +582,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
             && originInventory
             && isOriginSufficient
             && destinationInventory
-            && (crewCan(Permission.IDS.RUN_PROCESS, lot.building) || leasePayment > 0)
+            && productionAuthorization.allowed
           )
         }
         goLabel={`${leasePayment ? 'Lease & ' : ''}Begin`}

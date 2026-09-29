@@ -23,11 +23,9 @@ const isVisible = ({ asteroid, lot, blockTime, crew }) => {
   const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
   const isExpiredAuctionLease = !!(lot?.building && auctionStatus.expiredAgreement && !lot?._activeUseLotAgreement);
 
-  // visible when lot selected and lot is available to crew (and uncontrolled or not controlled by occupant)
-  if (lot && Permission.getPolicyDetails(lot, crew, blockTime)[Permission.IDS.USE_LOT]?.crewStatus === 'available') {
-    if (!lot.Control?.controller?.id) visible ||= true;
-    if ((lot.building || lot.surfaceShip)?.Control?.controller?.id !== lot.Control.controller.id) visible ||= true;
-  }
+  // Lease offers are presentation data, not evidence of current USE_LOT access.
+  const policy = lot && Permission.getPolicyDetails(lot, undefined, blockTime)[Permission.IDS.USE_LOT];
+  visible = !!policy && [Permission.POLICY_IDS.PREPAID, Permission.POLICY_IDS.CONTRACT].includes(policy.policyType);
 
   if (!visible && isExpiredAuctionLease && auctionStatus.isAuctionAvailable) {
     visible = true;

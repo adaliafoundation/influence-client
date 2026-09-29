@@ -5,26 +5,10 @@ import ActionButton, { getCrewDisabledReason } from './ActionButton';
 import useRepoManager from '~/hooks/actionManagers/useRepoManager';
 import theme from '~/theme';
 
-const isVisible = ({ crew, isAtRisk, lot }) => {
-  if (!crew || !lot) return false;
-
-  if (lot?.building) {
-    // if i am the lot controller but not the building controller...
-    if (crew?.id === lot?.Control?.controller?.id && crew?.id !== lot?.building?.Control?.controller?.id) {
-      return true;
-    }
-
-    // if i am NOT the controller and the building is expired...
-    if (crew?.id !== lot?.building?.Control?.controller?.id && isAtRisk) {
-      return true;
-    }
-  }
-
-  return false;
-};
+const isVisible = ({ crew, lot }) => !!crew && !!lot?.building && crew.id !== lot.building.Control?.controller?.id;
 
 const RepoBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
-  const { currentRepo } = useRepoManager(lot?.id);
+  const { currentRepo, authorization, takeoverType } = useRepoManager(lot?.id);
 
   const handleClick = useCallback(() => {
     onSetAction('REPO_BUILDING');
@@ -32,13 +16,14 @@ const RepoBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
 
   const disabledReason = useMemo(() => {
     if (_disabled || !!currentRepo) return 'loading...';
-    if (!currentRepo) return getCrewDisabledReason({ asteroid, crew });
+    if (authorization.status !== 'allowed') return authorization.status === 'unresolved' ? 'checking repossession rights' : 'repossession restricted';
+    if (!currentRepo) return getCrewDisabledReason({ asteroid, crew, requireSurface: false });
     return '';
-  }, [_disabled, asteroid, crew]);
+  }, [_disabled, asteroid, crew, currentRepo, authorization]);
 
   const buttonParams = useMemo(() => {
     // if i am the lot controller but not the building controller...
-    if (crew?.id === lot?.Control?.controller?.id && crew?.id !== lot?.building?.Control?.controller?.id) {
+    if (takeoverType !== 'expired') {
       return {
         label: 'Repossess Building',
         icon: <TakeControlIcon />
@@ -50,7 +35,7 @@ const RepoBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
       label: 'Claim Expired Construction Site',
       icon: <TakeControlIcon />
     }
-  }, [crew, lot]);
+  }, [takeoverType]);
 
   return (
     <ActionButton

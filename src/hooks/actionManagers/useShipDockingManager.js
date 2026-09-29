@@ -10,7 +10,7 @@ import { checkingShipEjection, isForceLaunch } from '~/lib/shipEjectionEligibili
 
 const useShipDockingManager = (shipId) => {
   const { execute, getPendingTx } = useContext(ChainTransactionContext);
-  const { crew } = useCrewContext();
+  const { crew, recheckAuthorization } = useCrewContext();
   const { data: ship } = useShip(shipId);
   const { eligibility: ejectionEligibility, recheck } = useShipEjectionEligibility(ship);
 
@@ -18,8 +18,12 @@ const useShipDockingManager = (shipId) => {
 
   const undockShip = useCallback(async (hopperAssisted) => {
     if (!crew?.id || !ship?.Control?.controller?.id || !ship?.Location?.location) return checkingShipEjection;
-    const forced = isForceLaunch(crew, ship);
-    let launchShip = ship;
+    const mode = await recheckAuthorization('forceLaunch', [crew, ship], [crew, ship]);
+    if (mode.status === 'unresolved') return checkingShipEjection;
+    const forced = mode.status === 'allowed';
+    if (forced !== isForceLaunch(crew, ship)) return { status: 'blocked', reason: 'Ship controller changed. Review the launch mode.' };
+    let launchShip = mode.entities?.find((entity) => entity.label === Entity.IDS.SHIP && Number(entity.id) === Number(ship.id));
+    if (!launchShip?.Location?.location) return checkingShipEjection;
     if (forced) {
       const eligibility = await recheck({ shipId: ship?.id, crewId: crew?.id });
       if (eligibility.status !== 'allowed') return eligibility;
@@ -37,9 +41,15 @@ const useShipDockingManager = (shipId) => {
         lotId: launchShip?.Location?.locations?.find((e) => e.label === Entity.IDS.LOT)?.id,
       }
     );
-  }, [caller_crew, crew, execute, recheck, ship]);
+  }, [caller_crew, crew, execute, recheck, recheckAuthorization, ship]);
 
-  const dockShip = useCallback((destination, hopperAssisted, destLotId) => {
+  const dockShip = useCallback(async (destination, hopperAssisted, destLotId) => {
+    const control = await recheckAuthorization('controls', [crew, ship], [crew, ship]);
+    if (control.status !== 'allowed') return control;
+    if (destination.label === Entity.IDS.BUILDING) {
+      const permission = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
+      if (permission.status !== 'allowed') return permission;
+    }
     execute(
       'DockShip',
       {
@@ -53,7 +63,7 @@ const useShipDockingManager = (shipId) => {
         shipId
       }
     );
-  }, [caller_crew, execute]);
+  }, [caller_crew, execute, crew, ship, recheckAuthorization, shipId]);
 
   const currentDockingAction = useMemo(
     () => getPendingTx ? getPendingTx('DockShip', { caller_crew }) : null,

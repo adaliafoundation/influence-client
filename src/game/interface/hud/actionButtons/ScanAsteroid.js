@@ -9,9 +9,9 @@ import useScanManager from '~/hooks/actionManagers/useScanManager';
 import ActionButton from './ActionButton';
 import useCrewContext from '~/hooks/useCrewContext';
 
-const isVisible = ({ accountCrewIds, asteroid, crew }) => {
+const isVisible = ({ crewControls, asteroid, crew }) => {
   return asteroid && crew
-    && accountCrewIds?.includes(asteroid.Control?.controller?.id)
+    && crewControls(asteroid)
     && asteroid.Celestial?.scanStatus < Asteroid.SCAN_STATUSES.RESOURCE_SCANNED;
 };
 

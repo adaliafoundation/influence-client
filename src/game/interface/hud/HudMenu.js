@@ -260,7 +260,7 @@ const MenuButton = ({ badge, coachmarkId, menuKey, label, useAltColor, icon, onO
 const HudMenu = () => {
   const history = useHistory();
   const { authenticated } = useSession();
-  const { accountCrewIds, crew } = useCrewContext();
+  const { authorize, crew } = useCrewContext();
   const simulationEnabled = useSimulationEnabled();
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -406,7 +406,7 @@ const HudMenu = () => {
           Component: hudMenus.AdminBuilding,
           isVisible: focus === 'lot'
             && lot?.building?.Building?.status === Building.CONSTRUCTION_STATUSES.OPERATIONAL
-            && accountCrewIds?.includes(lot?.building?.Control?.controller?.id)
+            && crew && authorize('controls', [crew, lot?.building], [crew, lot?.building]).status !== 'denied'
         },
         {
           key: 'ASTEROID_ADMIN',
@@ -415,7 +415,7 @@ const HudMenu = () => {
           noDetail: true,
           Component: hudMenus.AdminAsteroid,
           isVisible: focus === 'asteroid'
-            && accountCrewIds?.includes(asteroid?.Control?.controller?.id)
+            && crew && authorize('controls', [crew, asteroid], [crew, asteroid]).status !== 'denied'
         },
         {
           key: 'SHIP_ADMIN',
@@ -424,7 +424,7 @@ const HudMenu = () => {
           noDetail: true,
           Component: hudMenus.AdminShip,
           isVisible: (focus === 'ship' || (focus === 'lot' && lot?.surfaceShip))
-            && accountCrewIds?.includes(ship?.Control?.controller?.id)
+            && crew && authorize('controls', [crew, ship], [crew, ship]).status !== 'denied'
         },
         {
           key: 'DOCKED_SHIPS',
@@ -643,11 +643,12 @@ const HudMenu = () => {
 
     return [menuButtons, pageButtons];
   }, [
-    accountCrewIds,
+    authorize,
+    ship,
     asteroid,
     asteroidFilterTally,
     asteroidId,
-    crew?.id,
+    crew,
     destination,
     launcherPage,
     lot,

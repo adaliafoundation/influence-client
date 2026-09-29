@@ -1,3 +1,4 @@
+import { collectInventoryCandidates } from './authorizationData';
 import { missionBindingUrl } from './missionBindings';
 import axios from 'axios';
 import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
@@ -7,7 +8,7 @@ import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
 import { getApiAuthHeaders } from './apiAuth';
-import { entityToAgreements, esbLocationQuery, esbPermissionQuery, safeBigInt, safeEntityId } from './utils';
+import { entityToAgreements, esbLocationQuery, safeBigInt, safeEntityId } from './utils';
 import { TOKEN, TOKEN_SCALE } from './priceUtils';
 
 // set default app version
@@ -277,14 +278,11 @@ const api = {
     return formatESEntityData(response.data);
   },
 
-  getAsteroidBuildingsWithAccessibleInventories: async (asteroidId, crewId, crewSiblingIds, crewDelegatedTo, withPermission) => {
+  getAsteroidBuildingInventoryCandidates: async (asteroidId) => {
     const buildingQueryBuilder = esb.boolQuery();
 
     // Exclude unplanned buildings
     buildingQueryBuilder.mustNot(esb.termQuery('Building.status', Building.CONSTRUCTION_STATUSES.UNPLANNED))
-
-    // has permission
-    if (withPermission) buildingQueryBuilder.filter(esbPermissionQuery(crewId, crewSiblingIds, crewDelegatedTo, withPermission));
 
     // on asteroid
     buildingQueryBuilder.filter(esbLocationQuery({ asteroidId }));
@@ -301,16 +299,11 @@ const api = {
     buildingQ.from(0);
     buildingQ.size(10000);
 
-    const response = await instance.post(`/_search/building`, buildingQ.toJSON());
-    
-    return formatESEntityData(response.data);
+    return collectInventoryCandidates(async (body) => (await instance.post('/_search/building', body)).data, buildingQ.toJSON());
   },
 
-  getAsteroidShipsWithAccessibleInventories: async (asteroidId, crewId, crewSiblingIds, crewDelegatedTo, withPermission) => {
+  getAsteroidShipInventoryCandidates: async (asteroidId) => {
     const shipQueryBuilder = esb.boolQuery();
-
-    // has permission
-    if (withPermission) shipQueryBuilder.filter(esbPermissionQuery(crewId, crewSiblingIds, crewDelegatedTo, withPermission));
 
     // on asteroid
     // (and not in orbit -- i.e. lotId is present and !== 0)
@@ -342,9 +335,7 @@ const api = {
     shipQ.from(0);
     shipQ.size(10000);
 
-    const response = await instance.post(`/_search/ship`, shipQ.toJSON());
-    
-    return formatESEntityData(response.data);
+    return collectInventoryCandidates(async (body) => (await instance.post('/_search/ship', body)).data, shipQ.toJSON());
   },
 
   getDeliveries: async (destination, origin, statuses) => {

@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 
 import { CheckedIcon, ChevronRightIcon, MarketplaceBuildingIcon, MultiSellIcon, SwayIcon, UncheckedIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -354,10 +354,12 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
           selectedAmounts[row.buildingId] = 0;
           maxTravelTime = Math.max(
             maxTravelTime,
-            Time.toRealDuration(
-              Asteroid.getLotTravelTime(
-                asteroid?.id, Lot.toIndex(originLot?.id), Lot.toIndex(row.lotId), crewBonuses?.hopperTransport.totalBonus, crewBonuses?.freeTransport.totalBonus
-              ),
+            Asteroid.getLotTravelTimeReal(
+              asteroid?.id,
+              Lot.toIndex(originLot?.id),
+              Lot.toIndex(row.lotId),
+              crewBonuses?.hopperTransport.totalBonus,
+              crewBonuses?.freeTransport.totalBonus,
               crew?._timeAcceleration
             )
           );

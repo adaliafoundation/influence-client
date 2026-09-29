@@ -6,7 +6,7 @@ import esb from 'elastic-builder';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 import constants from '~/lib/constants';
-import { esbAnyPermissionQuery, esbLocationQuery } from '~/lib/utils';
+import { esbPermissionCandidateQuery, esbLocationQuery } from '~/lib/utils';
 
 const filtersToQuery = {};
 
@@ -114,7 +114,7 @@ filtersToQuery.buildings = (filters) => {
   if (filters.access) {
     if (Array.isArray(filters.access)) {
       const [crewId, crewSiblingIds, crewDelegatedTo] = filters.access;
-      queryBuilder.filter(esbAnyPermissionQuery(crewId, crewSiblingIds, crewDelegatedTo));
+      queryBuilder.filter(esbPermissionCandidateQuery(crewId, crewSiblingIds, crewDelegatedTo));
     } else if (filters.access === 'public') {
       queryBuilder.filter(
         esb.nestedQuery()

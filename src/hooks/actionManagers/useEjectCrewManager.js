@@ -10,7 +10,7 @@ import { locationsArrToObj } from '~/lib/utils';
 
 
 const useEjectCrewManager = (originEntity) => {
-  const { crew, isLoading, pendingTransactions } = useCrewContext();
+  const { crew, isLoading, pendingTransactions, recheckAuthorization, recheckActingCrew } = useCrewContext();
   const { execute } = useContext(ChainTransactionContext);
 
   const { data: origin } = useEntity(originEntity);
@@ -26,7 +26,12 @@ const useEjectCrewManager = (originEntity) => {
   }, [originCrews, pendingTransactions]);
 
   const ejectCrew = useCallback(
-    (id) => {
+    async (id) => {
+      const prerequisites = await recheckActingCrew({ requireReady: Number(id) !== Number(crew?.id) });
+      if (prerequisites.status !== 'allowed') return prerequisites;
+      const guest = { id, label: Entity.IDS.CREW };
+      const decision = await recheckAuthorization('crewEviction', [crew, guest], [crew, guest, origin]);
+      if (decision.status !== 'allowed') return decision;
       return execute(
         'EjectCrew',
         {
@@ -39,7 +44,7 @@ const useEjectCrewManager = (originEntity) => {
         }
       );
     },
-    [execute, crew, originEntity, origin]
+    [recheckActingCrew, execute, crew, originEntity, origin, recheckAuthorization]
   );
 
   return {

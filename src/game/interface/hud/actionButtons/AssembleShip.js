@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { DryDock, Permission } from '@influenceth/sdk';
 
@@ -20,6 +21,7 @@ const isVisible = ({ building, crew }) => {
 };
 
 const AssembleShip = ({ asteroid, blockTime, crew, lot, onSetAction, simulation, simulationActions, _disabled }) => {
+  const { crewAuthorization } = useCrewContext();
   const { assemblyStatus, currentAssembly } = useDryDockManager(lot?.id);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -28,13 +30,13 @@ const AssembleShip = ({ asteroid, blockTime, crew, lot, onSetAction, simulation,
   }, [onSetAction]);
 
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.ASSEMBLE_SHIP, crew, blockTime);
-  }, [blockTime, crew, lot?.building])
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.ASSEMBLE_SHIP, crew, blockTime, crewAuthorization(Permission.IDS.ASSEMBLE_SHIP, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building])
 
   const disabledReason = useMemo(() => {
     if (_disabled) return 'loading...';
     if (assemblyStatus === 'READY') {
-      return getCrewDisabledReason({
+      return getCrewDisabledReason({ crewAuthorization,
         asteroid,
         blockTime,
         crew,
@@ -47,7 +49,7 @@ const AssembleShip = ({ asteroid, blockTime, crew, lot, onSetAction, simulation,
     } else if (!currentAssembly?._isAccessible) {
       return 'in use';
     }
-  }, [_disabled, assemblyStatus, asteroid, blockTime, crew, currentAssembly, prepaidLeaseConfig, lot?.building, simulationActions]);
+  }, [crewAuthorization, _disabled, assemblyStatus, asteroid, blockTime, crew, currentAssembly, prepaidLeaseConfig, lot?.building, simulationActions]);
   
   const finishTime = lot?.building?.DryDocks.find((dryDock) => dryDock.status === DryDock.STATUSES.RUNNING)?.finishTime;
 

@@ -10,9 +10,9 @@ const labelDict = {
   DECONSTRUCTING: 'Deconstructing...'
 };
 
-const isVisible = ({ accountCrewIds, constructionStatus, building, ship }) => {
+const isVisible = ({ crewControls, constructionStatus, building, ship }) => {
   return building && !ship
-    && accountCrewIds?.includes(building.Control?.controller?.id)
+    && crewControls(building)
     && ['OPERATIONAL', 'DECONSTRUCTING'].includes(constructionStatus);
 };
 

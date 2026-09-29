@@ -1,5 +1,6 @@
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Building, Crewmate, Permission, Ship, Station, Time } from '@influenceth/sdk';
+import { Asteroid, Building, Crewmate, Ship, Station, Time } from '@influenceth/sdk';
 
 import { EjectMyCrewIcon, EjectPassengersIcon, WarningIcon, WarningOutlineIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -43,7 +44,7 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
   const { currentEjection, ejectCrew, actionStage: ejectionStatus } = manager;
 
   // TODO: only if specified id
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
 
   const [crewSelectorOpen, setCrewSelectorOpen] = useState(false);
   const [targetCrewId, setTargetCrewId] = useState(currentEjection?.ejected_crew?.id || (props.guests || props.guestId ? (props.guestId || null) : crew?.id));
@@ -58,8 +59,7 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
   const ejectionTime = useMemo(() => {
     // if from surface
     if (originLot) {
-      const travelTime = Asteroid.getLotTravelTime(asteroid?.id, originLot.index, 0, hopperBonus.totalBonus, distBonus.totalBonus);
-      return Time.toRealDuration(travelTime, crew?._timeAcceleration);
+      return Asteroid.getLotTravelTimeReal(asteroid?.id, originLot.index, 0, hopperBonus.totalBonus, distBonus.totalBonus, crew?._timeAcceleration);
 
     // if from in-flight ship
     } else if (origin?.Ship?.transitArrival) {
@@ -92,21 +92,16 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
     },
   ]), [targetCrew]);
 
-  const crewHasPermission = useCallback((c) => {
-    if (c && origin) {
-      const perm = Permission.getPolicyDetails(origin, c, blockTime)[Permission.IDS.STATION_CREW];
-      if (perm && (perm.crewStatus === 'controller' || perm.crewStatus === 'granted')) {
-        return 'Crew currently has permission to be here.';
-      }
-    }
-    return false;
-  }, [blockTime, origin]);
-
-  const targetCrewHasPermission = useMemo(() => crewHasPermission(targetCrew), [origin, targetCrew]);
+  const crewHasPermission = useCallback((guest) => {
+    const result = authorize('crewEviction', [crew, guest], [crew, guest, origin]);
+    return result.status === 'allowed' ? false : result.status === 'denied'
+      ? 'Crew has permission to remain.' : 'Checking crew permissions.';
+  }, [authorize, crew, origin]);
+  const targetCrewHasPermission = crewHasPermission(targetCrew);
 
   const onEject = useCallback(() => {
     ejectCrew(targetCrewId);
-  }, [targetCrewId]);
+  }, [ejectCrew, targetCrewId]);
 
   // handle auto-closing
   const lastStatus = useRef();
@@ -253,6 +248,7 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
 
       </ActionDialogBody>
 
+      {stage === actionStages.NOT_STARTED && targetCrew && <AuthorizationNotice authorization={authorize('crewEviction', [crew, targetCrew], [crew, targetCrew, origin])} deniedMessage="This crew has permission to remain." />}
       <ActionDialogFooter
         crewAvailableTime={timeRequirement}
         taskCompleteTime={timeRequirement}

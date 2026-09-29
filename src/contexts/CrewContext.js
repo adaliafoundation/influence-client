@@ -1,8 +1,10 @@
+import { recheckActingCrew as checkActingCrew } from '~/lib/actingCrewAuthorization';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Crewmate, Entity, Permission, RandomEvent, Ship, System } from '@influenceth/sdk';
+import { Crewmate, Entity, RandomEvent, Ship, System } from '@influenceth/sdk';
 
 import { appConfig } from '~/appConfig';
+import useAuthorizationService from '~/hooks/useAuthorizationService';
 import useConstants from '~/hooks/useConstants';
 import useEntity from '~/hooks/useEntity';
 import useSession from '~/hooks/useSession';
@@ -344,12 +346,19 @@ export function CrewProvider({ children }) {
     return selectedCrew?._crewmates?.[0] || null;
   }, [crewmateMap, selectedCrew, simulationState]);
 
-  const crewCan = useCallback(
-    (permission, hydratedTarget) => (finalSelectedCrew && hydratedTarget)
-      ? Permission.isPermitted(finalSelectedCrew, permission, hydratedTarget, blockTime)
-      : false,
-    [blockTime, finalSelectedCrew]
-  );
+  const { authorize, recheckAuthorization, retryAuthorization } = useAuthorizationService({
+    provider, blockNumber, blockTime, accountAddress, selectedCrewId: finalSelectedCrew?.id, queryClient, simulation: !!simulationState
+  });
+  const crewAuthorization = useCallback((permission, target, until) => authorize(
+    until == null ? 'can' : 'canUntil',
+    until == null ? [finalSelectedCrew, target, permission] : [finalSelectedCrew, target, permission, until],
+    [finalSelectedCrew, target]
+  ), [authorize, finalSelectedCrew]);
+  const crewCan = useCallback((permission, target, until) =>
+    crewAuthorization(permission, target, until).status === 'allowed', [crewAuthorization]);
+
+  const crewControls = useCallback((target) =>
+    authorize('controls', [finalSelectedCrew, target], [finalSelectedCrew, target]).status === 'allowed', [authorize, finalSelectedCrew]);
 
   const isBlurred = useRef(false);
   const onBlur = useCallback(() => {
@@ -408,6 +417,11 @@ export function CrewProvider({ children }) {
     }
   }, []);
 
+  const recheckActingCrew = useCallback((options = {}) => checkActingCrew({
+    ...options, crew: finalSelectedCrew, recheck: recheckAuthorization,
+    accountAddress, blockTime, isLaunched: gameIsLaunched
+  }), [recheckAuthorization, finalSelectedCrew, accountAddress, blockTime, gameIsLaunched]);
+
   return (
     <CrewContext.Provider value={{
       accountCrewIds,
@@ -416,6 +430,12 @@ export function CrewProvider({ children }) {
       captain,
       crew: finalSelectedCrew,
       crewCan,
+      crewControls,
+      crewAuthorization,
+      authorize,
+      recheckAuthorization,
+      recheckActingCrew,
+      retryAuthorization,
       crewMovementActivity,
       crews,
       crewmateMap,

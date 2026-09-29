@@ -1,12 +1,18 @@
 import { useCallback, useContext, useMemo } from 'react';
-import { Entity } from '@influenceth/sdk';
+import { Entity, Lot, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useCrewContext from '~/hooks/useCrewContext';
+import useLot from '~/hooks/useLot';
 import actionStages from '~/lib/actionStages';
 
 const useLotLeaseAuctionManager = (lotId) => {
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
+  const { data: lot } = useLot(lotId);
+  const tenant = lot?._permissionTargets?.lot?.UseLot?.tenant;
+  const asteroid = lotId ? { label: Entity.IDS.ASTEROID, id: Lot.toPosition(lotId).asteroidId } : null;
+  const controlAccess = authorize('controls', [crew, asteroid], [crew, asteroid]);
+  const tenantAccess = authorize('can', [tenant, lot, Permission.IDS.USE_LOT], [tenant, lot]);
   const { execute, getPendingTx } = useContext(ChainTransactionContext);
 
   const payload = useMemo(() => ({
@@ -33,6 +39,8 @@ const useLotLeaseAuctionManager = (lotId) => {
 
   return {
     cancelAuction,
+    tenantAccess,
+    controlAccess,
     currentAuctionChange,
     startAuction,
     actionStage: currentAuctionChange ? actionStages.STARTING : actionStages.NOT_STARTED,

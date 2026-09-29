@@ -1,6 +1,6 @@
 import { useMissionDeliveryTarget } from '~/contexts/MissionActionContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crewmate, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 import styled from 'styled-components';
 
 import { CheckIcon, CloseIcon, ForwardIcon, InventoryIcon, LocationIcon, RouteIcon, SurfaceTransferIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -47,7 +47,7 @@ import actionStage from '~/lib/actionStages';
 import formatters from '~/lib/formatters';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import theme from '~/theme';
-import useBlockTime from '~/hooks/useBlockTime';
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 
 const P2PSection = styled.div`
   align-self: flex-start;
@@ -70,14 +70,13 @@ const SurfaceTransfer = ({
   stage,
   ...props
 }) => {
-  const { crew: currentCrew, crewCan: currentCrewCan } = useCrewContext();
+  const { crew: currentCrew, authorize, crewCan: currentCrewCan } = useCrewContext();
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
   const { startDelivery, finishDelivery, packageDelivery, acceptDelivery, cancelDelivery } = deliveryManager;
   const currentDelivery = useMemo(() => currentDeliveryAction?.action, [currentDeliveryAction]);
   const crew = useActionCrew(currentDelivery);
   const { data: currentDeliveryCallerCrew } = useHydratedCrew(currentDelivery?.callerCrew?.id);
-  const blockTime = useBlockTime();
 
   const crewTravelBonus = useMemo(() => {
     if (!crew) return {};
@@ -227,10 +226,12 @@ const SurfaceTransfer = ({
     const originLotIndex = Lot.toIndex(originLot?.id);
     const destinationLotIndex = Lot.toIndex(destinationLot?.id);
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, originLotIndex, destinationLotIndex);
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid?.id, originLotIndex, destinationLotIndex, crewTravelBonus.totalBonus, crewDistBonus.totalBonus
-      ),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      originLotIndex,
+      destinationLotIndex,
+      crewTravelBonus.totalBonus,
+      crewDistBonus.totalBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, formatTimeRequirements(transportTime)];
@@ -259,18 +260,12 @@ const SurfaceTransfer = ({
     return true;
   }, [currentCrewCan, destination]);
 
-  const senderHasDestPerm = useMemo(() => {
-    if (!destination) return true;
-    if (currentDelivery) {
-      if (currentDeliveryCallerCrew && destination) {
-        return Permission.isPermitted(currentDeliveryCallerCrew, Permission.IDS.ADD_PRODUCTS, destination, blockTime);
-      }
-      return true;
-    }
-    return currentCrewCan(Permission.IDS.ADD_PRODUCTS, destination);
-  }, [blockTime, crew, currentDelivery, currentDeliveryCallerCrew, destination]);
-
-  const isP2P = useMemo(() => currentDelivery?.isProposal || !senderHasDestPerm, [currentDelivery?.isProposal, senderHasDestPerm]);
+  const senderDestinationAuthorization = authorize('can', [
+    currentDelivery ? currentDeliveryCallerCrew : currentCrew, destination, Permission.IDS.ADD_PRODUCTS
+  ], [currentDelivery ? currentDeliveryCallerCrew : currentCrew, destination]);
+  const senderHasDestPerm = senderDestinationAuthorization.status === 'allowed';
+  const checkingDestinationAccess = senderDestinationAuthorization.status === 'unresolved';
+  const isP2P = currentDelivery?.isProposal || senderDestinationAuthorization.status === 'denied';
 
   const stats = useMemo(() => ([
     {
@@ -315,6 +310,7 @@ const SurfaceTransfer = ({
   }, [crew?._inventoryBonuses, destinationInventory, stage, totalMass, totalVolume]);
 
   const onStartDelivery = useCallback(() => {
+    if (checkingDestinationAccess) return;
     if (willBeOverCapacity) {
       const destInventoryConfig = Inventory.getType(destinationInventory?.inventoryType, crew?._inventoryBonuses) || {};
       createAlert({
@@ -334,7 +330,7 @@ const SurfaceTransfer = ({
       contents: selectedItems,
       price: sway
     }, { asteroidId: asteroid?.id, lotId: originLot?.id });
-  }, [crew?._inventoryBonuses, packageDelivery, startDelivery, originInventory, destinationInventory, selectedItems, sway, isP2P, senderHasDestPerm, asteroid?.id, originLot?.id, willBeOverCapacity]);
+  }, [crew?._inventoryBonuses, packageDelivery, startDelivery, originInventory, destinationInventory, selectedItems, sway, checkingDestinationAccess, senderHasDestPerm, origin, destination, asteroid?.id, originLot?.id, willBeOverCapacity]);
 
   const onFinishDelivery = useCallback(() => {
     finishDelivery(deliveryId, {
@@ -452,7 +448,7 @@ const SurfaceTransfer = ({
 
           <InventoryInputBlock
             title="Destination"
-            titleDetails={<TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />}
+            titleDetails={<TransferDistanceDetails distance={transportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
             disabled={stage !== actionStage.NOT_STARTED || (fixedDestination && destinationInventoryTally === 1)}
             entity={destination}
             inventorySlot={destinationInventory?.slot}
@@ -505,7 +501,7 @@ const SurfaceTransfer = ({
 
                           <WarningAlert severity="warning">
                             <div><WarningOutlineIcon /></div>
-                            <div>The destination is controlled by a different crew.</div>
+                            <div>This delivery requires acceptance by a crew with permission to add products at the destination.</div>
                           </WarningAlert>
 
                           {(stage === actionStage.NOT_STARTED || ['PACKAGING','PACKAGED','CANCELING'].includes(currentDeliveryAction?.status)) && (
@@ -514,7 +510,7 @@ const SurfaceTransfer = ({
                                 ? (
                                   <SwayInputBlockInner
                                     inputLabel="REQUESTED SWAY"
-                                    instruction="OPTIONAL: You may request a SWAY payment from the controlling crew in exchange for goods delivered."
+                                    instruction="OPTIONAL: You may request a SWAY payment from the accepting crew in exchange for goods delivered."
                                     onChange={onSwayChange}
                                     value={sway} />
                                 )
@@ -522,7 +518,7 @@ const SurfaceTransfer = ({
                                   <SwayInputBlockInner
                                     disabled
                                     inputLabel="REQUESTED SWAY"
-                                    instruction="You requested the following payment from the controlling crew in exchange for goods delivered:"
+                                    instruction="You requested the following payment from the accepting crew in exchange for goods delivered:"
                                     onChange={onSwayChange}
                                     value={sway || '0'} />
                                 )}
@@ -606,6 +602,10 @@ const SurfaceTransfer = ({
           </>
         )}
 
+        {stage === actionStage.NOT_STARTED && checkingDestinationAccess && (
+          <AuthorizationNotice authorization={senderDestinationAuthorization} />
+        )}
+
         <ActionDialogStats
           stage={stage}
           stats={stats}
@@ -615,7 +615,7 @@ const SurfaceTransfer = ({
 
       <ActionDialogFooter
         disabled={stage === actionStage.NOT_STARTED
-          ? (totalMass === 0 || !destination || !origin || willBeOverCapacity || !currentCrewCan(Permission.IDS.REMOVE_PRODUCTS, origin))
+          ? (checkingDestinationAccess || totalMass === 0 || !destination || !origin || willBeOverCapacity || !currentCrewCan(Permission.IDS.REMOVE_PRODUCTS, origin))
           : (currentDeliveryAction?.status === 'PACKAGED' && !(crew?._location?.lotId && crew?._location?.asteroidId === asteroid?.id))
         }
         goLabel="Transfer"
@@ -643,7 +643,6 @@ const SurfaceTransfer = ({
             asteroidId={asteroid?.id}
             isSourcing
             itemIds={destinationProductIds}
-            limitToControlled={isP2P}
             limitToPrimary={fixedOrigin}
             otherEntity={destination}
             otherInvSlot={destinationInventory?.slot}

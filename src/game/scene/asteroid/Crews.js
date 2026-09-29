@@ -20,7 +20,7 @@ import {
   Vector2,
   Vector3
 } from 'three';
-import { Address, Asteroid, Crewmate, Entity, Lot, Time } from '@influenceth/sdk';
+import { Address, Asteroid, Crewmate, Entity, Lot } from '@influenceth/sdk';
 import { useHistory } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -176,20 +176,18 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         const finishTime = crew.Crew.readyAt;
         if (startTime <= blockTime && finishTime > blockTime) {
           const crewTravelBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.HOPPER_TRANSPORT_TIME, crew);
-          const crewDistBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.HOPPER_TRANSPORT_TIME, crew);
+          const crewDistBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.FREE_TRANSPORT_DISTANCE, crew);
           const station = locationsArrToObj(crew.Location.locations || []) || {};
           const visitedLotIndex = Lot.toIndex(visitedLot);
 
           const nowSec = Math.floor(Date.now() / 1000);
 
-          const travelTime = Time.toRealDuration(
-            Asteroid.getLotTravelTime(
-              asteroidId,
-              station.lotIndex,
-              visitedLotIndex,
-              crewTravelBonus.totalBonus,
-              crewDistBonus.totalBonus
-            ) || 0,
+          const travelTime = Asteroid.getLotTravelTimeReal(
+            asteroidId,
+            station.lotIndex,
+            visitedLotIndex,
+            crewTravelBonus.totalBonus,
+            crewDistBonus.totalBonus,
             crew._timeAcceleration
           );
 

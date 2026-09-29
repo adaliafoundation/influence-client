@@ -7,7 +7,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 
 const options = {
   all: "All",
-  granted: "Public / Permitted",
+  granted: "Public / Potential Crew Access",
   public: "Public",
   leaseable: "Leaseable",
 };
@@ -61,6 +61,7 @@ const BuildingAccessFilter = ({ assetType, filters, onChange }) => {
       fieldName={fieldName}
       filters={filters}
       title="Access">
+      {types.granted && <p>Includes recorded grants and agreements. Current access is checked for each action.</p>}
       {Object.keys(options)
         .filter((k) => !((crew && k === 'public') || (!crew && k === 'granted')))
         .map((k) => (

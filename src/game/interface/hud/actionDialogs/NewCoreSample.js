@@ -145,7 +145,7 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
   const [sampleBounds, sampleTime] = useMemo(() => {
     return [
       lotAbundance ? Deposit.getSampleBounds(lotAbundance, 0, sampleQualityBonus.totalBonus) : null,
-      Time.toRealDuration(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
+      Time.toRealDurationCeil(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
     ];
   }, [lotAbundance, sampleQualityBonus, sampleTimeBonus, crew?._timeAcceleration]);
 
@@ -159,14 +159,12 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
     const oneWayCrewTravelTime = crewTravelTime / 2;
     const drillTravelTime = usingCoreSampleEntitlement
       ? oneWayCrewTravelTime
-      : Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid.id,
-          drillSource.lotIndex,
-          Lot.toIndex(lot.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ),
+      : Asteroid.getLotTravelTimeReal(
+        asteroid.id,
+        drillSource.lotIndex,
+        Lot.toIndex(lot.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       );
 

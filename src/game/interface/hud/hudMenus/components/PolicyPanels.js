@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Address, Building, Entity, Permission } from '@influenceth/sdk';
@@ -7,7 +8,6 @@ import AddressLink from '~/components/AddressLink';
 import Autocomplete from '~/components/Autocomplete';
 import Button from '~/components/ButtonAlt';
 import CollapsibleBlock from '~/components/CollapsibleBlock';
-import EntityLink from '~/components/EntityLink';
 import EntityName from '~/components/EntityName';
 import IconButton from '~/components/IconButton';
 import { CloseIcon, AgreementIcon, LotControlIcon, PermissionIcon, RadioCheckedIcon, RadioUncheckedIcon, SwayIcon, WarningIcon, CheckedIcon, UncheckedIcon } from '~/components/Icons';
@@ -248,7 +248,6 @@ const getStatusColor = (status) => {
     case 'restricted': return theme.colors.red;
     case 'under notice': return theme.colors.orange;
     case 'unleasable': return theme.colors.secondaryText;
-    case 'under contract': return theme.colors.main;
     default: return '#666666';
   }
 }
@@ -431,26 +430,10 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
   );
 
   const jitStatus = useMemo(() => {
-    // if exclusive, everyone cares if under notice
-    if (Permission.TYPES[permission].isExclusive) {
-      if (currentPolicy?.agreements?.[0]?.noticeTime > 0) return 'under notice';
-      if (currentPolicy?.crewStatus === 'available' && permission === Permission.IDS.USE_LOT) {
-        if (entity?.Control?.controller?.id) {
-          if ((entity.building || entity?.surfaceShip)?.Control?.controller?.id === entity.Control.controller.id) return 'unleasable';
-        }
-      }
-
-    // else, only the crew cares
-    } else if (currentPolicy?.crewStatus === 'granted') {
-      const noticeGiven = (currentPolicy?.agreements || []).find((a) => (
-        ((crew?.Crew.delegatedTo && a.permitted === crew?.Crew.delegatedTo) || (a.permitted?.id === crew?.id))
-        && a.noticeTime > 0
-      ));
-      if (noticeGiven) return 'under notice';
-    }
-
+    if (currentPolicy?.authorization?.status === 'unresolved') return 'checking access';
+    if (currentPolicy?.crewStatus === 'granted' && (currentPolicy?.agreements || []).some((a) => matchesCrewPermissionSubject(a.permitted, crew) && a.noticeTime > 0)) return 'under notice';
     return null;
-  }, [currentPolicy?.crewStatus, entity]);
+  }, [currentPolicy, crew?.id]);
 
   const config = useMemo(() => {
     if (editing === 'allowlist') {
@@ -494,7 +477,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
       }}
       onClose={editing ? () => { toggleEditing() } : null}
       outerStyle={{ marginBottom: 8 }}
-      title={permission === Permission.IDS.USE_LOT ? <><LotControlIcon /> Lot Control</> : <><PermissionIcon /> {Permission.TYPES[permission]?.name}</>}
+      title={permission === Permission.IDS.USE_LOT ? <><LotControlIcon /> Lot Usage</> : <><PermissionIcon /> {Permission.TYPES[permission]?.name}</>}
       titleAction={() => (
         <span style={{ color: config.color }}>
           {editable
@@ -506,6 +489,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
           }
         </span>
       )}>
+      {permission === Permission.IDS.USE_LOT && <Desc>Lot usage grants do not override another crew’s active tenancy. Tenant rights belong to that exact crew.</Desc>}
       {editing && (
         <>
           <Section>
@@ -777,7 +761,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
             </EditBlock>
           )}
 
-          {permission !== Permission.IDS.USE_LOT && (
+          {(
             <>
               {editable && (
                 <Section style={{ borderTop: 0, marginTop: 5 }}>
@@ -806,7 +790,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
                   <DataBlock>
                     <DataRow>
                       <label>Allowlist</label>
-                      <span style={{ color: onAllowlist ? theme.colors.success : theme.colors.secondaryText }}>{onAllowlist ? 'Allowed' : 'Not on List'}</span>
+                      <span style={{ color: onAllowlist ? theme.colors.success : theme.colors.secondaryText }}>{onAllowlist ? 'On List' : 'Not on List'}</span>
                     </DataRow>
                   </DataBlock>
                 </Section>
@@ -822,26 +806,19 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
 const PolicyPanels = ({ editable, entity }) => {
   const blockTime = useBlockTime();
   const { accountAddress } = useSession();
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
   const { data: lot } = useLot(entity?.label === Entity.IDS.BUILDING ? entity.Location.location.id : null);
   const { isAtRisk } = useConstructionManager(lot?.id);
   const { data: entityController } = useHydratedCrew(entity?.Control?.controller?.id);
 
   const permPolicies = useMemo(
-    () => entity ? Permission.getPolicyDetails(entity, crew, blockTime) : {},
+    () => entity ? Permission.getPolicyDetails(entity, undefined, blockTime) : {},
     [accountAddress, blockTime, crew, entity]
   );
 
   // show lot warning if building controller does not have lot permission
-  const showLotWarning = useMemo(() => {
-    if (!lot || !entityController) return false;
-    const lotPerm = Permission.getPolicyDetails(lot, entityController, blockTime)[Permission.IDS.USE_LOT];
-    return !(
-      lotPerm?.crewStatus === 'controller' ||
-      lotPerm?.crewStatus === 'granted' ||
-      lotPerm?.crewStatus === 'under contract'
-    );
-  }, [blockTime, entity, entityController, lot]);
+  const lotAuthorization = authorize('lotUsage', [entityController, lot], [entityController, lot?._permissionTargets?.lot]);
+  const showLotWarning = lotAuthorization.status === 'denied';
 
   const buildingOrSite = useMemo(() => lot?.building?.Building?.status < Building.CONSTRUCTION_STATUSES.OPERATIONAL ? 'Construction Site' : 'Building', [lot]);
 
@@ -867,8 +844,8 @@ const PolicyPanels = ({ editable, entity }) => {
 
   return (
     <div>
-      {showLotWarning && <PermSummaryWarning style={{ paddingBottom: 10 }}><WarningIcon /><span>Lot not controlled. {buildingOrSite} is vulnerable to <EntityLink {...(lot?.Control?.controller || {})} />.</span></PermSummaryWarning>}
-      {showStagingWarning === 2 && <PermSummaryWarning><WarningIcon /><span>Staging Time expired. Construction Site is vulnerable to any crew.</span></PermSummaryWarning>}
+      {showLotWarning && <PermSummaryWarning style={{ paddingBottom: 10 }}><WarningIcon /><span>The controlling crew lacks lot usage rights. This {buildingOrSite.toLowerCase()} may be eligible for repossession.</span></PermSummaryWarning>}
+      {showStagingWarning === 2 && <PermSummaryWarning><WarningIcon /><span>Staging Time expired. Eligible crews may claim this site only if no other active tenant protects it.</span></PermSummaryWarning>}
       {showStagingWarning === 1 && <PermSummary><WarningIcon /><span><LiveTimer target={lot?.building?.Building?.plannedAt + Building.GRACE_PERIOD} maxPrecision={2} /> Staging Time Remaining</span></PermSummary>}
 
       {othersHaveAgreementsOnThisAsset && (

@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Permission } from '@influenceth/sdk';
 
@@ -8,22 +9,23 @@ import ActionButton, { getCrewDisabledReason } from './ActionButton';
 const isVisible = () => false;
 
 const MultiBuy = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogProps = {}, _disabled, _disabledReason }) => {
+  const { crewAuthorization } = useCrewContext();
   const destination = useMemo(() => ship || lot?.surfaceShip || lot?.building, [ship, lot]);
   const { pendingAction } = useMarketplaceManager(destination.id);
 
   const handleClick = useCallback(() => {
     onSetAction('SHOPPING_LIST', { destination, ...dialogProps }); // TODO: destinationSlot (if not set, use primary)
-  }, [destination, dialogProps]);
+  }, [crewAuthorization, destination, dialogProps]);
 
   const disabledReason = useMemo(() => {
     if (_disabledReason) return _disabledReason;
     if (_disabled) return 'loading...';
     if (pendingAction) return 'transacting...';
 
-    return getCrewDisabledReason({
+    return getCrewDisabledReason({ crewAuthorization,
       asteroid, blockTime, crew, permission: Permission.IDS.ADD_PRODUCTS, permissionTarget: destination, requireReady: false
     });
-  }, [asteroid, blockTime, crew, _disabled, _disabledReason, pendingAction]);
+  }, [crewAuthorization, asteroid, blockTime, crew, _disabled, _disabledReason, pendingAction]);
 
   return (
     <ActionButton

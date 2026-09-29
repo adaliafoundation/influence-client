@@ -7,7 +7,7 @@ const { renderHook } = require('@testing-library/react');
 jest.mock('~/contexts/ChainTransactionContext', () => ({ __esModule: true, default: require('react').createContext() }), { virtual: true });
 jest.mock('~/hooks/useStarterMissionExecution', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/hooks/usePlanningEligibility', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
-jest.mock('~/hooks/useCrewContext', () => () => ({ accountCrewIds: [1], crew: { id: 1 } }), { virtual: true });
+jest.mock('~/hooks/useCrewContext', () => () => ({ crewControls: () => true, crew: { id: 1 } }), { virtual: true });
 jest.mock('~/hooks/useBlockTime', () => () => 100, { virtual: true });
 jest.mock('~/hooks/useUnresolvedActivities', () => () => ({ data: [] }), { virtual: true });
 jest.mock('~/hooks/useLot', () => () => ({ data: { id: 1 } }), { virtual: true });
@@ -29,9 +29,7 @@ test.each(['blocked', 'checking', 'allowed'])('submission respects the fresh %s 
   const { result } = renderHook(() => useConstructionManager(1), { wrapper });
   await result.current.planConstruction(2);
   expect(recheck).toHaveBeenCalledWith({ lotId: 1, crewId: 1 });
-  if (status === 'allowed') {
-    expect(execute).toHaveBeenCalledWith('ConstructionPlan', { building_type: 2, lot: { id: 1, label: Entity.IDS.LOT }, caller_crew: { id: 1, label: Entity.IDS.CREW } });
-  } else {
-    expect(execute).not.toHaveBeenCalled();
-  }
+  expect(execute.mock.calls).toEqual(status === 'allowed' ? [[
+    'ConstructionPlan', { building_type: 2, lot: { id: 1, label: Entity.IDS.LOT }, caller_crew: { id: 1, label: Entity.IDS.CREW } }
+  ]] : []);
 });

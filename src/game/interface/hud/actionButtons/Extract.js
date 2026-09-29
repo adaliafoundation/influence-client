@@ -23,6 +23,7 @@ const isVisible = ({ building, crew }) => {
 
 // TODO: for multiple extractors, need one of these (and an extraction manager) per extractor
 const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simulation, simulationActions, _disabled }) => {
+  const { crewAuthorization } = useCrewContext();
   const { accountCrewIds, crewCan } = useCrewContext();
   const { currentExtraction, extractionStatus } = useExtractionManager(lot?.id);
   const setCoachmarkRef = useCoachmarkRefSetter();
@@ -32,8 +33,8 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
   }, [onSetAction, preselect]);
 
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.EXTRACT_RESOURCES, crew, blockTime);
-  }, [blockTime, crew, lot?.building])
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.EXTRACT_RESOURCES, crew, blockTime, crewAuthorization(Permission.IDS.EXTRACT_RESOURCES, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building])
 
   // badge shows full count of *useable* core samples of crew
   // TODO: this should ideally also check for pending use of samples (i.e. in core sample improvement)
@@ -46,9 +47,9 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
     return (lot?.deposits || []).filter((c) => (
       c.Deposit.status >= Deposit.STATUSES.SAMPLED
       && c.Deposit.remainingYield > 0
-      && (accountCrewIds?.includes(c.Control.controller.id) || (c.PrivateSale?.amount > 0))
+      && (crewCan(Permission.IDS.USE_DEPOSIT, c) || (c.PrivateSale?.amount > 0))
     ));
-  }, [accountCrewIds, crewCan, lot?.building, lot?.deposits, prepaidLeaseConfig]);
+  }, [crewCan, lot?.building, lot?.deposits, prepaidLeaseConfig]);
 
   // const attention = !_disabled && (extractionStatus === 'READY_TO_FINISH' || (myUsableSamples?.length > 0) && extractionStatus === 'READY');
   const attention = !_disabled && (simulation || extractionStatus === 'READY_TO_FINISH');
@@ -56,7 +57,7 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
   let disabledReason = useMemo(() => {
     if (_disabled) return 'loading...';
     if (extractionStatus === 'READY') {
-      const crewDisabledReason = getCrewDisabledReason({
+      const crewDisabledReason = getCrewDisabledReason({ crewAuthorization,
         asteroid,
         blockTime,
         crew,
@@ -71,7 +72,7 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
     } else if (!currentExtraction?._isAccessible) {
       return 'in use';
     }
-  }, [_disabled, blockTime, crew, currentExtraction, extractionStatus, prepaidLeaseConfig, lot?.building, simulationActions, myUsableSamples?.length]);
+  }, [crewAuthorization, _disabled, blockTime, crew, currentExtraction, extractionStatus, prepaidLeaseConfig, lot?.building, simulationActions, myUsableSamples?.length]);
   
   const loading = ['EXTRACTING', 'FINISHING'].includes(extractionStatus);
   return (

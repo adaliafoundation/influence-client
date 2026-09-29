@@ -1,3 +1,4 @@
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useMemo } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
@@ -19,7 +20,7 @@ import SwitchToAdministratingCrew from './components/SwitchToAdministratingCrew'
 const AdminShip = ({}) => {
   const lotId = useStore(s => s.asteroids.lot);
   const zoomScene = useStore(s => s.asteroids.zoomScene);
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
 
   const zoomShipId = zoomScene?.type === 'SHIP' ? zoomScene.shipId : null;
   const { data: zoomShip } = useShip(zoomShipId);
@@ -28,17 +29,21 @@ const AdminShip = ({}) => {
   const ship = useMemo(() => zoomShipId ? zoomShip : lot?.surfaceShip, [lot, zoomShip, zoomShipId]);
   const { data: controller } = useCrew(ship?.Control?.controller?.id);
 
+  const authorization = authorize('controls', [crew, ship], [crew, ship]);
+
   return (
     <>
       <Scrollable>
         <ShipTitleArea ship={ship} />
 
-        {crew?.id !== ship?.Control?.controller?.id && (
+        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
+
+        {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={ship} />
         )}
 
-        {crew?.id && crew.id === ship?.Control?.controller?.id && (
-          <>
+        {ship && authorization.status !== 'denied' && (
+          <fieldset disabled={authorization.status !== 'allowed'} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <HudMenuCollapsibleSection titleText="Update Name" collapsed>
               <EntityNameForm
                 entity={ship ? { id: ship.id, label: Entity.IDS.SHIP } : null}
@@ -64,7 +69,7 @@ const AdminShip = ({}) => {
                 entity={ship}
                 forSaleWarning="Note: Control of the ship's manifest and inventories will transfer with any sale." />
             </HudMenuCollapsibleSection>
-          </>
+          </fieldset>
         )}
 
       </Scrollable>

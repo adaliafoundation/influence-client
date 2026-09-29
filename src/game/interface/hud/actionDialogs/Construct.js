@@ -84,7 +84,7 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
   }, [asteroid?.id, lot?.id, crew?._location?.lotId, crew?._timeAcceleration, crewTravelBonus, crewDistBonus]);
 
   const constructionTime = useMemo(() =>
-    Time.toRealDuration(
+    Time.toRealDurationCeil(
       lot?.building?.Building?.buildingType
         ? Building.getConstructionTime(lot?.building?.Building?.buildingType, constructionBonus.totalBonus)
         : 0,
@@ -98,7 +98,7 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
     return [
       [
         [oneWayCrewTravelTime, 'Travel to Site'],
-        [constructionTime / 8, 'On-site Crew Labor'],
+        [Time.getCrewLaborDuration(constructionTime), 'On-site Crew Labor'],
         [oneWayCrewTravelTime, 'Return to Station'],
       ],
       [

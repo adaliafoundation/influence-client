@@ -642,7 +642,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
             <Alert scheme={alertScheme}>
               <div>
                 {entity.label === Entity.IDS.LOT
-                  ? <><LotControlIcon /> Lot Control (Exclusive)</>
+                  ? <><LotControlIcon /> Lot Lease (Exclusive Tenancy)</>
                   : <><PermissionIcon /> {Permission.TYPES[permission].name}</>
                 }
               </div>
@@ -650,7 +650,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                 ? (
                   <>
                     <Desc>
-                      Start the Notice Period, after which the asset agreement expires.
+                      Start the notice period. Access remains valid through the later of the lease expiry and the notice deadline.
                     </Desc>
                     {refundablePeriod > 0 && currentAgreement?.rate > 0 && (
                       <div style={{ padding: '0 10px' }}>

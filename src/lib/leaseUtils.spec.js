@@ -5,10 +5,10 @@ global.TextEncoder = TextEncoder;
 jest.mock('~/lib/priceUtils', () => ({ TOKEN: { SWAY: 'sway' }, TOKEN_SCALE: { sway: 1e6 } }), { virtual: true });
 jest.mock('~/lib/utils', () => ({ safeBigInt: (value) => BigInt(value || 0) }), { virtual: true });
 
-const { Building, Permission } = require('@influenceth/sdk');
+const { Building, Entity, Permission } = require('@influenceth/sdk');
 const { canRestoreExpiredLotLease, canExtendAgreement, getLotLeaseAuctionStatus } = require('./leaseUtils');
 const blockTime = 10000000;
-const agreement = { permission: Permission.IDS.USE_LOT, endTime: 1000, rate: 100 };
+const agreement = { permission: Permission.IDS.USE_LOT, endTime: 1000, noticeTime: 0, rate: 100 };
 const asteroid = { PrepaidAgreementAuctionSet: { mode: Permission.AUCTION_MODES.MANUAL, gracePeriod: 0 } };
 const lot = {
   PrepaidAgreements: [agreement],
@@ -48,9 +48,10 @@ test('automatic auctions use the lease expiration time', () => {
 });
 
 describe('expired lot lease restoration eligibility', () => {
-  const expiredAgreement = { ...agreement, permitted: { id: 2493 } };
+  const expiredAgreement = { ...agreement, permitted: { id: 2493, label: Entity.IDS.CREW } };
   const buildingLot = {
     ...lot,
+    UseLot: { tenant: expiredAgreement.permitted },
     building: { ...lot.building, Control: { controller: { id: 5630 } } }
   };
 
@@ -89,7 +90,7 @@ test.each([
   [1001, false, false],
   [1000, true, true],
 ])('extension at time %s with restoration %s is allowed: %s', (blockTime, isExpiredLeaseRenewal, expected) => {
-  expect(canExtendAgreement({ agreement: { endTime: 1000 }, blockTime, isExpiredLeaseRenewal })).toBe(expected);
+  expect(canExtendAgreement({ agreement: { endTime: 1000, noticeTime: 0 }, blockTime, isExpiredLeaseRenewal })).toBe(expected);
 });
 
 test('owning another eligible crew does not allow the selected unrelated crew to restore', () => {
@@ -97,7 +98,7 @@ test('owning another eligible crew does not allow the selected unrelated crew to
     crewId: 999,
     accountCrewIds: [999, 2493],
     lot,
-    expiredAgreement: { ...agreement, permitted: { id: 2493 } }
+    expiredAgreement: { ...agreement, permitted: { id: 2493, label: Entity.IDS.CREW } }
   })).toBe(false);
 });
 
@@ -108,4 +109,11 @@ test('active and expired lot lease helpers share the inclusive notice boundary',
   expect(getExpiredUseLotAgreement([lease], 100)).toBeNull();
   expect(getActiveUseLotAgreement([lease], 101)).toBeNull();
   expect(getExpiredUseLotAgreement([lease], 101)).toBe(lease);
+});
+
+test('cancelled agreements cannot be extended', () => {
+  expect(canExtendAgreement({ agreement: { endTime: 1000, noticeTime: 10 }, blockTime: 100 })).toBe(false);
+});
+test('cleared tenancy cannot be restored from a historical agreement', () => {
+  expect(canRestoreExpiredLotLease({ crewId: 1, expiredAgreement: { noticeTime: 0, permitted: { id: 1, label: Entity.IDS.CREW } }, lot: { UseLot: { tenant: null }, building: { Building: { status: 3 } } } })).toBe(false);
 });

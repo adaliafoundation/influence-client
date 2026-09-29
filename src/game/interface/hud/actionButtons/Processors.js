@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Permission } from '@influenceth/sdk';
 
@@ -12,6 +13,7 @@ const isVisible = ({ building, crew }) => {
 };
 
 const Button = ({ asteroid, blockTime, crew, lot, processor, onSetAction, simulation, simulationActions, _disabled }) => {
+  const { crewAuthorization } = useCrewContext();
   const { currentProcess, processStatus } = useProcessManager(lot?.id, processor.slot);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -22,13 +24,13 @@ const Button = ({ asteroid, blockTime, crew, lot, processor, onSetAction, simula
   const buttonProps = useMemo(() => getProcessorProps(processor?.processorType), [processor?.processorType]);
 
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.RUN_PROCESS, crew, blockTime);
-  }, [blockTime, crew, lot?.building])
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.RUN_PROCESS, crew, blockTime, crewAuthorization(Permission.IDS.RUN_PROCESS, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building])
 
   const disabledReason = useMemo(() => {
     if (_disabled) return 'loading...';
     if (processStatus === 'READY') {
-      return getCrewDisabledReason({
+      return getCrewDisabledReason({ crewAuthorization,
         asteroid,
         blockTime,
         crew,
@@ -41,7 +43,7 @@ const Button = ({ asteroid, blockTime, crew, lot, processor, onSetAction, simula
     } else if (!currentProcess?._isAccessible) {
       return 'in use';
     }
-  }, [asteroid, blockTime, crew, currentProcess, prepaidLeaseConfig, processor?.processorType, processStatus, simulationActions]);
+  }, [crewAuthorization, asteroid, blockTime, crew, currentProcess, prepaidLeaseConfig, processor?.processorType, processStatus, simulationActions]);
 
   const loading = ['PROCESSING', 'FINISHING'].includes(processStatus);
   return (

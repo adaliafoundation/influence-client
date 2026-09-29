@@ -66,8 +66,12 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
       escapeVelocity,
       propellantRequired,
       0, // TODO: poweredTime may be a thing in the future
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(asteroid?.id, originLotIndex, 0, hopperBonus.totalBonus, distBonus.totalBonus),
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        originLotIndex,
+        0,
+        hopperBonus.totalBonus,
+        distBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];

@@ -1,3 +1,6 @@
+import api from '~/lib/api';
+import { refreshDeliveryAcceptance } from '~/lib/deliveryAuthorization';
+import useStore from '~/hooks/useStore';
 import { useCallback, useContext, useMemo } from 'react';
 import { Delivery, Entity, Permission } from '@influenceth/sdk';
 
@@ -24,10 +27,11 @@ import useEntity from '../useEntity';
 const managedStatuses = [Delivery.STATUSES.ON_HOLD, Delivery.STATUSES.PACKAGED, Delivery.STATUSES.SENT];
 
 const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, deliveryId, txHash, missionId }) => {
+  const createAlert = useStore((state) => state.dispatchAlertLogged);
   const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
   const { getStatus } = useContext(ChainTransactionContext);
-  const { crew, crewCan, pendingTransactions } = useCrewContext();
+  const { crew, crewCan, pendingTransactions, recheckAuthorization } = useCrewContext();
 
   const { data: deliveryById, isLoading: deliveryIsLoading } = useEntity(deliveryId ? { label: Entity.IDS.DELIVERY, id: deliveryId } : undefined)
   const { data: deliveriesByLoc, isLoading: deliveriesIsLoading } = useDeliveries({ destination, destinationSlot, origin, originSlot, status: managedStatuses });
@@ -203,20 +207,25 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
     return [allDeliveries, Date.now()];
   }, [actionItems, blockTime, crew?.id, crewCan, deliveries, pendingDeliveries, getStatus, payload]);
 
-  const acceptDelivery = useCallback((selectedDeliveryId, meta) => {
-    const delivery = currentDeliveries.find((d) => d.action.deliveryId === (selectedDeliveryId || deliveryId));
-    if (!delivery?.action) return;
-    execute(
-      'AcceptDelivery',
-      {
-        caller: delivery.action.caller,
-        price: delivery.action.price,
-        delivery: { id: selectedDeliveryId || deliveryId, label: Entity.IDS.DELIVERY },
-        ...payload,
-      },
-      meta
-    );
-  }, [currentDeliveries, execute, payload]);
+  const acceptDelivery = useCallback(async (selectedDeliveryId, meta) => {
+    const current = currentDeliveries.find((d) => d.action.deliveryId === (selectedDeliveryId || deliveryId));
+    if (!current?.action) return;
+    try {
+      const sale = await refreshDeliveryAcceptance({ api, deliveryId: selectedDeliveryId || deliveryId, expectedPrice: current.action.price });
+      const target = sale.delivery.Delivery.dest;
+      const decision = await recheckAuthorization('acceptDelivery', [crew, target], [crew, target]);
+      if (decision.status !== 'allowed') {
+        createAlert({ type: 'GenericAlert', level: 'warning', data: { content: decision.status === 'denied' ? 'Delivery acceptance is no longer permitted.' : 'Unable to confirm delivery permissions. Try again.' } });
+        return decision;
+      }
+      return execute('AcceptDelivery', {
+        caller: sale.recipient, price: sale.price,
+        delivery: { id: selectedDeliveryId || deliveryId, label: Entity.IDS.DELIVERY }, ...payload
+      }, meta);
+    } catch (error) {
+      createAlert({ type: 'GenericAlert', level: 'warning', data: { content: error.message } });
+    }
+  }, [currentDeliveries, deliveryId, execute, payload, crew, recheckAuthorization, createAlert]);
 
   const cancelDelivery = useCallback((selectedDeliveryId, meta) => {
     execute(
@@ -227,9 +236,11 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
       },
       meta
     );
-  }, [execute, payload]);
+  }, [execute, payload, crew, recheckAuthorization]);
 
-  const packageDelivery = useCallback(({ origin, originSlot, destination, destinationSlot, contents, price }, meta) => {
+  const packageDelivery = useCallback(async ({ origin, originSlot, destination, destinationSlot, contents, price }, meta) => {
+    const decision = await recheckAuthorization('packageDelivery', [crew, origin], [crew, origin]);
+    if (decision.status !== 'allowed') return decision;
     execute(
       'PackageDelivery',
       {
@@ -243,7 +254,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
       },
       meta
     );
-  }, [execute, payload]);
+  }, [execute, payload, crew, recheckAuthorization]);
 
   const startDelivery = useCallback(({ origin, originSlot, destination, destinationSlot, contents }, meta) => {
     execute(

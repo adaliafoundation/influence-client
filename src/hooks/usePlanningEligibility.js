@@ -12,7 +12,7 @@ const usePlanningEligibility = (lot) => {
   const queryClient = useQueryClient();
   const { data: launchTime } = useConstants('LAUNCH_TIME');
   const { crew } = useCrewContext();
-  const { provider, blockTime, accountAddress } = useSession();
+  const { provider, blockTime, blockNumber, accountAddress } = useSession();
   const current = useRef();
   const snapshot = {
     ...lot?._permissionTargets,
@@ -24,11 +24,11 @@ const usePlanningEligibility = (lot) => {
     ...api,
     getEntityById: ({ label, id }) => Promise.resolve(queryClient.getQueryData(['entity', label, Number(id)]))
   } : api;
-  const params = { api: planningApi, provider, lotId, crewId: crew?.id, blockTime, accountAddress };
+  const params = { api: planningApi, provider, lotId, crewId: crew?.id, blockTime, blockNumber, accountAddress };
   // Tutorial transactions operate entirely on the existing mock state.
   current.current = crew?._isSimulation ? { ...params, snapshot } : params;
   const query = useQuery({
-    queryKey: ['planningEligibility', Number(lotId), crew?.id, accountAddress, blockTime, lot?._permissionTargets, lot?._planningOccupants, crew?.Crew, crew?.Location, launchTime],
+    queryKey: ['planningEligibility', Number(lotId), crew?.id, accountAddress, blockTime, blockNumber, lot?._permissionTargets, lot?._planningOccupants, crew?.Crew, crew?.Location, launchTime],
     queryFn: () => loadPlanningEligibility({ ...params, snapshot }),
     enabled: !!(lotId && crew?.id && blockTime != null && lot?._permissionTargets?.lot && lot?._permissionTargets?.asteroid && launchTime != null),
     retry: false
@@ -38,7 +38,7 @@ const usePlanningEligibility = (lot) => {
     if (expected.lotId !== snapshot.lotId || expected.crewId !== snapshot.crewId) return checkingPlanning;
     const result = await loadPlanningEligibility(snapshot);
     const latest = current.current;
-    if (snapshot.crewId !== latest.crewId || snapshot.accountAddress !== latest.accountAddress || snapshot.lotId !== latest.lotId || snapshot.blockTime !== latest.blockTime) return checkingPlanning;
+    if (snapshot.crewId !== latest.crewId || snapshot.accountAddress !== latest.accountAddress || snapshot.lotId !== latest.lotId || snapshot.blockTime !== latest.blockTime || snapshot.blockNumber !== latest.blockNumber || snapshot.provider !== latest.provider) return checkingPlanning;
     return result;
   }, []);
   return {

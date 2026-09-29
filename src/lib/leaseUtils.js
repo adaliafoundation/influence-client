@@ -1,4 +1,4 @@
-import { Building, Entity, Permission } from '@influenceth/sdk';
+import { Authorization, Building, Entity, Permission } from '@influenceth/sdk';
 
 import { prepaidPermissionEnd } from './lotUsageAuthorization';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
@@ -64,13 +64,15 @@ export const isLeaseHolderOrBuildingController = ({ accountCrewIds = [], lot, pr
 
 export const canRestoreExpiredLotLease = ({ crewId, lot, expiredAgreement }) => (
   !!expiredAgreement &&
+  expiredAgreement.noticeTime === 0 &&
+  Authorization.sameEntity(lot?.UseLot?.tenant, expiredAgreement.permitted) &&
   !lot?._activeUseLotAgreement &&
   lot?.building?.Building?.status > Building.CONSTRUCTION_STATUSES.UNPLANNED &&
   isLeaseHolderOrBuildingController({ accountCrewIds: [crewId], lot, previousAgreement: expiredAgreement })
 );
 
 export const canExtendAgreement = ({ agreement, blockTime, isExpiredLeaseRenewal }) => (
-  !!isExpiredLeaseRenewal || !!(agreement?.endTime > blockTime)
+  agreement?.noticeTime === 0 && (!!isExpiredLeaseRenewal || !!(agreement?.endTime > blockTime))
 );
 
 export const getLotLeasePayment = ({ agreement, isExtension, rate, term, now }) => {

@@ -1,3 +1,5 @@
+import { deliveryPaymentTransfers } from '~/lib/deliveryAuthorization';
+import { recheckTransactionAuthorization } from '~/lib/transactionAuthorization';
 import { verifyMissionAction } from '~/lib/missionBindings';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
@@ -58,11 +60,7 @@ const customConfigs = {
   // customization of Systems configs from sdk
   AcceptDelivery: {
     equalityTest: ['delivery.id'],
-    getTransferConfig: ({ caller, delivery, price }) => ({
-      amount: safeBigInt(price || 0),
-      recipient: caller,
-      memo: Entity.packEntity(delivery)
-    })
+    getTransferConfig: deliveryPaymentTransfers
   },
   AcceptPrepaidAgreement: {
     equalityTest: ['target.id', 'target.label', 'permission'],
@@ -620,7 +618,7 @@ export function ChainTransactionProvider({ children }) {
   const queryClient = useQueryClient();
   const missionSubmissions = useRef(new Set());
   const activities = useActivitiesContext();
-  const { crew } = useCrewContext();
+  const { crew, recheckAuthorization } = useCrewContext();
   const { data: walletSource } = useWalletPurchasableBalances();
   const { data: swayBalanceSource } = useSwayBalance();
   const { data: usdcBalanceSource } = useUSDCBalance();
@@ -1524,6 +1522,13 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
+    const authorization = await recheckTransactionAuthorization(key, vars, recheckAuthorization);
+    if (authorization.status !== 'allowed') {
+      createAlert({ type: 'GenericAlert', level: 'warning', data: { content: authorization.status === 'denied'
+        ? 'Access has changed. Review permissions before submitting.' : 'Unable to confirm permissions. Please try again.' } });
+      return authorization;
+    }
+
     let activeWalletAccount = walletAccountRef.current;
     let activeContracts = contractsRef.current;
 
@@ -1613,7 +1618,7 @@ export function ChainTransactionProvider({ children }) {
     }
 
     setPromptingTransaction(false);
-  }, [blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPendingTx = useCallback((key, vars) => {
     // simulation will only ever have one concurrent?

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 
 import { ForwardIcon, InventoryIcon, TransferToSiteIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -123,10 +123,12 @@ const TransferToSite = ({ asteroid, lot: destinationLot, deliveryManager, stage,
     const originLotIndex = Lot.toIndex(originLot?.id);
     const destinationLotIndex = Lot.toIndex(destinationLot?.id);
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, originLotIndex, destinationLotIndex);
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid?.id, originLotIndex, destinationLotIndex, crewTravelBonus.totalBonus, crewDistBonus.totalBonus
-      ),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      originLotIndex,
+      destinationLotIndex,
+      crewTravelBonus.totalBonus,
+      crewDistBonus.totalBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, formatTimeRequirements(transportTime)];

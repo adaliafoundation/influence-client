@@ -157,49 +157,8 @@ export const esbLocationQuery = ({ asteroidId, lotId }, path = 'Location.locatio
     )
 };
 
-export const esbPermissionQuery = (crewId, siblingCrewIds, crewDelegatedTo, permissionId) => {
-  return esb.boolQuery().should([
-    esb.termsQuery('Control.controller.id', [crewId, ...(siblingCrewIds || [])]),
-    esb.nestedQuery()
-      .path('PublicPolicies')
-      .query(esb.termQuery('PublicPolicies.permission', permissionId)),
-    esb.nestedQuery()
-      .path('PrepaidAgreements')
-      .query(
-        esb.boolQuery().must([
-          esb.termQuery('PrepaidAgreements.permission', permissionId),
-          esb.termQuery('PrepaidAgreements.permitted.id', crewId),
-          esb.rangeQuery('PrepaidAgreements.endTime').gt(Math.floor(Date.now() / 1000))
-        ])
-      ),
-    esb.nestedQuery()
-      .path('ContractAgreements')
-      .query(
-        esb.boolQuery().must([
-          esb.termQuery('ContractAgreements.permission', permissionId),
-          esb.termQuery('ContractAgreements.permitted.id', crewId),
-        ])
-      ),
-    esb.nestedQuery()
-      .path('WhitelistAgreements')
-      .query(
-        esb.boolQuery().must([
-          esb.termQuery('WhitelistAgreements.permission', permissionId),
-          esb.termQuery('WhitelistAgreements.permitted.id', crewId),
-        ])
-      ),
-    esb.nestedQuery()
-      .path('WhitelistAccountAgreements')
-      .query(
-        esb.boolQuery().must([
-          esb.termQuery('WhitelistAccountAgreements.permission', permissionId),
-          esb.termQuery('WhitelistAccountAgreements.permitted', crewDelegatedTo),
-        ])
-      )
-  ])
-};
-
-export const esbAnyPermissionQuery = (crewId, siblingCrewIds, crewDelegatedTo) => {
+// Discovery only: expiry, notice and external policies are evaluated by the SDK.
+export const esbPermissionCandidateQuery = (crewId, siblingCrewIds, crewDelegatedTo) => {
   return esb.boolQuery().should([
     esb.termsQuery('Control.controller.id', [crewId, ...(siblingCrewIds || [])]),
     esb.nestedQuery()
@@ -209,8 +168,7 @@ export const esbAnyPermissionQuery = (crewId, siblingCrewIds, crewDelegatedTo) =
       .path('PrepaidAgreements')
       .query(
         esb.boolQuery().must([
-          esb.termQuery('PrepaidAgreements.permitted.id', crewId),
-          esb.rangeQuery('PrepaidAgreements.endTime').gt(Math.floor(Date.now() / 1000))
+          esb.termQuery('PrepaidAgreements.permitted.id', crewId)
         ])
       ),
     esb.nestedQuery()
@@ -423,9 +381,9 @@ export const isProcessingPermission = (permission) => [
   Permission.IDS.ASSEMBLE_SHIP
 ].includes(permission);
 
-export const getProcessorLeaseConfig = (permissionTarget, permission, crew, blockTime) => {
+export const getProcessorLeaseConfig = (permissionTarget, permission, crew, blockTime, authorization) => {
   if (isProcessingPermission(permission)) {
-    if (crew && !Permission.isPermitted(crew, permission, permissionTarget, blockTime)) {
+    if (crew && authorization?.status === 'denied') {
       const processingPolicy = Permission.getPolicyDetails(permissionTarget)?.[permission];
       if (processingPolicy?.policyType === Permission.POLICY_IDS.PREPAID) {
         return processingPolicy.policyDetails;

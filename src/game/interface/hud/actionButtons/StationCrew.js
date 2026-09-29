@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Permission, Station } from '@influenceth/sdk';
 
@@ -21,14 +22,15 @@ const isVisible = ({ crew, building, ship }) => {
   );
 };
 
-const StationCrew = ({ accountCrewIds, asteroid, blockTime, crew, lot, ship, onSetAction, simulation, simulationActions, _disabled }) => {
+const StationCrew = ({ asteroid, blockTime, crew, lot, ship, onSetAction, simulation, simulationActions, _disabled }) => {
+  const { crewAuthorization, crewControls } = useCrewContext();
   const stationEntity = useMemo(() => ship || (lot?.building?.Station ? lot.building : null), [ship, lot?.building]);
   const { currentStationing } = useStationCrewManager(stationEntity);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
   const crewIsController = useMemo(
-    () => accountCrewIds?.includes(stationEntity?.Control?.controller?.id),
-    [accountCrewIds, stationEntity?.Control?.controller?.id]
+    () => crewControls(stationEntity),
+    [crewControls, stationEntity]
   );
   
   const handleClick = useCallback(() => {
@@ -42,7 +44,7 @@ const StationCrew = ({ accountCrewIds, asteroid, blockTime, crew, lot, ship, onS
       if (stationConfig.cap && (stationEntity.Station?.population + crew._crewmates.length) > stationConfig.cap) {
         return 'station is too full';
       }
-      return getCrewDisabledReason({
+      return getCrewDisabledReason({ crewAuthorization,
         asteroid,
         blockTime,
         crew,
@@ -53,7 +55,7 @@ const StationCrew = ({ accountCrewIds, asteroid, blockTime, crew, lot, ship, onS
       });
     }
     return '';
-  }, [_disabled, asteroid, blockTime, crew, crewIsController, currentStationing, simulationActions, stationEntity]);
+  }, [crewAuthorization, _disabled, asteroid, blockTime, crew, crewIsController, currentStationing, simulationActions, stationEntity]);
 
   const buttonParams = useMemo(() => {
     if (ship) {
