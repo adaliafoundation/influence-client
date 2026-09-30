@@ -18,6 +18,7 @@ import HUD from './interface/HUD';
 import MainMenu from './interface/MainMenu';
 import RecruitCrewmate from './interface/RecruitCrewmate';
 import PendingCrewmatePurchases from './interface/PendingCrewmatePurchases';
+import TransactionFundingPrompt from './interface/TransactionFundingPrompt';
 import ListView from './interface/details/ListView';
 import AsteroidDetails from './interface/details/AsteroidDetails';
 // import CrewAssignment from './interface/details/crewAssignments/Assignment';
@@ -153,6 +154,7 @@ const Interface = () => {
     <>
       <Alerts />
       <PendingCrewmatePurchases />
+      <TransactionFundingPrompt />
       {!DISABLE_INTRO_ANIMATION && <Intro />}
       {cutscene && <Cutscene />}
       {launcherPage && <Launcher />}

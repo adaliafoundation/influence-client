@@ -1,3 +1,4 @@
+import { reportFailure } from '../lib/errorReporting';
 import { useCallback, useEffect, useState } from 'react';
 
 import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
@@ -61,12 +62,7 @@ const ChatListener = () => {
         message: body?.message
       });
     } else if (type === 'send-message-failure') {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: `Message failed to send. ${errorMessage || 'Please try again'}.` },
-        duration: 3000,
-        level: 'warning',
-      });
+      reportFailure(createAlert, new Error(errorMessage), { message: 'messageFailed' });
     }
   }, [dispatchChatMessage]);
 

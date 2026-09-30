@@ -28,7 +28,6 @@ import {
   getBuildingRequirements,
   LotInputBlock,
   getTripDetails,
-  LotControlWarning,
   MultiSourceWrapper,
   formatTimeRequirements
 } from './components';
@@ -295,7 +294,6 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
           />
         )}
 
-        <LotControlWarning lot={lot} />
 
         <ActionDialogStats
           stage={stage}

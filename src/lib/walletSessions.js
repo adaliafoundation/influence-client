@@ -1,3 +1,4 @@
+import { errorMessages } from './errorMessages';
 import { ec, hash, shortString } from 'starknet';
 import { buildSessionAccount, bytesToHexString, createSession, createSessionRequest, signOutsideExecution } from '@argent/x-sessions';
 
@@ -184,7 +185,7 @@ class CartridgeWalletSession {
   async prepare() {
     if (!this.isEnabled()) return false;
     if (!this.ready) this.ready = !!await this.wallet.updateSession({ policies: buildGameplaySessionPolicies() });
-    if (!this.ready) throw new Error('Gameplay session approval was not completed.');
+    if (!this.ready) throw new Error(errorMessages.loginFailed);
     return true;
   }
 

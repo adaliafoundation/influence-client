@@ -1,3 +1,5 @@
+import { createErrorReport } from '../../../lib/errorReporting';
+import { errorMessages } from '../../../lib/errorMessages';
 import { useCallback, useMemo } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
@@ -205,9 +207,6 @@ const ActionItem = ({ data, getActivityConfig }) => {
   const history = useHistory();
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const currentAsteroidId = useStore(s => s.asteroids.origin);
-  const currentLotId = useStore(s => s.asteroids.lot);
-  const zoomStatus = useStore(s => s.asteroids.zoomStatus);
   const resourceMap = useStore(s => s.asteroids.resourceMap);
   const dispatchActionDialog = useStore(s => s.dispatchActionDialog);
   const dispatchToggleHideActionItem = useStore(s => s.dispatchToggleHideActionItem);
@@ -238,17 +237,7 @@ const ActionItem = ({ data, getActivityConfig }) => {
     }
 
     if (item.onClick) {
-      // delay dialog opening based on how far camera needs to fly to get there
-      let dialogDelay = 0;
-      if (item.asteroidId && (currentAsteroidId !== item.asteroidId || zoomStatus !== 'in')) {
-        dialogDelay = 3250;
-        if (item.lotId) dialogDelay += 750;
-      } else if (item.lotId && currentLotId !== item.lotId) {
-        dialogDelay = 400;
-      // TODO: implement these?
-      } else if (item.buildingId) {
-      } else if (item.shipId) {
-      }
+      // Let lot selection finish dispatching; ActionDialog waits for camera arrival.
       setTimeout(() => {
         item.onClick({
           openDialog: (dialog, vars) => dispatchActionDialog(dialog, { asteroidId: item.asteroidId, lotId: item.lotId, ...vars }),
@@ -257,15 +246,15 @@ const ActionItem = ({ data, getActivityConfig }) => {
           asteroid,
           lot
         });
-      }, dialogDelay)
+      }, 0)
     }
 
     if (type === 'failed' && item.txHash && appConfig.get('Url.starknetExplorer')) {
       try {
-        navigator.clipboard.writeText(JSON.stringify(data));
+        navigator.clipboard.writeText(createErrorReport(data));
         createAlert({
           type: 'ClipboardAlert',
-          data: { content: 'Transaction error copied to clipboard. If you are stuck, contact the Influence team in Discord.' }
+          data: { content: errorMessages.reportCopied }
         });
       } catch (e) {}
 
@@ -273,12 +262,9 @@ const ActionItem = ({ data, getActivityConfig }) => {
     }
   }, [
     goToAction,
-    currentAsteroidId,
-    currentLotId,
     item.asteroidId,
     item.lotId,
     item.onClick,
-    zoomStatus,
   ]);
 
   const onDismiss = useCallback((e) => {

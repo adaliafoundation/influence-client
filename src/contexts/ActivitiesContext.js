@@ -309,10 +309,11 @@ export function ActivitiesProvider({ children }) {
           });
         if (debugInvalidation) console.log('deduped final invalidate', finalInvalidations);
 
-        finalInvalidations.forEach((queryKey) => {
+        // Publish confirmations only after active consumers have refreshed their data.
+        await Promise.all(finalInvalidations.map((queryKey) => {
           if (appConfig.get('App.verboseLogs')) console.log('invalidate', queryKey);
-          queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
-        });
+          return queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        }));
       }
 
       setActivities((prevActivities) => uniq([

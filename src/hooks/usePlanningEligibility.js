@@ -28,9 +28,11 @@ const usePlanningEligibility = (lot) => {
   // Tutorial transactions operate entirely on the existing mock state.
   current.current = crew?._isSimulation ? { ...params, snapshot } : params;
   const query = useQuery({
-    queryKey: ['planningEligibility', Number(lotId), crew?.id, accountAddress, blockTime, blockNumber, lot?._permissionTargets, lot?._planningOccupants, crew?.Crew, crew?.Location, launchTime],
+    queryKey: ['planningEligibility', Number(lotId), crew?.id, accountAddress, blockTime != null, lot?._permissionTargets, lot?._planningOccupants, crew?.Crew, crew?.Location, launchTime],
     queryFn: () => loadPlanningEligibility({ ...params, snapshot }),
     enabled: !!(lotId && crew?.id && blockTime != null && lot?._permissionTargets?.lot && lot?._permissionTargets?.asteroid && launchTime != null),
+    meta: { recheck: () => recheck({ lotId, crewId: crew?.id }) },
+    staleTime: Infinity,
     retry: false
   });
   const recheck = useCallback(async (expected) => {
@@ -38,11 +40,11 @@ const usePlanningEligibility = (lot) => {
     if (expected.lotId !== snapshot.lotId || expected.crewId !== snapshot.crewId) return checkingPlanning;
     const result = await loadPlanningEligibility(snapshot);
     const latest = current.current;
-    if (snapshot.crewId !== latest.crewId || snapshot.accountAddress !== latest.accountAddress || snapshot.lotId !== latest.lotId || snapshot.blockTime !== latest.blockTime || snapshot.blockNumber !== latest.blockNumber || snapshot.provider !== latest.provider) return checkingPlanning;
+    if (snapshot.crewId !== latest.crewId || snapshot.accountAddress !== latest.accountAddress || snapshot.lotId !== latest.lotId || snapshot.provider !== latest.provider) return checkingPlanning;
     return result;
   }, []);
   return {
-    eligibility: query.isFetching || query.isError ? checkingPlanning : (query.data || checkingPlanning),
+    eligibility: query.isError ? checkingPlanning : (query.data || checkingPlanning),
     recheck
   };
 };

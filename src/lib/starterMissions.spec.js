@@ -3,7 +3,7 @@ global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
 const { Entity, StarterMission, System } = require('@influenceth/sdk');
 const {
-  STARTER_MISSION_IMAGES, canonicalCrewId, starterMissionsQueryKey,
+  STARTER_MISSION_IMAGES, canonicalCrewId, starterMissionsQueryKey, isMissionTransactionIndexed,
   getStarterMissionAssignment, getMissionAssignmentKey,
   assertStarterMissionOperation, assertStarterMissionAction,
   getStarterMissionActionCall, getMissionValidationArguments, getMissionCompletionCalls
@@ -96,4 +96,17 @@ test('finds pending native mission actions and lifecycle transactions across can
   expect(findPendingMissionTransaction([tx], { ...assignment, mission: 1 })).toBeUndefined();
   const claim = { key: 'ClaimMissionReward', vars: { assignment } };
   expect(findPendingMissionTransaction([claim], assignment)).toBe(claim);
+});
+
+
+test('indexed mission confirmation requires the matching crew, campaign, mission and operation', () => {
+  const tx = { key: 'AcceptMission', vars: { assignment } };
+  const indexed = { ...view, missions: [{ id: 0, accepted: true }] };
+  expect(isMissionTransactionIndexed(tx, indexed)).toBe(true);
+  for (const other of [undefined, { ...indexed, campaign: '124' },
+    { ...indexed, subject: { ...view.subject, id: '502' } },
+    { ...indexed, missions: [{ id: 1, accepted: true }] }]) {
+    expect(isMissionTransactionIndexed(tx, other)).toBe(false);
+  }
+  expect(isMissionTransactionIndexed({ ...tx, key: 'ConstructionPlan' }, indexed)).toBe(false);
 });

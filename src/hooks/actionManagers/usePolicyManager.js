@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { Address, Authorization, Entity, Lot, Permission } from '@influenceth/sdk';
 
@@ -7,6 +8,7 @@ import { daysToSeconds, safeBigInt, secondsToDays } from '~/lib/utils';
 import useBlockTime from '../useBlockTime';
 
 const usePolicyManager = (target, permission) => {
+  const reportBlocked = useFailureReporter();
   const blockTime = useBlockTime();
   const { crew, authorize, recheckAuthorization } = useCrewContext();
   const { execute, getStatus } = useContext(ChainTransactionContext);
@@ -56,7 +58,8 @@ const usePolicyManager = (target, permission) => {
   }, [policyJSON, authorization]);
 
   const updateAllowlists = useCallback(async (newAllowlist, newAccountAllowlist) => {
-    if ((await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget])).status !== 'allowed') return;
+    const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
     execute(
       'UpdateAllowlists',
       {
@@ -68,7 +71,7 @@ const usePolicyManager = (target, permission) => {
       },
       meta
     );
-  }, [recheckAuthorization, crew, controlTarget, target, currentPolicy?.allowlist, currentPolicy?.accountAllowlist, execute, meta, payload]);
+  }, [reportBlocked, recheckAuthorization, crew, controlTarget, target, currentPolicy?.allowlist, currentPolicy?.accountAllowlist, execute, meta, payload]);
 
   const getPolicyUpdateParams = useCallback((newPolicyType, newPolicyDetails) => {
     const params = {
@@ -95,16 +98,18 @@ const usePolicyManager = (target, permission) => {
 
   const updatePolicy = useCallback(
     async (newPolicyType, newPolicyDetails) => {
-      if ((await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget])).status !== 'allowed') return;
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
       const params = getPolicyUpdateParams(newPolicyType, newPolicyDetails);
       execute('UpdatePolicy', params, meta);
     },
-    [recheckAuthorization, crew, controlTarget, target, execute, getPolicyUpdateParams, meta]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, target, execute, getPolicyUpdateParams, meta]
   );
 
   const updateAuctionSettings = useCallback(
     async ({ mode, gracePeriod }) => {
-      if ((await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget])).status !== 'allowed') return;
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
       execute(
         'ConfigurePrepaidAuction',
         {
@@ -116,12 +121,13 @@ const usePolicyManager = (target, permission) => {
         meta
       );
     },
-    [recheckAuthorization, crew, controlTarget, execute, meta, target?.id]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, execute, meta, target?.id]
   );
 
   const updatePolicyAndAuctionSettings = useCallback(
     async (newPolicyType, newPolicyDetails, auctionDetails) => {
-      if ((await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget])).status !== 'allowed') return;
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
       execute(
         'UpdatePolicyAndAuctionSettings',
         {
@@ -136,7 +142,7 @@ const usePolicyManager = (target, permission) => {
         meta
       );
     },
-    [recheckAuthorization, crew, controlTarget, execute, getPolicyUpdateParams, meta, target?.id]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, execute, getPolicyUpdateParams, meta, target?.id]
   );
 
   const allowlistChangePending = useMemo(

@@ -1,3 +1,4 @@
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Building, Crewmate, Lot, Permission, Process, Processor, Product, Time } from '@influenceth/sdk';
@@ -58,6 +59,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
   const destinationInventory = useMemo(() => (destination?.Inventories || []).find((i) => i.slot === selectedDestination?.slot), [destination, selectedDestination?.slot]);
 
   const [amount, setAmount] = useState(currentProcess?.recipeTally || 1);
+  useMissionActionDetails(useMemo(() => ({ recipes: amount, running: !!currentProcess }), [amount, currentProcess]));
   const [processId, setProcessId] = useState(currentProcess?.processId);
   const [destinationSelectorOpen, setDestinationSelectorOpen] = useState(false);
   const [originSelectorOpen, setOriginSelectorOpen] = useState(false);

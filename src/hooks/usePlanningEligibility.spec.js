@@ -33,7 +33,12 @@ test('pending policy checks disable planning and refresh on invalidation while o
   await act(async () => resolve({ status: 'allowed', reason: null }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
-  await act(async () => client.invalidateQueries({ queryKey: ['planningEligibility'] }));
+  let finishRefresh;
+  loadPlanningEligibility.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+  act(() => { client.invalidateQueries({ queryKey: ['planningEligibility'] }); });
+  await waitFor(() => expect(finishRefresh).toBeDefined());
+  expect(result.current.eligibility.status).toBe('allowed');
+  await act(async () => finishRefresh({ status: 'blocked' }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
 });
 
@@ -59,13 +64,16 @@ test('crew changes during submission cannot authorize the old payload', async ()
   expect((await result.current.recheck({ lotId: 1, crewId: 1 })).status).toBe('checking');
 });
 
-test('block time changes re-evaluate expiring permissions', async () => {
+test('block updates preserve display and defer expiry checks until submission', async () => {
   const { result, rerender } = renderHook(() => usePlanningEligibility(lot), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
   useSession.mockReturnValue({ blockTime: 101, accountAddress: '0x123' });
   rerender();
-  await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
+  expect(result.current.eligibility.status).toBe('allowed');
+  expect(loadPlanningEligibility).toHaveBeenCalledTimes(1);
+  expect((await result.current.recheck({ lotId: 1, crewId: 1 })).status).toBe('blocked');
+  expect(loadPlanningEligibility.mock.calls.at(-1)[0].blockTime).toBe(101);
 });
 
 

@@ -1,7 +1,7 @@
 import { entityKey } from './authorization';
 
 // A render may request access to hundreds of inventory candidates. Batch component
-// reads by projection and entity type, and share controller reads within the block.
+// reads by projection and entity type, and share controller reads within the authorization cache.
 export const createAuthorizationLoader = (api) => {
   const reads = new Map();
   const batches = new Map();
@@ -24,6 +24,13 @@ export const createAuthorizationLoader = (api) => {
     }));
   };
   return {
+    updateEntities: (entities) => {
+      const updates = new Map(entities.map(entity => [entityKey(entity), entity]));
+      for (const [key, read] of reads) {
+        const update = updates.get(entityKey(JSON.parse(key)));
+        if (update) reads.set(key, read.then(record => ({ ...record, ...update })));
+      }
+    },
     getEntityById: (request) => {
       const key = JSON.stringify(request);
       if (!reads.has(key)) reads.set(key, new Promise((resolve, reject) => {

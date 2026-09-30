@@ -8,7 +8,7 @@ import { createWalletSession } from '~/lib/walletSessions';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 
-jest.mock('starknet', () => ({ RpcProvider: jest.fn(), PaymasterRpc: jest.fn(), WalletAccount: { connect: jest.fn() } }));
+jest.mock('starknet', () => ({ RpcProvider: jest.fn(), PaymasterRpc: jest.fn(), WalletAccount: jest.fn() }));
 jest.mock('react-jwt', () => ({ isExpired: () => true }));
 jest.mock('~/lib/authFlow', () => jest.requireActual('../lib/authFlow'), { virtual: true });
 jest.mock('@influenceth/sdk', () => ({ Address: { toStandard: (value) => value } }));
@@ -74,7 +74,7 @@ beforeEach(() => {
   RpcProvider.mockImplementation(() => provider);
   connector = { id: 'controller', wallet: { id: 'controller' }, connect: jest.fn() };
   createWalletConnectors.mockReturnValue({ controller: connector });
-  WalletAccount.connect.mockResolvedValue({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) });
+  WalletAccount.mockImplementation(() => ({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) }));
   walletSession = { supported: jest.fn().mockResolvedValue(false), prepare: jest.fn(), ready: false };
   createWalletSession.mockReturnValue(walletSession);
 });
@@ -98,7 +98,7 @@ test.each(['resolve', 'reject'])('cancels connecting and ignores a late %s after
   expect(session.authPhase).toBe(AUTH_PHASES.CONNECTING_WALLET);
   expect(session.loginPrompt.busy).toBe(true);
   expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
-  expect(WalletAccount.connect).not.toHaveBeenCalled();
+  expect(WalletAccount).not.toHaveBeenCalled();
 });
 
 test('cancels verification without continuing authentication when the RPC returns', async () => {
@@ -224,4 +224,47 @@ test('closing a store login does not redirect a later login back to the store', 
 
   expect(state.dispatchSessionStarted).toHaveBeenCalled();
   expect(state.dispatchLauncherPage).toHaveBeenCalledTimes(1);
+});
+
+
+test('uses the account approved by the connector without a second connection request', async () => {
+  connector.wallet.request = jest.fn();
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  provider.getClassAt.mockReturnValue(new Promise(() => {}));
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(WalletAccount).toHaveBeenCalledWith({
+    provider, walletProvider: connector.wallet, address: '0x123', paymaster: undefined
+  });
+  expect(connector.wallet.request).not.toHaveBeenCalled();
+  expect(session.walletAccount.address).toBe('0x123');
+});
+
+test('retains the approved account when the extension repeats it during authentication', async () => {
+  let onAccountChange;
+  const account = {
+    address: '0x123',
+    onAccountChange: (callback) => { onAccountChange = callback; },
+    off: jest.fn()
+  };
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA', walletAccount: account });
+  provider.getClassAt.mockReturnValue(new Promise(() => {}));
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  act(() => onAccountChange(['0x123']));
+  expect(session.walletAccount).toBe(account);
+  expect(state.dispatchSessionEnded).not.toHaveBeenCalled();
+  act(() => onAccountChange([]));
+  expect(session.walletAccount).toBeUndefined();
+});
+
+
+test('returns the connection failure so a pending action does not wait for another timeout', async () => {
+  const error = new Error('Connection rejected');
+  connector.connect.mockRejectedValue(error);
+  render(<SessionProvider><Probe /></SessionProvider>);
+  let result;
+  await act(async () => { result = await session.login({ controller: true }); });
+  expect(result).toEqual({ error });
+  expect(session.loginPrompt.busy).toBe(false);
 });

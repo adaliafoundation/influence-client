@@ -1,3 +1,5 @@
+import { reportFailure } from '../../../../lib/errorReporting';
+import { errorMessages } from '../../../../lib/errorMessages';
 import React, { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1625,12 +1627,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
   useEffect(() => {
     if (!automaticSubmissionError) return;
-    createAlert({
-      type: 'GenericAlert',
-      level: 'warning',
-      data: { content: automaticSubmissionError?.response?.data?.error || automaticSubmissionError.message || 'Unable to submit crewmate customization.' },
-      duration: 10000
-    });
+    reportFailure(createAlert, automaticSubmissionError, { message: 'crewmateGrantFailed' });
   }, [automaticSubmissionError, createAlert]);
 
   const submitStripeCustomization = useCallback(async () => {
@@ -1639,12 +1636,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     try {
       await submitCustomization(buildCrewmatePurchaseGrantRequestFromCrewmate(crewmate));
     } catch (e) {
-      createAlert({
-        type: 'GenericAlert',
-        level: 'warning',
-        data: { content: e?.response?.data?.error || e.message || 'Unable to submit crewmate customization.' },
-        duration: 10000
-      });
+      reportFailure(createAlert, e, { message: 'crewmateGrantFailed' });
     }
   }, [readyForSubmission, nameError, purchaseAcknowledged, stripeBusy, isNameValid, name,
     submitCustomization, crewmate, createAlert]);
@@ -1687,7 +1679,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Wallet connection is not ready yet. Please try again in a moment.' },
+        data: { content: errorMessages.connection },
         duration: 5000
       });
       return;
@@ -1697,7 +1689,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Stripe Checkout is not configured for this environment.' },
+        data: { content: errorMessages.serviceUnavailable },
         duration: 10000
       });
       return;
@@ -1707,7 +1699,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Card checkout is temporarily unavailable.' },
+        data: { content: errorMessages.checkoutUnavailable },
         duration: 10000
       });
       return;
@@ -1732,12 +1724,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
       setAwaitingStripePayment(false);
       setStripeCheckoutOpen(true);
     } catch (e) {
-      createAlert({
-        type: 'GenericAlert',
-        level: 'warning',
-        data: { content: e?.response?.data?.error || e.message || 'Unable to create Stripe checkout.' },
-        duration: 10000
-      });
+      reportFailure(createAlert, e, { message: 'checkoutFailed' });
     } finally {
       setStripeSubmitting(false);
     }

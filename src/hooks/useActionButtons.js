@@ -123,7 +123,7 @@ const useActionButtons = () => {
   const { accountAddress } = useSession();
 
   // crew
-  const { accountCrewIds, crew, crewControls } = useCrewContext();
+  const { accountCrewIds, crew, crewControls, authorize } = useCrewContext();
 
   // asteroid-level
   const { data: asteroid, isLoading: asteroidIsLoading } = useAsteroid(asteroidId);
@@ -168,6 +168,7 @@ const useActionButtons = () => {
         account: accountAddress,
         accountCrewIds,
         crewControls,
+        authorize,
         asteroid,
         blockTime,
         crew,
@@ -184,7 +185,7 @@ const useActionButtons = () => {
       }))
       .sort((a, b) => (buttonOrder[a] || 100) - (buttonOrder[b] || 100))
       .map((k) => actionButtons[k].Component || actionButtons[k]);
-  }, [accountAddress, accountCrewIds, crewControls, asteroidIsLoading, lotIsLoading, crewedShipIsLoading, zoomedShipIsLoading, isAtRisk, asteroid, blockTime, constructionStatus, crew, crewedShip, lot, openHudMenu, resourceMap?.active, !!resourceMap?.selected, targetShip, simulation, zoomScene, zoomStatus]);
+  }, [accountAddress, accountCrewIds, crewControls, authorize, asteroidIsLoading, lotIsLoading, crewedShipIsLoading, zoomedShipIsLoading, isAtRisk, asteroid, blockTime, constructionStatus, crew, crewedShip, lot, openHudMenu, resourceMap?.active, !!resourceMap?.selected, targetShip, simulation, zoomScene, zoomStatus]);
 
   // TODO: within each action button, should memoize whatever is passed to flags
   // (because always a new object, will always re-render the underlying button)

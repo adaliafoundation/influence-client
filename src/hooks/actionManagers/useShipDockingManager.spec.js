@@ -1,3 +1,7 @@
+jest.mock('../useFailureReporter', () => () => result => {
+  require('../../lib/errorReporting').reportFailure(jest.fn(), result, { message: 'accessChanged' });
+  return result;
+});
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;

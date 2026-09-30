@@ -1,7 +1,7 @@
 import { isPaymasterUnavailable } from './paymaster';
 
-const isUserRejection = (error) => /USER_REFUSED_OP|User abort|User rejected/i.test(error?.message || '');
-const isInsufficientFee = (error) => /insufficient.*(?:balance|funds|fee)|(?:balance|funds).*too low/i.test(error?.message || '');
+import { isUserCancellation as isUserRejection } from './errorReporting';
+const isInsufficientFee = (error) => /insufficient.*(?:balance|funds)|(?:balance|funds).*too low/i.test(error?.message || '');
 
 const cancelFeePayment = () => {
   const error = new Error('Fee payment permission was not granted.');
@@ -49,9 +49,9 @@ export const executePaidTransaction = async ({
     // Let the account estimate native fees using current balances and resource bounds.
     return await account.execute(calls, {});
   } catch (error) {
-    if (isUserRejection(error)) throw error;
+    if (isUserRejection(error) || !isInsufficientFee(error)) throw error;
     const openWallet = await requestFeePermission(paymasterAvailable ? 'TOP_UP' : 'TOP_UP_STRK');
-    if (openWallet && paymasterAvailable) openTopUp();
+    if (openWallet) openTopUp();
     error.suppressTransactionFailure = true;
     throw error;
   }

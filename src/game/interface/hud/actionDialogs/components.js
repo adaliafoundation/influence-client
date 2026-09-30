@@ -1,3 +1,4 @@
+import withOpenDialog from '~/components/withOpenDialog';
 import { getInstantTransferDetails, getTripTiming } from '~/lib/transport';
 import { useMissionAction } from '~/contexts/MissionActionContext';
 import MissionActionNotice from './MissionActionNotice';
@@ -61,7 +62,6 @@ import { theming } from '../ActionDialog';
 import ThumbnailWithData from '~/components/AssetThumbnailWithData';
 import AssetBlock, { assetBlockCornerSize } from '~/components/AssetBlock';
 import LiveReadyStatus from '~/components/LiveReadyStatus';
-import useConstructionManager from '~/hooks/actionManagers/useConstructionManager';
 import EntityName from '~/components/EntityName';
 import DataTableComponent from '~/components/DataTable';
 import Autocomplete, { StaticAutocomplete } from '~/components/Autocomplete';
@@ -1346,18 +1346,6 @@ const FreeTransferNote = styled.div`
   }
 `;
 
-const ControlWarning = styled.div`
-  align-items: center;
-  color: ${p => p.theme.colors.error};
-  display: flex;
-  justify-content: center;
-  padding: 20px 0 5px;
-  & > svg {
-    font-size: 125%;
-    margin-right: 10px;
-  }
-`;
-
 const getMarketplaceAlertColor = (p) => {
   if (p.scheme === 'success') return p.theme.colors.green;
   if (p.scheme === 'error') return p.theme.colors.red;
@@ -2008,7 +1996,7 @@ export const TransferSelectionDialog = ({
   );
 };
 
-export const LandingSelectionDialog = ({ asteroid, deliveryMode, initialSelection, onClose, onSelected, open, originLotIndex, ship }) => {
+const LandingSelectionDialogContent = ({ asteroid, deliveryMode, initialSelection, onClose, onSelected, open, originLotIndex, ship }) => {
   const [error, setError] = useState();
   const [selection, setSelection] = useState(initialSelection);
   const shipConfig = Ship.TYPES[ship?.Ship?.shipType];
@@ -2450,7 +2438,7 @@ const FilterWrapper = ({ children, isLimited }) => {
   return <>{children}</>;
 }
 
-export const InventorySelectionDialog = ({
+const InventorySelectionDialogContent = ({
   asteroidId,
   excludeSites,
   otherEntity,
@@ -2994,7 +2982,7 @@ const OrderSelectionTable = ({ orders, productId, onSelected, selected }) => {
   );
 };
 
-export const OrderSelectionDialog = ({ asteroidId, otherEntity, maxAmount, onClose, onCompleted, open, productId }) => {
+const OrderSelectionDialogContent = ({ asteroidId, otherEntity, maxAmount, onClose, onCompleted, open, productId }) => {
   const { crew } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
@@ -3024,10 +3012,9 @@ export const OrderSelectionDialog = ({ asteroidId, otherEntity, maxAmount, onClo
 
   const {
     data: resourceMarketplaces,
-    dataUpdatedAt: resourceMarketplacesUpdatedAt,
     refetch: refetchResourceMarketplaces
   } = useShoppingListData(asteroidId, destLotId, [productId]);
-  const exchanges = useMemo(() => resourceMarketplaces?.[productId] || [], [resourceMarketplacesUpdatedAt]);
+  const exchanges = useMemo(() => resourceMarketplaces?.[productId] || [], [resourceMarketplaces, productId]);
 
   useInterval(() => { refetchResourceMarketplaces(); }, 60e3); // keep things loosely fresh
 
@@ -3178,7 +3165,7 @@ export const OrderSelectionDialog = ({ asteroidId, otherEntity, maxAmount, onClo
   );
 }
 
-export const ExchangeSelectionDialog = ({
+const ExchangeSelectionDialogContent = ({
   asteroidId,
   otherEntity,
   isSourcing,
@@ -3204,11 +3191,10 @@ export const ExchangeSelectionDialog = ({
 
   const {
     data: resourceMarketplaces,
-    dataUpdatedAt: resourceMarketplacesUpdatedAt,
     isLoading: resourceMarketplacesLoading,
     refetch: refetchResourceMarketplaces
   } = useShoppingListData(asteroidId, destLotId, [productId]);
-  const exchanges = useMemo(() => resourceMarketplaces?.[productId] || [], [resourceMarketplacesUpdatedAt]);
+  const exchanges = useMemo(() => resourceMarketplaces?.[productId] || [], [resourceMarketplaces, productId]);
 
   useInterval(() => { refetchResourceMarketplaces(); }, 60e3); // keep things loosely fresh
 
@@ -3972,19 +3958,6 @@ export const FlexSectionBlock = ({ bodyStyle, children, style = {}, title, title
     </FlexSectionInputContainer>
   );
 };
-
-export const LotControlWarning = ({ lot }) => {
-  if (!lot) return null;
-  return (
-    <ControlWarning>
-      <WarningIcon />
-      <span>USE_LOT permission allows building but does not grant land ownership or permanent tenancy.
-        Existing site abandonment and repossession rules still apply.</span>
-    </ControlWarning>
-  );
-}
-
-
 
 //
 // Sections
@@ -5391,7 +5364,7 @@ export const ActionDialogFooter = ({
   wide
 }) => {
   const mission = useMissionAction();
-  const missionBlocked = (mission && !mission.ready) || mission?.checking || (mission?.pending && mission?.selected) || (mission?.selected && (!mission.eligible || mission.unavailable || mission.constructionMissing))
+  const missionBlocked = (mission && !mission.ready) || mission?.checking || (mission?.pending && mission?.selected) || (mission?.selected && (!mission.eligible || mission.unavailable))
     || (stage === actionStage.READY_TO_COMPLETE && mission?.unavailable);
   const { crew, isLaunched } = useCrewContext();
   const { data: user, isLoading: userIsLoading } = useUser();
@@ -6085,3 +6058,11 @@ export const formatTimeRequirements = (details) => {
     details: []
   };
 };
+
+export const InventorySelectionDialog = withOpenDialog(InventorySelectionDialogContent);
+
+export const OrderSelectionDialog = withOpenDialog(OrderSelectionDialogContent);
+
+export const ExchangeSelectionDialog = withOpenDialog(ExchangeSelectionDialogContent);
+
+export const LandingSelectionDialog = withOpenDialog(LandingSelectionDialogContent);

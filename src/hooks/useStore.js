@@ -109,6 +109,7 @@ const useStore = create(
   subscribeWithSelector(
     persist((set, get) => ({
         actionDialog: {},
+        lotCameraTransition: null,
         missionParticipation: {},
         objectivePreferences: {},
         missionGuidance: null,
@@ -450,6 +451,7 @@ const useStore = create(
           }
 
           state.asteroids.lot = null;
+          state.lotCameraTransition = null;
           state.asteroids.travelSolution = null;
           state.asteroids.zoomScene = null;
         })),
@@ -496,6 +498,7 @@ const useStore = create(
           state.asteroids.zoomStatus = status;
           if (!maintainLot) {
             state.asteroids.lot = null;
+            state.lotCameraTransition = null;
             state.asteroids.zoomScene = null;
           }
         })),
@@ -832,12 +835,19 @@ const useStore = create(
         })),
 
         dispatchLotSelected: (lotId) => set(produce(state => {
-          state.asteroids.lot = lotId > 0 ? lotId : null;
+          const nextLot = lotId > 0 ? lotId : null;
+          if (nextLot !== state.asteroids.lot) state.lotCameraTransition = nextLot;
+          state.asteroids.lot = nextLot;
           state.asteroids.zoomScene = null;
         })),
 
         dispatchRecenterCamera: (needsRecenter) => set(produce(state => {
           state.cameraNeedsRecenter = !!needsRecenter;
+          if (needsRecenter && state.asteroids.lot) state.lotCameraTransition = state.asteroids.lot;
+        })),
+
+        dispatchLotCameraSettled: (lotId) => set(produce(state => {
+          if (state.lotCameraTransition === lotId) state.lotCameraTransition = null;
         })),
 
         dispatchReorientCamera: (needsReorienting) => set(produce(state => {
@@ -1097,6 +1107,7 @@ const useStore = create(
         // TODO: should these be stored elsewhere if ephemeral?
         // TODO: the nested values are not supported by zustand
         'actionDialog',
+        'lotCameraTransition',
         'missionGuidance',
         'missionDetails',
         'asteroids.hovered',

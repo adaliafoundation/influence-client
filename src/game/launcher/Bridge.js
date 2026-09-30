@@ -1,3 +1,4 @@
+import { errorMessages } from '../../lib/errorMessages';
 import { useCallback, useMemo, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { formatUnits } from 'viem';
@@ -876,7 +877,7 @@ const AssetPane = ({ assetType }) => {
             <Subtitle>
               {configured
                 ? 'Select assets from one chain and bridge them to the other.'
-                : 'This bridge is not configured for the current deployment.'}
+                : errorMessages.serviceUnavailable}
             </Subtitle>
           </div>
         </Header>

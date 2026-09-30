@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { Asteroid, Building, Entity, Lot } from '@influenceth/sdk';
 
@@ -12,6 +13,7 @@ import useAsteroid from '~/hooks/useAsteroid';
 import actionStage from '~/lib/actionStages';
 
 const useConstructionManager = (lotId, missionId) => {
+  const reportBlocked = useFailureReporter();
   const execute = useStarterMissionExecution(missionId);
   const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const blockTime = useBlockTime();
@@ -150,7 +152,7 @@ const useConstructionManager = (lotId, missionId) => {
 
   const planConstruction = useCallback(async (buildingType) => {
     const eligibility = await recheck({ lotId, crewId: planPayload.caller_crew.id });
-    if (eligibility.status !== 'allowed') return eligibility;
+    if (eligibility.status !== 'allowed') return reportBlocked(eligibility);
     return execute(
       'ConstructionPlan',
       {
@@ -158,7 +160,7 @@ const useConstructionManager = (lotId, missionId) => {
         ...planPayload
       }
     )
-  }, [execute, lotId, planPayload, recheck]);
+  }, [reportBlocked, execute, lotId, planPayload, recheck]);
 
   const unplanConstruction = useCallback(() => {
     execute(

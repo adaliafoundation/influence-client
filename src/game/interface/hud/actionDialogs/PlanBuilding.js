@@ -1,3 +1,7 @@
+import useStore from '~/hooks/useStore';
+import { reportFailure } from '../../../../lib/errorReporting';
+import { errorMessages } from '../../../../lib/errorMessages';
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Building } from '@influenceth/sdk';
@@ -24,7 +28,6 @@ import {
   ProgressBarSection,
   ActionDialogBody,
   getBuildingRequirements,
-  LotControlWarning,
   formatTimeRequirements
 } from './components';
 import actionStage from '~/lib/actionStages';
@@ -41,19 +44,19 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
   const { crew } = useCrewContext();
 
   const [buildingType, setBuildingType] = useState();
+  useMissionActionDetails(useMemo(() => ({ buildingType }), [buildingType]));
 
   const crewTimeRequirement = useMemo(() => formatTimeRequirements([[0, 'Initiate Building Plan']]), []);
   const stats = [{ label: 'Task Duration', value: formatTimer(0), isTimeStat: true }];
-  const [submissionReason, setSubmissionReason] = useState(null);
+  const createAlert = useStore(s => s.dispatchAlertLogged);
   const [submitting, setSubmitting] = useState(false);
   const onPlan = async () => {
     setSubmitting(true);
-    setSubmissionReason(null);
     try {
       const result = await planConstruction(buildingType);
-      if (result?.reason) setSubmissionReason(result.reason);
+      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: result.status === 'blocked' || result.status === 'denied' ? 'accessChanged' : 'accessUnavailable' });
     } catch (error) {
-      setSubmissionReason('Unable to verify planning permission. Please try again.');
+      reportFailure(createAlert, error, { message: 'accessUnavailable' });
     } finally {
       setSubmitting(false);
     }
@@ -135,7 +138,6 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
           />
         )}
 
-        <LotControlWarning lot={lot} />
 
         <ActionDialogStats
           stage={stage}
@@ -143,7 +145,7 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
         />
       </ActionDialogBody>
 
-      {(submissionReason || planningEligibility.reason) && <p role="status">{submissionReason || planningEligibility.reason}</p>}
+      {planningEligibility.reason && <p role="status">{planningEligibility.reason}</p>}
       <ActionDialogFooter
         {...props}
         crewAvailableTime={crewTimeRequirement}

@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../../lib/errorMessages';
 import styled from 'styled-components';
 import { CheckedIcon, UncheckedIcon } from '~/components/Icons';
 import { useMissionAction } from '~/contexts/MissionActionContext';
@@ -33,7 +34,7 @@ const MissionActionNotice = ({ stage }) => {
   const mission = useMissionAction();
   if (!mission?.visible || stage === actionStage.STARTING || stage === actionStage.COMPLETING) return null;
   return <Notice>
-    {mission.ready && <Participation>
+    {mission.ready && mission.qualifies && <Participation>
       <input type="checkbox" checked={mission.selected} disabled={!mission.eligible || mission.checking}
         onChange={event => mission.setSelected(event.target.checked)} />
       {mission.selected ? <CheckedIcon aria-hidden="true" /> : <UncheckedIcon aria-hidden="true" />}
@@ -41,7 +42,7 @@ const MissionActionNotice = ({ stage }) => {
     </Participation>}
     {mission.ready && !mission.eligible && <p>This crew is no longer eligible. Actions will not earn campaign progress.</p>}
     {mission.pending && <p>Campaign transaction pending; waiting for indexed progress.</p>}
-    {mission.message && <p role="status">{mission.message} <button type="button" onClick={mission.retry}>Retry verification</button></p>}
+    {mission.message && <p role="status">{mission.message} <button type="button" onClick={mission.retry}>{errorMessages.retry}</button></p>}
   </Notice>;
 };
 

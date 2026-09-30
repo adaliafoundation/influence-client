@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useThrottle } from '@react-hook/throttle';
@@ -279,8 +280,7 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
           type: 'GenericAlert',
           level: 'warning',
           data: {
-            content: 'Crew is not under your control. You may transfer crewmates you own, '
-              + 'but other modifications are prohibited.'
+            content: errorMessages.crewControl
           },
           duration: 10000
         });
@@ -291,7 +291,7 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
           type: 'GenericAlert',
           level: 'warning',
           data: {
-            content: 'No available slots on my crew for this crewmate.'
+            content: errorMessages.crewFull
           },
           duration: 10000
         });

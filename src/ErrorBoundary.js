@@ -1,3 +1,5 @@
+import { errorMessages } from './lib/errorMessages';
+import { sanitizeErrorReport } from './lib/errorReporting';
 import { Component } from 'react';
 import styled from 'styled-components';
 
@@ -116,7 +118,7 @@ class ErrorBoundary extends Component {
 
   copyToClipboard = () => {
     try {
-      navigator.clipboard.writeText(JSON.stringify(this.state.debugData));
+      navigator.clipboard.writeText(JSON.stringify(sanitizeErrorReport(this.state.debugData), null, 2));
       this.setState({ copied: true });
     } catch (e) {
       console.warn(e);
@@ -140,30 +142,29 @@ class ErrorBoundary extends Component {
           <InnerWrapper>
             <ErrorImage />
             <ErrorBody>
-              <h1>This Hopper's Gone Rogue...</h1>
-              <h4>Influence has experienced an unexpected error.</h4>
+              <h1>{errorMessages.crash.title}</h1>
+              <h4>{errorMessages.crash.message}</h4>
               <p>
-                Please report the error in Discord by copying the error log below and then pasting it in the #support channel.
+                {errorMessages.crash.help}
               </p>
               <p>
-                You can then refresh the tab to try again. If the problem persists, click "Reload State" below
-                to restore your game state from the servers.
+                {errorMessages.crash.recovery}
               </p>
               <Buttons>
                 <Button
                   disabled={reactBool(this.state.copied)}
                   onClick={this.copyToClipboard}>
                   {this.state.copied ? <CheckIcon /> : <CopyIcon />}
-                  <span>Copy Error Log</span>
+                  <span>{errorMessages.crash.copy}</span>
                 </Button>
                 <Button onClick={this.reloadPage}>
-                  <RefreshIcon /> <span>Refresh Page</span>
+                  <RefreshIcon /> <span>{errorMessages.crash.refresh}</span>
                 </Button>
                 <Button
                   background={`rgba(${hexToRGB(theme.colors.error)}, 0.2)`}
                   color={theme.colors.error}
                   onClick={this.resetState}>
-                  <WarningIcon /> <span>Reload State</span>
+                  <WarningIcon /> <span>{errorMessages.crash.reset}</span>
                 </Button>
               </Buttons>
             </ErrorBody>

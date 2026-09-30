@@ -346,7 +346,7 @@ export function CrewProvider({ children }) {
     return selectedCrew?._crewmates?.[0] || null;
   }, [crewmateMap, selectedCrew, simulationState]);
 
-  const { authorize, recheckAuthorization, retryAuthorization } = useAuthorizationService({
+  const { authorize, recheckAuthorization, refreshAuthorization, retryAuthorization } = useAuthorizationService({
     provider, blockNumber, blockTime, accountAddress, selectedCrewId: finalSelectedCrew?.id, queryClient, simulation: !!simulationState
   });
   const crewAuthorization = useCallback((permission, target, until) => authorize(
@@ -434,6 +434,7 @@ export function CrewProvider({ children }) {
       crewAuthorization,
       authorize,
       recheckAuthorization,
+      refreshAuthorization,
       recheckActingCrew,
       retryAuthorization,
       crewMovementActivity,

@@ -324,13 +324,13 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
   const [openProductId, setOpenProductId] = useState();
   const [selected, setSelected] = useState({});
 
-  const { data: exchanges, dataUpdatedAt: exchangesUpdatedAt } = useAsteroidBuildings(asteroid?.id, 'Exchange', Permission.IDS.BUY);
+  const { data: exchanges } = useAsteroidBuildings(asteroid?.id, 'Exchange', Permission.IDS.BUY);
   const exchangesById = useMemo(() => {
     return (exchanges || []).reduce((acc, cur) => {
       acc[cur.id] = cur;
       return acc;
     }, {});
-  }, [exchangesUpdatedAt])
+  }, [exchanges])
   const { data: destinationLot } = useLot(locationsArrToObj(destination?.Location?.locations || []).lotId);
   const destinationInventory = useMemo(() => destination?.Inventories.find((i) => i.slot === destinationSlot), [destination, destinationSlot]);
 
@@ -376,7 +376,6 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
 
   const {
     data: resourceMarketplaces,
-    dataUpdatedAt: resourceMarketplacesUpdatedAt,
     isLoading: resourceMarketplacesLoading,
     refetch: refetchResourceMarketplaces
   } = useShoppingListData(asteroid?.id, destinationLot?.id, productIds);
@@ -562,7 +561,7 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
         }
       });
     });
-  }, [resourceMarketplacesUpdatedAt, selected])
+  }, [resourceMarketplaces, selected])
 
   const [purchasing, setPurchasing] = useState();
   const handlePurchase = useCallback(async () => {
@@ -622,7 +621,7 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
       }, 1000);
     }
 
-  }, [allFills, crew?.id, destination, destinationLot?.id, destinationSlot, exchangesUpdatedAt, execute]);
+  }, [allFills, crew?.id, destination, destinationLot?.id, destinationSlot, exchanges, execute]);
 
   const handleProductClick = useCallback((productId) => () => {
     setOpenProductId((p) => p === productId ? null : productId);

@@ -32,7 +32,12 @@ test('pending policy checks stay checking, and invalidations refresh an open dia
   await act(async () => resolve({ status: 'allowed', ship }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadShipEjectionEligibility.mockResolvedValue({ status: 'blocked', reason: 'Ship has permission to remain' });
-  await act(async () => client.invalidateQueries({ queryKey: ['shipEjectionEligibility'] }));
+  let finishRefresh;
+  loadShipEjectionEligibility.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+  act(() => { client.invalidateQueries({ queryKey: ['shipEjectionEligibility'] }); });
+  await waitFor(() => expect(finishRefresh).toBeDefined());
+  expect(result.current.eligibility.status).toBe('allowed');
+  await act(async () => finishRefresh({ status: 'blocked' }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
 });
 
@@ -56,16 +61,20 @@ test('changing selected crew during a pending recheck cannot authorize the old p
   expect((await result.current.recheck({ shipId: 9, crewId: 1 })).status).toBe('checking');
 });
 
-test('agreement expiry, controller updates and ship movement recompute eligibility', async () => {
+test('blocks defer checks until submission; controller and movement changes refresh eligibility', async () => {
   const { result, rerender } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadShipEjectionEligibility.mockResolvedValue({ status: 'blocked' });
   useSession.mockReturnValue({ accountAddress: '0x123', blockTime: 101 });
   rerender();
-  await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
+  expect(result.current.eligibility.status).toBe('allowed');
+  expect(loadShipEjectionEligibility).toHaveBeenCalledTimes(1);
+  expect((await result.current.recheck({ shipId: 9, crewId: 1 })).status).toBe('blocked');
+  expect(loadShipEjectionEligibility.mock.calls.at(-1)[0].blockTime).toBe(101);
   loadShipEjectionEligibility.mockResolvedValue({ status: 'allowed' });
   ship = { ...ship, Control: { controller: { id: 3 } }, Location: { location: { label: Entity.IDS.BUILDING, id: 8 } } };
   rerender();
+  await waitFor(() => expect(loadShipEjectionEligibility).toHaveBeenCalledTimes(3));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
 });
 

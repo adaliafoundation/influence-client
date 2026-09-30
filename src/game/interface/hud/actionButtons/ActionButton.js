@@ -1,4 +1,7 @@
-import { forwardRef, useCallback, useMemo, useState } from 'react';
+import useActionButtonClick from '~/hooks/useActionButtonClick';
+import ActionAuthorizationContext from './ActionAuthorizationContext';
+import useFailureReporter from '~/hooks/useFailureReporter';
+import { forwardRef, useCallback, useContext, useMemo, useState } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import styled, { css, keyframes } from 'styled-components';
 
@@ -344,9 +347,11 @@ const ActionButtonComponent = forwardRef(({
   const { isLaunched } = useCrewContext();
 
   const [isHovering, setIsHovering] = useState();
+  const refreshAuthorization = useContext(ActionAuthorizationContext);
+  const reportBlocked = useFailureReporter();
 
   const [flags, labelAddendum] = useMemo(() => {
-    const f = rawFlags || {};
+    const f = { ...rawFlags };
     let l = rawLabelAddendum;
     if (!enablePrelaunch && !isLaunched) {
       f.disabled = true;
@@ -355,9 +360,9 @@ const ActionButtonComponent = forwardRef(({
     return [f, l];
   }, [enablePrelaunch, isLaunched, rawFlags, rawLabelAddendum]);
 
-  const _onClick = useCallback(() => {
-    if (!flags?.disabled && onClick) onClick();
-  }, [flags?.disabled, onClick]);
+  const { checking, hidden, handleClick: _onClick } = useActionButtonClick({
+    disabled: flags.disabled, onClick, refresh: refreshAuthorization, reportBlocked
+  });
 
   const handleHover = useCallback((e) => {
     if (e.type === 'mouseenter') setIsHovering(true);
@@ -407,6 +412,8 @@ const ActionButtonComponent = forwardRef(({
     return null;
   }, [label, labelAddendum, prepaidLeaseConfig, isHovering, safeFlags, sequenceDelay]);
 
+  if (hidden) return null;
+
   return (
     <ActionButtonWrapper
       ref={ref}
@@ -421,7 +428,7 @@ const ActionButtonComponent = forwardRef(({
       onMouseLeave={handleHover}
       {...safeFlags}
       {...props}>
-      {flags.loading && <LoadingAnimation />}
+      {(flags.loading || checking) && <LoadingAnimation />}
       {safeFlags.badge ? <BubbleBadge {...badgeProps}>{safeFlags.badge}</BubbleBadge> : null}
       <ActionButton {...safeFlags} overrideColor={props.overrideColor} overrideBgColor={props.overrideBgColor}>
         <ClipCorner dimension={cornerSize} />

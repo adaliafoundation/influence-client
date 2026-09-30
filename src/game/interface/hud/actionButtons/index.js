@@ -1,3 +1,4 @@
+import { ActionAuthorizationProvider } from './ActionAuthorizationContext';
 import AssembleShip from './AssembleShip';
 import ClaimArrivalReward from './ClaimArrivalReward';
 import ClaimPrepareReward from './ClaimPrepareReward';
@@ -80,4 +81,11 @@ const ActionsButtons = {
   ViewAgreements,
 };
 
-export default ActionsButtons;
+// Every HUD action shares the same click-time refresh; dialogs keep submission checks.
+const guardedButtons = Object.fromEntries(Object.entries(ActionsButtons).map(([key, definition]) => {
+  const Component = definition.Component || definition;
+  const GuardedAction = props => <ActionAuthorizationProvider {...props}><Component {...props} /></ActionAuthorizationProvider>;
+  return [key, { ...definition, Component: GuardedAction }];
+}));
+
+export default guardedButtons;

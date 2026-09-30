@@ -39,9 +39,9 @@ const useAsteroidBuildings = (asteroidId, reqComponent = 'Building', reqOneOfPer
       data,
       isLoading,
       refetch,
-      dataUpdatedAt: Date.now() // to capture changes to crewCan
+      dataUpdatedAt
     };
-  }, [crew, crewCan, dataUpdatedAt, isLoading, perms, refetch]);
+  }, [allData, crew, crewCan, dataUpdatedAt, isLoading, perms, refetch]);
 };
 
 export default useAsteroidBuildings;

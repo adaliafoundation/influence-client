@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { DryDock, Entity, Permission } from '@influenceth/sdk';
 
@@ -9,6 +10,7 @@ import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 
 const useDryDockManager = (lotId, slot = 1) => {
+  const reportBlocked = useFailureReporter();
   const blockTime = useBlockTime();
   const { execute, getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const { crew, crewCan, authorize, recheckAuthorization } = useCrewContext();
@@ -105,14 +107,14 @@ const useDryDockManager = (lotId, slot = 1) => {
   const finishShipAssembly = useCallback(async (destination) => {
     const ship = slotDryDock?.outputShip;
     const control = await recheckAuthorization('controls', [crew, ship], [crew, ship]);
-    if (control.status === 'unresolved') return control;
+    if (control.status === 'unresolved') return reportBlocked(control);
     if (control.status === 'denied') {
       const access = await recheckAuthorization('can', [crew, lot?.building, Permission.IDS.ASSEMBLE_SHIP], [crew, lot?.building]);
-      if (access.status !== 'allowed') return access;
+      if (access.status !== 'allowed') return reportBlocked(access);
     }
     if (destination?.label === Entity.IDS.BUILDING) {
       const access = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
-      if (access.status !== 'allowed') return access;
+      if (access.status !== 'allowed') return reportBlocked(access);
     }
     execute(
       'AssembleShipFinish', 
@@ -125,7 +127,7 @@ const useDryDockManager = (lotId, slot = 1) => {
         shipType: currentAssembly?.shipType
       }
     );
-  }, [currentAssembly?.shipType, execute, payload, recheckAuthorization, crew, lot?.building, slotDryDock?.outputShip]);
+  }, [reportBlocked, currentAssembly?.shipType, execute, payload, recheckAuthorization, crew, lot?.building, slotDryDock?.outputShip]);
 
   return {
     startShipAssembly,

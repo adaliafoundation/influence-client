@@ -1,3 +1,5 @@
+import useFailureReporter from '../useFailureReporter';
+import { reportFailure } from '../../lib/errorReporting';
 import api from '~/lib/api';
 import { refreshDeliveryAcceptance } from '~/lib/deliveryAuthorization';
 import useStore from '~/hooks/useStore';
@@ -27,6 +29,7 @@ import useEntity from '../useEntity';
 const managedStatuses = [Delivery.STATUSES.ON_HOLD, Delivery.STATUSES.PACKAGED, Delivery.STATUSES.SENT];
 
 const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, deliveryId, txHash, missionId }) => {
+  const reportBlocked = useFailureReporter();
   const createAlert = useStore((state) => state.dispatchAlertLogged);
   const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
@@ -215,7 +218,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
       const target = sale.delivery.Delivery.dest;
       const decision = await recheckAuthorization('acceptDelivery', [crew, target], [crew, target]);
       if (decision.status !== 'allowed') {
-        createAlert({ type: 'GenericAlert', level: 'warning', data: { content: decision.status === 'denied' ? 'Delivery acceptance is no longer permitted.' : 'Unable to confirm delivery permissions. Try again.' } });
+        reportFailure(createAlert, decision, { message: decision.status === 'denied' ? 'accessChanged' : 'accessUnavailable' });
         return decision;
       }
       return execute('AcceptDelivery', {
@@ -223,7 +226,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
         delivery: { id: selectedDeliveryId || deliveryId, label: Entity.IDS.DELIVERY }, ...payload
       }, meta);
     } catch (error) {
-      createAlert({ type: 'GenericAlert', level: 'warning', data: { content: error.message } });
+      reportFailure(createAlert, error, { message: 'actionFailed' });
     }
   }, [currentDeliveries, deliveryId, execute, payload, crew, recheckAuthorization, createAlert]);
 
@@ -240,7 +243,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
 
   const packageDelivery = useCallback(async ({ origin, originSlot, destination, destinationSlot, contents, price }, meta) => {
     const decision = await recheckAuthorization('packageDelivery', [crew, origin], [crew, origin]);
-    if (decision.status !== 'allowed') return decision;
+    if (decision.status !== 'allowed') return reportBlocked(decision);
     execute(
       'PackageDelivery',
       {
@@ -254,7 +257,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
       },
       meta
     );
-  }, [execute, payload, crew, recheckAuthorization]);
+  }, [reportBlocked, execute, payload, crew, recheckAuthorization]);
 
   const startDelivery = useCallback(({ origin, originSlot, destination, destinationSlot, contents }, meta) => {
     execute(

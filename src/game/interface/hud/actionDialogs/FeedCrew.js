@@ -1,3 +1,4 @@
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Crew, Crewmate, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
@@ -135,6 +136,9 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
     return undefined;
   }, [exchangeSelection, inventorySelection]);
   const { data: origin } = useEntity(originId);
+  useMissionActionDetails(useMemo(() => ({
+    inventorySource: !usingFoodSupplyEntitlement && !exchangeSelection && !!inventorySelection?.id
+  }), [usingFoodSupplyEntitlement, exchangeSelection, inventorySelection?.id]));
   const originLotId = useMemo(() => origin && locationsArrToObj(origin?.Location?.locations || []).lotId, [origin]);
   const { data: originLot } = useLot(originLotId);
   const originInventory = useMemo(() => (origin?.Inventories || []).find((i) => i.slot === inventorySelection?.slot), [origin, inventorySelection]);

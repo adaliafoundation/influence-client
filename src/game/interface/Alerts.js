@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import ErrorReportDialog from '~/components/ErrorReportDialog';
+import { errorMessages } from '../../lib/errorMessages';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { ReactNotifications, Store as notify } from 'react-notifications-component';
 import '~/compat/react-notifications-component.css';
@@ -178,6 +180,7 @@ export const useControlledAlert = () => {
 }
 
 const Alerts = () => {
+  const [errorReport, setErrorReport] = useState(null);
   const alerts = useStore(s => s.logs.alerts);
   const notifyAlert = useStore(s => s.dispatchAlertNotified);
   const playSound = useStore(s => s.dispatchEffectStartRequested);
@@ -221,6 +224,8 @@ const Alerts = () => {
             </Icon>
             <Description>
               {content}
+              {data?.report && <button type="button" onClick={event => { event.stopPropagation(); setErrorReport(data.report); }}
+                style={{ background: 'none', border: 0, color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>{errorMessages.details}</button>}
               {stacks.current?.[stackId]?.tally > 0 && (
                 <StackNote>
                   + {stacks.current?.[stackId]?.tally} similar notifications...
@@ -251,7 +256,10 @@ const Alerts = () => {
   }, [ alerts, notifyAlert, playSound ]);
 
   return (
-    <StyledReactNotification />
+    <>
+      <StyledReactNotification />
+      {errorReport && <ErrorReportDialog report={errorReport} onClose={() => setErrorReport(null)} />}
+    </>
   );
 }
 

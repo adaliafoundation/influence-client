@@ -826,6 +826,7 @@ const AsteroidComponent = () => {
   }, [cameraNeedsHighAltitude]);
 
   const automatingCamera = useRef();
+  const dispatchLotCameraSettled = useStore(s => s.dispatchLotCameraSettled);
   const selectedLotTween = useRef();
   useEffect(() => {
     if (selectedLot?.lotIndex > 0 && zoomedIntoAsteroidId === selectedLot?.asteroidId && config?.radiusNominal && zoomStatus === 'in') {
@@ -892,6 +893,7 @@ const AsteroidComponent = () => {
       // console.log('arcLength', arcLength, animationTime);
 
       const onZoomComplete = () => {
+        dispatchLotCameraSettled(lotId);
         if (closestChunk) {
           setCameraAltitude(controls.object.position.length() - closestChunk.sphereCenterHeight);
         }

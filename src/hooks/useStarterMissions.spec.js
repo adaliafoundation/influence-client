@@ -5,6 +5,7 @@ const React = require('react');
 const { renderHook, act } = require('@testing-library/react');
 jest.mock('@tanstack/react-query', () => ({ useQuery: jest.fn(), useQueryClient: jest.fn() }));
 jest.mock('~/contexts/WebsocketContext', () => ({ __esModule: true, default: require('react').createContext() }), { virtual: true });
+jest.mock('~/hooks/useStore', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: () => ({ chainId: 'sepolia', token: 'token' }) }), { virtual: true });
 jest.mock('~/hooks/useSimulationEnabled', () => ({ __esModule: true, default: () => false }), { virtual: true });
 jest.mock('~/appConfig', () => ({ appConfig: { get: () => 'api' } }), { virtual: true });
@@ -13,10 +14,13 @@ jest.mock('~/lib/starterMissions', () => jest.requireActual('../lib/starterMissi
 const WebsocketContext = require('~/contexts/WebsocketContext').default;
 const { useQuery, useQueryClient } = require('@tanstack/react-query');
 const useStarterMissions = require('./useStarterMissions').default;
-let socket, refetch, invalidateQueries;
+const useStore = require('~/hooks/useStore').default;
+let socket, refetch, invalidateQueries, store;
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  store = { pendingTransactions: [], dispatchPendingTransactionComplete: jest.fn() };
+  useStore.mockImplementation(select => select(store));
   refetch = jest.fn();
   invalidateQueries = jest.fn();
   useQueryClient.mockReturnValue({ invalidateQueries });
@@ -57,4 +61,31 @@ test('the background subscriber switches crew rooms and refetches after reconnec
   expect(refetch).toHaveBeenCalledTimes(3);
   unmount();
   expect(socket.unregisterMessageHandler.mock.calls.map(([id]) => id)).toContain('Crew::502');
+});
+
+
+test.each([
+  ['AcceptMission', { accepted: true }],
+  ['MissionValidate', { completed: true }],
+  ['ClaimMissionReward', { claimed: true }],
+  ['CompleteStarterMission', { claimed: true }]
+])('%s stays pending through stale refreshes until its result is indexed', (key, result) => {
+  const assignment = { campaign: '123', subject: { label: 1, id: '501' }, mission: 0 };
+  const view = { campaign: '123', subject: assignment.subject, missions: [{ id: 0 }] };
+  store.pendingTransactions = [{ key, vars: { assignment }, txHash: '0xabc' }];
+  useQuery.mockReturnValue({ refetch, data: view });
+  const { rerender } = renderHook(() => useStarterMissions(501), { wrapper });
+  expect(store.dispatchPendingTransactionComplete).not.toHaveBeenCalled();
+  useQuery.mockReturnValue({ refetch, data: { ...view }, isFetching: true });
+  rerender();
+  useQuery.mockReturnValue({ refetch, data: { ...view }, isFetching: false });
+  rerender();
+  expect(store.dispatchPendingTransactionComplete).not.toHaveBeenCalled();
+  const partial = key === 'CompleteStarterMission' ? { completed: true } : {};
+  useQuery.mockReturnValue({ refetch, data: { ...view, missions: [{ id: 0, ...partial }] } });
+  rerender();
+  expect(store.dispatchPendingTransactionComplete).not.toHaveBeenCalled();
+  useQuery.mockReturnValue({ refetch, data: { ...view, missions: [{ id: 0, ...result }] } });
+  rerender();
+  expect(store.dispatchPendingTransactionComplete).toHaveBeenCalledWith('0xabc');
 });

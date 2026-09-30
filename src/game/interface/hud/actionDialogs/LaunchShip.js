@@ -1,3 +1,5 @@
+import { reportFailure } from '../../../../lib/errorReporting';
+import { errorMessages } from '../../../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Asteroid, Crewmate, Dock, Inventory, Lot, Product, Ship, Time } from '@influenceth/sdk';
 
@@ -27,7 +29,7 @@ import { isForceLaunch } from '~/lib/shipEjectionEligibility';
 const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 
 const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], stage, ...props }) => {
-  useStore(s => s.dispatchAlertLogged);
+  const createAlert = useStore(s => s.dispatchAlertLogged);
 
   const { undockShip } = manager;
   const blockTime = useBlockTime();
@@ -143,9 +145,14 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
     },
   ]), [escapeVelocity, hopperBonus, launchTime?.total, exhaustBonus, propellantRequirement, ship]);
 
-  const onLaunch = useCallback(() => {
-    undockShip(!powered);
-  }, [powered, undockShip]);
+  const onLaunch = useCallback(async () => {
+    try {
+      const result = await undockShip(!powered);
+      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: 'accessChanged' });
+    } catch (error) {
+      reportFailure(createAlert, error);
+    }
+  }, [createAlert, powered, undockShip]);
 
   // handle auto-closing
   const lastStatus = useRef();
@@ -285,15 +292,14 @@ const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, .
   const { crew } = useCrewContext();
   const { ejectionEligibility, undockShip } = manager;
   const [submitting, setSubmitting] = useState(false);
-  const [submissionReason, setSubmissionReason] = useState(null);
+  const createAlert = useStore(s => s.dispatchAlertLogged);
   const onLaunch = async () => {
     setSubmitting(true);
-    setSubmissionReason(null);
     try {
       const result = await undockShip(true);
-      if (result?.reason) setSubmissionReason(result.reason);
+      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: result.status === 'blocked' || result.status === 'denied' ? 'accessChanged' : 'accessUnavailable' });
     } catch (error) {
-      setSubmissionReason('Unable to verify ship protection. Please try again.');
+      reportFailure(createAlert, error, { message: 'accessUnavailable' });
     } finally {
       setSubmitting(false);
     }
@@ -319,7 +325,7 @@ const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, .
           <FlexSectionInputBlock title="Destination" image={<AsteroidImage asteroid={asteroid} />} label={formatters.asteroidName(asteroid)} sublabel="Orbit" />
         </FlexSection>
         <p>The ship will be towed to orbit without using its propellant.</p>
-        {(submissionReason || ejectionEligibility.reason) && <p role="status">{submissionReason || ejectionEligibility.reason}</p>}
+        {ejectionEligibility.reason && <p role="status">{ejectionEligibility.reason}</p>}
       </ActionDialogBody>
       <ActionDialogFooter
         {...props}

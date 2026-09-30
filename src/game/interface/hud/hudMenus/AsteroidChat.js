@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
@@ -165,7 +166,7 @@ const AsteroidChat = () => {
       } else {
         createAlert({
           type: 'GenericAlert',
-          data: { content: 'Message failed to send. Please try again.' },
+          data: { content: errorMessages.messageFailed },
           duration: 3000,
           level: 'warning',
         });

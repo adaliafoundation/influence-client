@@ -1,3 +1,4 @@
+import { errorMessages } from '../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import screenfull from 'screenfull';
@@ -389,7 +390,7 @@ const GameplayPane = () => {
         createAlert({
           type: 'GenericAlert',
           level: 'warning',
-          data: { content: 'Gameplay session approval was not completed.' },
+          data: { content: errorMessages.loginFailed },
           duration: 5000
         });
       }

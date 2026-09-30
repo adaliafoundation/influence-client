@@ -4,6 +4,18 @@ import { prepaidPermissionEnd } from './lotUsageAuthorization';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
 
+// A lot occupied by the asteroid controller's building cannot be leased.
+// SDK control checks include different crews delegated to the same account.
+export const getLotLeaseEligibility = ({ asteroid, lot, authorize }) => {
+  if (!lot) return { status: 'unresolved' };
+  if (!lot.building) return { status: 'allowed' };
+  const controller = asteroid?.Control?.controller;
+  if (!controller?.id) return { status: 'unresolved' };
+  const control = authorize('controls', [controller, lot.building], [controller, lot.building]);
+  if (control.status === 'unresolved') return control;
+  return { status: control.status === 'allowed' ? 'denied' : 'allowed' };
+};
+
 export const isUseLotLease = (agreement) => Number(agreement?.permission) === Permission.IDS.USE_LOT;
 
 export const getLatestUseLotAgreement = (agreements = []) => {

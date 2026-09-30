@@ -13,9 +13,11 @@ const useShipEjectionEligibility = (ship) => {
   current.current = params;
   const enabled = isForceLaunch(crew, ship) && isLandedShip(ship) && blockTime != null;
   const query = useQuery({
-    queryKey: ['shipEjectionEligibility', ship?.id, crew?.id, accountAddress, blockTime, blockNumber, ship?.Location, ship?.Control, crew?.Crew, crew?.Location],
+    queryKey: ['shipEjectionEligibility', ship?.id, crew?.id, accountAddress, blockTime != null, ship?.Location, ship?.Control, crew?.Crew, crew?.Location],
     queryFn: () => loadShipEjectionEligibility(params),
     enabled,
+    meta: { recheck: () => recheck({ shipId: ship?.id, crewId: crew?.id }) },
+    staleTime: Infinity,
     retry: false
   });
   const recheck = useCallback(async (expected) => {
@@ -23,11 +25,11 @@ const useShipEjectionEligibility = (ship) => {
     if (expected.shipId !== start.shipId || expected.crewId !== start.crewId) return checkingShipEjection;
     const result = await loadShipEjectionEligibility(start);
     const latest = current.current;
-    if (start.shipId !== latest.shipId || start.crewId !== latest.crewId || start.accountAddress !== latest.accountAddress || start.blockTime !== latest.blockTime || start.blockNumber !== latest.blockNumber || start.provider !== latest.provider) return checkingShipEjection;
+    if (start.shipId !== latest.shipId || start.crewId !== latest.crewId || start.accountAddress !== latest.accountAddress || start.provider !== latest.provider) return checkingShipEjection;
     return result;
   }, []);
   return {
-    eligibility: !enabled || query.isFetching || query.isError ? checkingShipEjection : (query.data || checkingShipEjection),
+    eligibility: !enabled || query.isError ? checkingShipEjection : (query.data || checkingShipEjection),
     recheck
   };
 };

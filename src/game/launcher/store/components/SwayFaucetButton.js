@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../../lib/errorMessages';
 import { useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PuffLoader } from 'react-spinners';
@@ -43,7 +44,7 @@ const SwayFaucetButton = ({ noLabel }) => {
       console.error(e);
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'Faucet request failed, please try again later.' },
+        data: { content: errorMessages.fundingUnavailable },
         level: 'warning',
         duration: 5000
       });

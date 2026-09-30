@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Deposit, Entity, Permission } from '@influenceth/sdk';
 
@@ -11,6 +12,7 @@ import actionStages from '~/lib/actionStages';
 import { getStarterCoreSampleSource } from '~/lib/starterPacks';
 
 const useCoreSampleManager = (lotId, missionId) => {
+  const reportBlocked = useFailureReporter();
   const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
   const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
@@ -175,10 +177,10 @@ const useCoreSampleManager = (lotId, missionId) => {
   const startImproving = useCallback(async (depositId, coreDrillSource, depositOwnerCrew) => {
     const sample = (lot?.deposits || []).find((c) => c.id === depositId);
     const permission = await recheckAuthorization('can', [crew, sample, Permission.IDS.USE_DEPOSIT], [crew, sample]);
-    if (permission.status === 'unresolved' || (permission.status === 'denied' && !depositOwnerCrew)) return permission;
+    if (permission.status === 'unresolved' || (permission.status === 'denied' && !depositOwnerCrew)) return reportBlocked(permission);
     if (coreDrillSource?.id) {
       const originPermission = await recheckAuthorization('can', [crew, coreDrillSource, Permission.IDS.REMOVE_PRODUCTS], [crew, coreDrillSource]);
-      if (originPermission.status !== 'allowed') return originPermission;
+      if (originPermission.status !== 'allowed') return reportBlocked(originPermission);
     }
     execute(
       depositOwnerCrew ? 'PurchaseDepositAndImprove' : 'SampleDepositImprove',
@@ -195,7 +197,7 @@ const useCoreSampleManager = (lotId, missionId) => {
         resource: sample?.Deposit?.resource
       }
     )
-  }, [execute, lotId, payload, recheckAuthorization, crew, lot?.deposits]);
+  }, [reportBlocked, execute, lotId, payload, recheckAuthorization, crew, lot?.deposits]);
 
   const finishSampling = useCallback((sampleId) => {
     const selectedAction = currentSamplings.find((c) => c.action?.sampleId === sampleId);

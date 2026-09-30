@@ -1,3 +1,4 @@
+import { errorMessages } from '../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -136,7 +137,7 @@ const NotificationSettings = ({ onLoading, onValid, ...props }) => {
                 createAlert({
                   type: 'GenericAlert',
                   level: 'warning',
-                  data: { content: 'User update failed. Please try again.' },
+                  data: { content: errorMessages.settingsFailed },
                   duration: 5000
                 });
               });
@@ -169,7 +170,7 @@ const NotificationSettings = ({ onLoading, onValid, ...props }) => {
           createAlert({
             type: 'GenericAlert',
             level: 'warning',
-            data: { content: 'User update failed. Please try again.' },
+            data: { content: errorMessages.settingsFailed },
             duration: 5000
           });
         });

@@ -52,6 +52,19 @@ export const findPendingMissionTransaction = (transactions, assignment) => {
   });
 };
 
+// A receipt confirms execution, but buttons must wait for the indexed result.
+export const isMissionTransactionIndexed = (tx, view) => {
+  const assignment = tx.vars?.assignment;
+  if (!STARTER_MISSION_SYSTEMS.has(tx.key) || !assignment || !view?.campaign || !view?.subject
+    || BigInt(view.campaign) !== BigInt(assignment.campaign)
+    || view.subject.label !== assignment.subject.label
+    || canonicalCrewId(view.subject.id) !== canonicalCrewId(assignment.subject.id)) return false;
+  const mission = view.missions?.find(entry => entry.id === assignment.mission);
+  if (tx.key === 'AcceptMission') return !!(mission?.accepted || mission?.completed || mission?.claimed);
+  if (tx.key === 'MissionValidate') return !!(mission?.completed || mission?.claimed);
+  return !!mission?.claimed;
+};
+
 export const assertStarterMissionAuthority = (view, accountAddress) => {
   if (!accountAddress || !view.recipient || !Address.areEqual(accountAddress, view.recipient)) {
     throw new Error('Only the current crew delegate can submit mission transactions.');

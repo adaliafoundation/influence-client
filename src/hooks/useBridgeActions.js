@@ -1,3 +1,5 @@
+import { reportFailure } from '../lib/errorReporting';
+import { errorMessages } from '../lib/errorMessages';
 import { useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { num } from 'starknet';
@@ -74,7 +76,7 @@ const useBridgeActions = () => {
 
   const ensureEthereumReady = useCallback(async () => {
     if (!isConnected || !ethereumAddress) {
-      notifyBridge(createAlert, 'Connect an Ethereum wallet before bridging.');
+      notifyBridge(createAlert, errorMessages.connection);
       return false;
     }
     if (chainId !== configuredChain.id) {
@@ -89,7 +91,7 @@ const useBridgeActions = () => {
       return false;
     }
     if (!walletAccount) {
-      notifyBridge(createAlert, 'Connect your Starknet wallet before bridging.');
+      notifyBridge(createAlert, errorMessages.connection);
       return false;
     }
     return true;
@@ -127,7 +129,7 @@ const useBridgeActions = () => {
       return null;
     }
     if (!isBridgeAssetConfigured(assetType)) {
-      notifyBridge(createAlert, 'This bridge is not configured for the current deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
     if (!(await ensureEthereumReady())) return null;
@@ -192,8 +194,8 @@ const useBridgeActions = () => {
       }));
       return hash;
     } catch (e) {
-      console.warn('Bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -212,7 +214,7 @@ const useBridgeActions = () => {
   const bridgeAssetsToEthereum = useCallback(async ({ assetType, assets }) => {
     if (!ensureStarknetReady()) return null;
     if (!isBridgeAssetConfigured(assetType)) {
-      notifyBridge(createAlert, 'This bridge is not configured for the current deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
     if (!(await ensureEthereumReady())) return null;
@@ -245,8 +247,8 @@ const useBridgeActions = () => {
       }));
       return txHash;
     } catch (e) {
-      console.warn('Bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -295,8 +297,8 @@ const useBridgeActions = () => {
       queryClient.invalidateQueries({ queryKey: ['bridgeCrossings'] });
       return hash;
     } catch (e) {
-      console.warn('Receive transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Receive transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -306,7 +308,7 @@ const useBridgeActions = () => {
   const mintCrewFromAsteroid = useCallback(async (asteroidId) => {
     if (!(await ensureEthereumReady())) return null;
     if (!getConfig('Ethereum.Address.arvadCrewmateSale')) {
-      notifyBridge(createAlert, 'Crew minting is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
@@ -334,8 +336,8 @@ const useBridgeActions = () => {
       }));
       return hash;
     } catch (e) {
-      console.warn('Crew mint transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Crew mint transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -352,7 +354,7 @@ const useBridgeActions = () => {
     const tokenAddress = getConfig('Ethereum.Address.swayToken');
     const bridgeAddress = getConfig('Ethereum.Address.swayBridge');
     if (!(tokenAddress && bridgeAddress && getConfig('Starknet.Address.swayToken'))) {
-      notifyBridge(createAlert, 'SWAY bridge is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
@@ -406,8 +408,8 @@ const useBridgeActions = () => {
       }));
       return hash;
     } catch (e) {
-      console.warn('SWAY bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -428,7 +430,7 @@ const useBridgeActions = () => {
     if (!ensureStarknetReady()) return null;
     if (!(await ensureEthereumReady())) return null;
     if (!getConfig('Starknet.Address.swayToken')) {
-      notifyBridge(createAlert, 'SWAY bridge is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
@@ -459,8 +461,8 @@ const useBridgeActions = () => {
       }));
       return txHash;
     } catch (e) {
-      console.warn('SWAY withdrawal failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY withdrawal failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -505,8 +507,8 @@ const useBridgeActions = () => {
       queryClient.invalidateQueries({ queryKey: ['bridgeSwayCrossings'] });
       return hash;
     } catch (e) {
-      console.warn('SWAY receive transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY receive transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();

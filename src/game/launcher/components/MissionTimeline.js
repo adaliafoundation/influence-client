@@ -124,8 +124,8 @@ const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onA
       <h3>{accepted ? 'Mission accepted' : 'Accept mission'}</h3>
       {!accepted && <>
         {!mission.canAccept && <Muted>Complete the previous mission to unlock this one.</Muted>}
-        <Controls><Button disabled={disabled || !mission.canAccept} isTransaction onClick={onAccept}>
-          {pending ? 'Transaction pending' : 'Accept mission'}
+        <Controls><Button disabled={disabled || pending || !mission.canAccept} loading={pending} isTransaction onClick={onAccept}>
+          Accept mission
         </Button></Controls>
       </>}
     </Step>
@@ -157,8 +157,8 @@ const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onA
       <h3>{mission.claimed ? 'Mission complete' : 'Complete mission'}</h3>
       <Controls>
         <Reward><SwayIcon /> {mission.reward.toLocaleString()} SWAY</Reward>
-        {mission.claimed ? <State $done>Reward claimed</State> : <Button disabled={disabled || !canComplete} isTransaction onClick={onComplete}>
-          {pending ? 'Transaction pending' : 'Complete mission'}
+        {mission.claimed ? <State $done>Reward claimed</State> : <Button disabled={disabled || pending || !canComplete} loading={pending} isTransaction onClick={onComplete}>
+          Complete mission
         </Button>}
       </Controls>
     </Step>

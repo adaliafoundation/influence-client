@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import useConstants from '~/hooks/useConstants';
 import { useCallback, useContext, useMemo } from 'react';
 import { Entity, Lot } from '@influenceth/sdk';
@@ -11,6 +12,7 @@ import actionStages from '~/lib/actionStages';
 import { getLotLeaseAuctionStatus } from '~/lib/leaseUtils';
 
 const useRepoManager = (lotId) => {
+  const reportBlocked = useFailureReporter();
   const { crew, isLoading, authorize, recheckAuthorization, recheckActingCrew } = useCrewContext();
   const { execute, getPendingTx } = useContext(ChainTransactionContext);
   const { data: lot } = useLot(lotId);
@@ -36,12 +38,12 @@ const useRepoManager = (lotId) => {
   const repoBuilding = useCallback(
     async () => {
       const prerequisites = await recheckActingCrew({ asteroidId: asteroid?.id });
-      if (prerequisites.status !== 'allowed') return prerequisites;
+      if (prerequisites.status !== 'allowed') return reportBlocked(prerequisites);
       const decision = await recheckAuthorization('repossession', [crew, lot?.building, gracePeriod], [crew, lot?.building]);
-      if (decision.status !== 'allowed') return decision;
+      if (decision.status !== 'allowed') return reportBlocked(decision);
       return execute(isAuctionActive ? 'RepossessBuildingAndCancelAuction' : 'RepossessBuilding', payload, { lotId });
     },
-    [recheckActingCrew, asteroid?.id, execute, isAuctionActive, lotId, payload, recheckAuthorization, crew, lot?.building, gracePeriod]
+    [reportBlocked, recheckActingCrew, asteroid?.id, execute, isAuctionActive, lotId, payload, recheckAuthorization, crew, lot?.building, gracePeriod]
   );
 
   const currentRepo = useMemo(

@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { Entity } from '@influenceth/sdk';
 
@@ -9,6 +10,7 @@ import useShipEjectionEligibility from '~/hooks/useShipEjectionEligibility';
 import { checkingShipEjection, isForceLaunch } from '~/lib/shipEjectionEligibility';
 
 const useShipDockingManager = (shipId) => {
+  const reportBlocked = useFailureReporter();
   const { execute, getPendingTx } = useContext(ChainTransactionContext);
   const { crew, recheckAuthorization } = useCrewContext();
   const { data: ship } = useShip(shipId);
@@ -17,16 +19,16 @@ const useShipDockingManager = (shipId) => {
   const caller_crew = useMemo(() => ({ id: crew?.id, label: Entity.IDS.CREW }), [crew?.id]);
 
   const undockShip = useCallback(async (hopperAssisted) => {
-    if (!crew?.id || !ship?.Control?.controller?.id || !ship?.Location?.location) return checkingShipEjection;
+    if (!crew?.id || !ship?.Control?.controller?.id || !ship?.Location?.location) return reportBlocked(checkingShipEjection);
     const mode = await recheckAuthorization('forceLaunch', [crew, ship], [crew, ship]);
-    if (mode.status === 'unresolved') return checkingShipEjection;
+    if (mode.status === 'unresolved') return reportBlocked(checkingShipEjection);
     const forced = mode.status === 'allowed';
-    if (forced !== isForceLaunch(crew, ship)) return { status: 'blocked', reason: 'Ship controller changed. Review the launch mode.' };
+    if (forced !== isForceLaunch(crew, ship)) return reportBlocked({ status: 'blocked', reason: 'Ship controller changed. Review the launch mode.' });
     let launchShip = mode.entities?.find((entity) => entity.label === Entity.IDS.SHIP && Number(entity.id) === Number(ship.id));
-    if (!launchShip?.Location?.location) return checkingShipEjection;
+    if (!launchShip?.Location?.location) return reportBlocked(checkingShipEjection);
     if (forced) {
       const eligibility = await recheck({ shipId: ship?.id, crewId: crew?.id });
-      if (eligibility.status !== 'allowed') return eligibility;
+      if (eligibility.status !== 'allowed') return reportBlocked(eligibility);
       launchShip = eligibility.ship;
     }
     return execute(
@@ -41,14 +43,14 @@ const useShipDockingManager = (shipId) => {
         lotId: launchShip?.Location?.locations?.find((e) => e.label === Entity.IDS.LOT)?.id,
       }
     );
-  }, [caller_crew, crew, execute, recheck, recheckAuthorization, ship]);
+  }, [reportBlocked, caller_crew, crew, execute, recheck, recheckAuthorization, ship]);
 
   const dockShip = useCallback(async (destination, hopperAssisted, destLotId) => {
     const control = await recheckAuthorization('controls', [crew, ship], [crew, ship]);
-    if (control.status !== 'allowed') return control;
+    if (control.status !== 'allowed') return reportBlocked(control);
     if (destination.label === Entity.IDS.BUILDING) {
       const permission = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
-      if (permission.status !== 'allowed') return permission;
+      if (permission.status !== 'allowed') return reportBlocked(permission);
     }
     execute(
       'DockShip',
@@ -63,7 +65,7 @@ const useShipDockingManager = (shipId) => {
         shipId
       }
     );
-  }, [caller_crew, execute, crew, ship, recheckAuthorization, shipId]);
+  }, [reportBlocked, caller_crew, execute, crew, ship, recheckAuthorization, shipId]);
 
   const currentDockingAction = useMemo(
     () => getPendingTx ? getPendingTx('DockShip', { caller_crew }) : null,

@@ -1,3 +1,4 @@
+import ActionDialogGate from './ActionDialogGate';
 import { useEffect, useMemo } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { PuffLoader } from 'react-spinners';
@@ -285,8 +286,7 @@ const ActionDialog = ({ type, params }) => {
 
 const ActionDialogWrapper = () => {
   const actionDialog = useStore(s => s.actionDialog);
-  // const actionDialog = { params: { origin: { id: 755, label: 6 }, originSlot: 2 }, type: 'JETTISON_CARGO' }; // (for debugging)
-  return actionDialog?.type ? <ActionDialog {...actionDialog} /> : null;
+  return actionDialog?.type ? <ActionDialogGate><ActionDialog {...actionDialog} /></ActionDialogGate> : null;
 };
 
 export default ActionDialogWrapper;

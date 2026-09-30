@@ -1,3 +1,5 @@
+import { reportFailure } from '../../../lib/errorReporting';
+import { errorMessages } from '../../../lib/errorMessages';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
@@ -929,6 +931,12 @@ const PurchaseStatus = ({
   product,
   purchase
 }) => {
+  const notify = useStore(s => s.dispatchAlertLogged);
+  useEffect(() => {
+    if (purchase?.status === STARTER_PACK_STATUSES.GRANT_FAILED) {
+      reportFailure(notify, purchase, { message: 'starterGrantFailed' });
+    }
+  }, [notify, purchase]);
   if (!purchase) return null;
 
   if (purchase.status === STARTER_PACK_STATUSES.PAID_PENDING_CUSTOMIZATION) {
@@ -960,14 +968,7 @@ const PurchaseStatus = ({
     );
   }
 
-  if (purchase.status === STARTER_PACK_STATUSES.GRANT_FAILED) {
-    return (
-      <Notice warn>
-        <WarningIcon />
-        <span>{purchase.grantError || 'Starter pack grant failed. Please try submitting again.'}</span>
-      </Notice>
-    );
-  }
+  if (purchase.status === STARTER_PACK_STATUSES.GRANT_FAILED) return null;
 
   if (purchase.status === STARTER_PACK_STATUSES.CHECKOUT_CREATED) {
     if (awaitingPaymentConfirmation) {
@@ -1423,16 +1424,7 @@ const StarterPackSKU = () => {
 
   useEffect(() => {
     if (!checkoutQuery.error) return;
-    createAlert({
-      type: 'GenericAlert',
-      level: 'warning',
-      data: {
-        content: checkoutQuery.error?.response?.data?.error ||
-          checkoutQuery.error.message ||
-          'Unable to load Stripe checkout.'
-      },
-      duration: 10000
-    });
+    reportFailure(createAlert, checkoutQuery.error, { message: 'checkoutFailed' });
   }, [checkoutQuery.error, createAlert]);
 
   useEffect(() => {
@@ -1456,7 +1448,7 @@ const StarterPackSKU = () => {
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Stripe checkout could not be resumed because the server response was incomplete.' },
+        data: { content: errorMessages.checkoutFailed },
         duration: 10000
       });
     }
@@ -1517,12 +1509,7 @@ const StarterPackSKU = () => {
       .catch((e) => {
         accountSetupPurchaseRef.current = undefined;
         if (!cancelled) {
-          createAlert({
-            type: 'GenericAlert',
-            level: 'warning',
-            data: { content: e?.userMessage || e.message || 'Unable to set up your Influence account.' },
-            duration: 10000
-          });
+          reportFailure(createAlert, e, { message: 'setupRequired' });
         }
       })
       .finally(() => {
@@ -1656,7 +1643,7 @@ const StarterPackSKU = () => {
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Stripe Checkout is not configured for this environment.' },
+        data: { content: errorMessages.serviceUnavailable },
         duration: 10000
       });
       return;
@@ -1682,12 +1669,7 @@ const StarterPackSKU = () => {
       setCheckoutClientSecret(response.clientSecret);
       setCheckoutOpen(true);
     } catch (e) {
-      createAlert({
-        type: 'GenericAlert',
-        level: 'warning',
-        data: { content: e?.response?.data?.error || e.message || 'Unable to create Stripe checkout.' },
-        duration: 10000
-      });
+      reportFailure(createAlert, e, { message: 'checkoutFailed' });
     } finally {
       setCheckoutProductId();
     }
@@ -1726,12 +1708,7 @@ const StarterPackSKU = () => {
       dispatchStarterPackCheckoutUpdated(response.purchase);
       refreshPurchases();
     } catch (e) {
-      createAlert({
-        type: 'GenericAlert',
-        level: 'warning',
-        data: { content: e?.response?.data?.error || e.message || 'Unable to submit starter crew.' },
-        duration: 10000
-      });
+      reportFailure(createAlert, e, { message: 'actionFailed' });
     } finally {
       setSubmitting(false);
     }

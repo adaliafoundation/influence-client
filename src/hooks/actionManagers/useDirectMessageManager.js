@@ -1,3 +1,4 @@
+import { errorMessages } from '../../lib/errorMessages';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Encryption } from '@influenceth/sdk';
 
@@ -53,7 +54,7 @@ const useDirectMessageManager = (recipient) => {
         createAlert({
           type: 'GenericAlert',
           level: 'warning',
-          data: { content: 'IPFS hashing failed. This is likely either a temporary error or due to the size of the mssage. Please try again.' },
+          data: { content: errorMessages.messageFailed },
           duration: 5000
         });
       }

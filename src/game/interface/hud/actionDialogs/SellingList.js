@@ -294,13 +294,13 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
   const [openProductId, setOpenProductId] = useState();
   const [selected, setSelected] = useState(initialSelection || {});
 
-  const { data: exchanges, dataUpdatedAt: exchangesUpdatedAt } = useAsteroidBuildings(asteroid?.id, 'Exchange', Permission.IDS.SELL);
+  const { data: exchanges } = useAsteroidBuildings(asteroid?.id, 'Exchange', Permission.IDS.SELL);
   const exchangesById = useMemo(() => {
     return (exchanges || []).reduce((acc, cur) => {
       acc[cur.id] = cur;
       return acc;
     }, {});
-  }, [exchangesUpdatedAt])
+  }, [exchanges])
   const { data: originLot } = useLot(locationsArrToObj(origin?.Location?.locations || []).lotId);
   useMemo(() => origin?.Inventories.find((i) => i.slot === originSlot), [origin, originSlot]);
 
@@ -314,7 +314,6 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
 
   const {
     data: resourceMarketplaces,
-    dataUpdatedAt: resourceMarketplacesUpdatedAt,
     isLoading: resourceMarketplacesLoading,
     refetch: refetchResourceMarketplaces
   } = useShoppingListData(asteroid?.id, originLot?.id, productIds, 'sell');
@@ -448,7 +447,7 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
         }
       });
     });
-  }, [resourceMarketplacesUpdatedAt, selected])
+  }, [resourceMarketplaces, selected])
 
   const [selling, setSelling] = useState();
   const handleSell = useCallback(async () => {
@@ -505,7 +504,7 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
       }, 1000);
     }
 
-  }, [allFills, crew?.id, origin, originLot?.id, originSlot, exchangesUpdatedAt, execute]);
+  }, [allFills, crew?.id, origin, originLot?.id, originSlot, exchanges, execute]);
 
   const handleProductClick = useCallback((productId) => () => {
     setOpenProductId((p) => p === productId ? null : productId);

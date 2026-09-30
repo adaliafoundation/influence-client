@@ -1,3 +1,4 @@
+import { errorMessages } from '../lib/errorMessages';
 import { useEffect, useMemo } from 'react';
 
 import useStore from '~/hooks/useStore';
@@ -78,7 +79,7 @@ const useFundingIntentMonitor = (intent, { enabled = true, notifyOnComplete = tr
         } else if (['failed', 'cancelled'].includes(order.status)) {
           createAlert({
             type: 'GenericAlert',
-            data: { content: order.status === 'cancelled' ? 'Banxa order cancelled.' : 'Banxa order failed.' },
+            data: { content: order.status === 'cancelled' ? errorMessages.fundingCancelled : errorMessages.fundingFailed },
             level: 'warning',
             duration: 5e3
           });

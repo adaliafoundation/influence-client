@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crew, Crewmate, Lot, Permission } from '@influenceth/sdk';
+import { useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Asteroid, Crew, Crewmate, Entity, Lot, Permission } from '@influenceth/sdk';
 
 import useAsteroidBuildings from '~/hooks/useAsteroidBuildings';
 import useShoppingListOrders from '~/hooks/useShoppingListOrders';
 import api from '~/lib/api';
+import { entitiesCacheKey } from '~/lib/cacheKey';
 
 const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
   const {
@@ -15,59 +17,42 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
 
   const lastValue = useRef();
 
-  // TODO: how much effort would it be to include feeEnforcement in elasticsearch on exchanges
-  const [feeEnforcements, setFeeEnforcements] = useState();
-  const [feesLoading, setFeesLoading] = useState(true);
-  const loadFees = useCallback(async () => {
-    const ids = (exchanges || []).map((e) => e.Control?.controller?.id);
-    if (ids?.length > 0) {
-      setFeesLoading(true);
-      try {
-        const crewmates = await api.getCrewmatesOfCrews(ids);
-        const crews = crewmates.reduce((acc, c) => {
-          const crewId = c.Control?.controller?.id;
-          if (crewId) {
-            if (!acc[crewId]) acc[crewId] = [];
-            acc[crewId].push(c);
-          }
-          return acc;
-        }, {});
-
-        const fees = {};
-        Object.keys(crews).forEach((crewId) => {
-
-          // NOTE: this only works because we know MARKETPLACE_FEE_ENFORCEMENT is `notFurtherModified`
-          // (if that changes, would need to pull more data from Crew as well)
-          const crewFeeEnforcement = Crew.getAbilityBonus(Crewmate.ABILITY_IDS.MARKETPLACE_FEE_ENFORCEMENT, crews[crewId]);
-          exchanges.filter((e) => e.Control?.controller?.id === Number(crewId)).forEach((e) => {
-            fees[e.id] = crewFeeEnforcement.totalBonus;
-          });
-        });
-        setFeeEnforcements(fees);
-      } catch (e) {
-        console.warn(e);
-      }
+  // Fee data depends on controlling crews, not exchange render timestamps.
+  const crewIds = [...new Set((exchanges || []).map(exchange => exchange.Control?.controller?.id).filter(Boolean))].sort((a, b) => a - b);
+  const { data: crewmates, isLoading: crewmatesLoading, isError: crewmatesError, dataUpdatedAt: crewmatesUpdatedAt, refetch: refetchCrewmates } = useQuery({
+    queryKey: entitiesCacheKey(Entity.IDS.CREWMATE, `controllers:${crewIds.join(',')}`),
+    queryFn: () => api.getCrewmatesOfCrews(crewIds),
+    enabled: crewIds.length > 0
+  });
+  const feesLoading = crewIds.length > 0 && crewmatesLoading;
+  const feeEnforcements = useMemo(() => {
+    if (crewmatesError) return undefined;
+    const crews = {};
+    for (const crewmate of crewmates || []) {
+      const crewId = crewmate.Control?.controller?.id;
+      if (crewId) (crews[crewId] ||= []).push(crewmate);
     }
-    setFeesLoading(false);
-  }, [exchangesUpdatedAt]);
-  useEffect(() => {
-    loadFees();
-  }, [loadFees]);
+    const bonuses = Object.fromEntries(Object.entries(crews).map(([crewId, members]) => [crewId,
+      Crew.getAbilityBonus(Crewmate.ABILITY_IDS.MARKETPLACE_FEE_ENFORCEMENT, members).totalBonus
+    ]));
+    return Object.fromEntries((exchanges || []).map(exchange => [exchange.id, bonuses[exchange.Control?.controller?.id] || 1]));
+  }, [crewmates, crewmatesError, exchanges]);
 
-  const { data: orders, isLoading: ordersLoading, refetch: refetchOrders } = useShoppingListOrders(asteroidId, productIds, mode);
-
+  const { data: orders, isLoading: ordersLoading, dataUpdatedAt: ordersUpdatedAt, refetch: refetchOrders } = useShoppingListOrders(asteroidId, productIds, mode);
+  const dataUpdatedAt = Math.max(exchangesUpdatedAt || 0, crewmatesUpdatedAt || 0, ordersUpdatedAt || 0);
   const isLoading = exchangesLoading || feesLoading || ordersLoading;
   return useMemo(() => {
     const refetch = () => {
       refetchExchanges();
       refetchOrders();
+      if (crewIds.length) refetchCrewmates();
     };
 
     if (isLoading) {
       return {
         data: lastValue.current,
         isLoading: true,
-        dataUpdatedAt: Date.now(),
+        dataUpdatedAt,
         refetch
       };
     }
@@ -81,10 +66,12 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
           const marketplace = exchanges.find((e) => e.id === Number(buildingId));
 
           if (marketplace) {
-            o.marketplace = marketplace;
-            o.distance = lotId > 0 ? Asteroid.getLotDistance(asteroidId, Lot.toIndex(o.lotId), Lot.toIndex(lotId)) : 0;
-            o.feeEnforcement = feeEnforcements[buildingId] || 1;
-            finalData[productId].push(o);
+            finalData[productId].push({
+              ...o,
+              marketplace,
+              distance: lotId > 0 ? Asteroid.getLotDistance(asteroidId, Lot.toIndex(o.lotId), Lot.toIndex(lotId)) : 0,
+              feeEnforcement: feeEnforcements[buildingId] || 1
+            });
           }
         });
       });
@@ -93,11 +80,11 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
 
     return {
       data: finalData,
-      dataUpdatedAt: Date.now(),
+      dataUpdatedAt,
       isLoading: false,
       refetch
     };
-  }, [asteroidId, lotId, isLoading, feeEnforcements, exchangesUpdatedAt, orders]);
+  }, [asteroidId, lotId, isLoading, feeEnforcements, exchanges, dataUpdatedAt, orders, refetchExchanges, refetchOrders, refetchCrewmates, crewIds.length]);
 };
 
 export default useShoppingListData;

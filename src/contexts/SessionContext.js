@@ -1,3 +1,5 @@
+import { reportFailure } from '../lib/errorReporting';
+import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { isExpired } from 'react-jwt';
@@ -42,21 +44,13 @@ const manualConnectTimeout = 30000;
 const connectCancelFocusDelay = 750;
 const connectCancelCheckInterval = 250;
 
-const getErrorMessage = (error) => {
-  console.error(error);
-  if (error?.userMessage) return error.userMessage;
-  if (typeof error === 'string') return error;
-  else if (typeof error === 'object' && error?.message) return error.message;
-  return 'An unknown error occurred, please check the console for details.';
-};
-
 const normalizeAuthSigningError = (error) => {
   if (!error?.message?.includes('invalid domain type definition')) return error;
 
   const authError = new Error('Login challenge is not compatible with this wallet.');
   authError.cause = error;
   authError.code = 'AUTH_TYPED_DATA_UNSUPPORTED';
-  authError.userMessage = 'Login could not be signed by this wallet. Please try another wallet or report this issue.';
+  authError.userMessage = errorMessages.loginFailed;
   return authError;
 };
 
@@ -75,16 +69,16 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const createLoginCancelledError = () => new Error('Login cancelled');
 
 const createGameplaySessionApprovalError = (cause) => {
-  const error = new Error('Gameplay session approval was not completed.');
+  const error = new Error(errorMessages.loginFailed);
   error.cause = cause;
-  error.userMessage = 'Gameplay session approval was not completed. Please try logging in again.';
+  error.userMessage = errorMessages.loginFailed;
   return error;
 };
 
 const createLoginSigningUnavailableError = (cause) => {
   const error = new Error('Wallet cannot sign the login challenge.');
   error.cause = cause;
-  error.userMessage = 'This wallet could not sign the login challenge. Please try reconnecting or use another wallet.';
+  error.userMessage = errorMessages.loginFailed;
   return error;
 };
 
@@ -312,7 +306,7 @@ export function SessionProvider({ children }) {
         throw createWalletConnectionError(
           WALLET_ERROR_CODES.CONNECTOR_NOT_FOUND,
           selectedConnectorId,
-          `${getWalletLabel(selectedConnectorId)} is not available. Choose another login option.`
+          errorMessages.loginOptionMissing(getWalletLabel(selectedConnectorId))
         );
       }
 
@@ -375,12 +369,13 @@ export function SessionProvider({ children }) {
           });
         }
 
-        const newAccount = connectorData.walletAccount || await WalletAccount.connect(
+        // The connector already obtained account permission; do not prompt again.
+        const newAccount = connectorData.walletAccount || new WalletAccount({
           provider,
-          wallet,
-          undefined,
+          walletProvider: wallet,
+          address: connectorData.account,
           paymaster
-        );
+        });
         if (authFlowId !== authFlowRef.current) return;
 
         const capabilities = getWalletCapabilities(walletId);
@@ -433,14 +428,14 @@ export function SessionProvider({ children }) {
         throw createWalletConnectionError(
           WALLET_ERROR_CODES.NOT_CONNECTED,
           selectedConnectorId,
-          `${getWalletLabel(selectedConnectorId)} did not return an account. Please try again.`
+          errorMessages.accountMissing(getWalletLabel(selectedConnectorId))
         );
       }
     } catch(e) {
       if (authFlowId !== authFlowRef.current) return;
       if (e.message === 'Incorrect chain') {
         console.log('');
-        setError(`Incorrect chain, please switch to ${resolveChainId(appConfig.get('Starknet.chainId'))}`);
+        setError(errorMessages.wrongChain(resolveChainId(appConfig.get('Starknet.chainId'))));
       }
 
       else if (auto && isConnectorNotFoundError(e)) {
@@ -464,6 +459,8 @@ export function SessionProvider({ children }) {
         setAuthPhase(AUTH_PHASES.FAILED);
         setError(e);
       }
+      setConnecting(false);
+      return { error: e };
     }
 
     if (authFlowId === authFlowRef.current) setConnecting(false);
@@ -553,8 +550,8 @@ export function SessionProvider({ children }) {
 
       const eventAccount = Address.toStandard(Array.isArray(e) ? e[0] : e);
 
-      if (currentSession?.accountAddress === eventAccount && status === STATUSES.AUTHENTICATED) {
-        // Handle extra events that can occasionally be fired (i.e. we're already authed)
+      if (connectedAccount === eventAccount) {
+        // Extensions can repeat the approved account while authentication is still pending.
         return;
       } else if (sessions[eventAccount]) {
         // If the account we just switched to has a suspended session, use it
@@ -602,7 +599,7 @@ export function SessionProvider({ children }) {
 
     if (walletAccount) startListening();
     return stopListening;
-  }, [ currentSession, disconnectWalletOnly, sessions, status, walletAccount ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ connectedAccount, disconnectWalletOnly, sessions, walletAccount ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Checks the account contract do determine if it's deployed on-chain yet
   const checkDeployed = useCallback(async () => {
@@ -747,12 +744,7 @@ export function SessionProvider({ children }) {
         clearWalletConnection();
         setAuthPhase(AUTH_PHASES.FAILED);
         setStatus(getAuthenticatedStatus(currentSession));
-        createAlert({
-          type: 'GenericAlert',
-          level: 'warning',
-          data: { content: getErrorMessage(e) || 'Signature verification failed.' },
-          duration: 10000
-        });
+        reportFailure(createAlert, e, { message: 'loginFailed' });
       }
     }
 
@@ -841,12 +833,7 @@ export function SessionProvider({ children }) {
   // Catch errors and display in an alert
   useEffect(() => {
     if (error) {
-      createAlert({
-        type: 'GenericAlert',
-        level: 'warning',
-        data: { content: getErrorMessage(error) || 'Please try again.' },
-        duration: 10000
-      });
+      reportFailure(createAlert, error, { message: 'loginFailed' });
 
       setError(null);
       if (hasValidSession(currentSession)) {

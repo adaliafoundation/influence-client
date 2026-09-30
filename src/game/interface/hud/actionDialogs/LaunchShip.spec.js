@@ -39,7 +39,10 @@ const useStationedCrews = require('~/hooks/useStationedCrews');
 const useShipDockingManager = require('~/hooks/actionManagers/useShipDockingManager');
 const LaunchShip = require('./LaunchShip').default;
 let manager;
+const createAlert = jest.fn();
 beforeEach(() => {
+  createAlert.mockClear();
+  require('~/hooks/useStore').mockImplementation(selector => selector({ dispatchAlertLogged: createAlert }));
   useCrewContext.mockReturnValue({ crew: { id: 1 }, accountCrewIds: [1, 2] });
   useShip.mockReturnValue({ data: { id: 9, Control: { controller: { id: 2 } }, Ship: { readyAt: 999 }, Inventories: [{ reservedMass: 10 }], _location: { lotId: 5, asteroidId: 1 }, Location: { location: { label: Entity.IDS.LOT, id: 5 } } } });
   useLot.mockReturnValue({ data: { id: 5 } });
@@ -67,7 +70,9 @@ test('submission displays a newly granted protection without proceeding', async 
   manager.undockShip.mockResolvedValue({ status: 'blocked', reason: 'Ship has permission to remain' });
   render(<LaunchShip shipId={9} onClose={jest.fn()} />);
   fireEvent.click(screen.getByRole('button'));
-  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Ship has permission to remain'));
+  await waitFor(() => expect(createAlert).toHaveBeenCalledTimes(1));
+  expect(createAlert.mock.calls[0][0].data.report).toContain('Ship has permission to remain');
+  expect(screen.queryByRole('status')).toBeNull();
 });
 
 

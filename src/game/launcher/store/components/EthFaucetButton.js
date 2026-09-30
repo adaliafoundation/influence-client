@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PuffLoader } from 'react-spinners';
@@ -38,7 +39,7 @@ const EthFaucetButton = ({ buttonComponent: ButtonComponent = Button, icon, onEr
     } catch (e) {
       console.error(e);
       setRequestingEth(false);
-      if (onError) onError('Faucet request failed, please try again later.');
+      if (onError) onError(errorMessages.fundingUnavailable);
     }
 
     queryClient.invalidateQueries({ queryKey: ['faucetInfo'], refetchType: 'none' });

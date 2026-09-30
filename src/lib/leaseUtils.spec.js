@@ -117,3 +117,33 @@ test('cancelled agreements cannot be extended', () => {
 test('cleared tenancy cannot be restored from a historical agreement', () => {
   expect(canRestoreExpiredLotLease({ crewId: 1, expiredAgreement: { noticeTime: 0, permitted: { id: 1, label: Entity.IDS.CREW } }, lot: { UseLot: { tenant: null }, building: { Building: { status: 3 } } } })).toBe(false);
 });
+
+describe('lot lease eligibility', () => {
+  const { getLotLeaseEligibility } = require('./leaseUtils');
+  const { evaluateAuthorization } = require('./authorization');
+  const asteroidCrew = { label: Entity.IDS.CREW, id: 101, Crew: { delegatedTo: '0x123' } };
+  const buildingCrew = { label: Entity.IDS.CREW, id: 102, Crew: { delegatedTo: '0x456' } };
+  const asteroid = { Control: { controller: { label: asteroidCrew.label, id: asteroidCrew.id } } };
+  const occupiedLot = controller => ({ building: {
+    label: Entity.IDS.BUILDING, id: 201, Control: { controller }, Building: { status: Building.CONSTRUCTION_STATUSES.OPERATIONAL }
+  } });
+  const check = (lot, crews = [asteroidCrew, buildingCrew], targetAsteroid = asteroid) => getLotLeaseEligibility({
+    asteroid: targetAsteroid, lot,
+    authorize: (method, args, entities) => evaluateAuthorization({ method, args, entities: [...entities, ...crews], blockTime: 1000 })
+  });
+
+  test('blocks a building controlled by the asteroid crew', () => {
+    expect(check(occupiedLot(asteroidCrew)).status).toBe('denied');
+  });
+  test('blocks a different controlling crew delegated to the same wallet', () => {
+    expect(check(occupiedLot(buildingCrew), [asteroidCrew, { ...buildingCrew, Crew: { delegatedTo: '0x0123' } }]).status).toBe('denied');
+  });
+  test('allows buildings controlled by an independent account and empty lots', () => {
+    expect(check(occupiedLot(buildingCrew)).status).toBe('allowed');
+    expect(check({ building: null }).status).toBe('allowed');
+  });
+  test('waits for missing controller and delegate data', () => {
+    expect(check(occupiedLot(buildingCrew), [], {}).status).toBe('unresolved');
+    expect(check(occupiedLot({ label: buildingCrew.label, id: buildingCrew.id }), []).status).toBe('unresolved');
+  });
+});
