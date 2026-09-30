@@ -1,7 +1,7 @@
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Building, Crewmate, Entity, Lot, Permission, Product, Ship, Time } from '@influenceth/sdk';
-import { CrewCaptainCardFramed } from '~/components/CrewmateCardFramed';
+
 
 import { ForwardIcon, AssembleShipIcon, InventoryIcon, LocationIcon, SwayIcon, AgreementIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -32,7 +32,7 @@ const shipContructionProcesses = [Ship.IDS.SHUTTLE, Ship.IDS.LIGHT_TRANSPORT, Sh
 }));
 
 const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
-  const { currentAssembly, assemblyStatus, startShipAssembly, finishShipAssembly } = dryDockManager;
+  const { currentAssembly, startShipAssembly, finishShipAssembly } = dryDockManager;
 
   const crew = useActionCrew(currentAssembly);
   const blockTime = useBlockTime();
@@ -233,7 +233,7 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
   const onStart = useCallback(async () => {
     if ((await productionAuthorization.recheck()).status !== 'allowed') return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
-    startShipAssembly(
+    return startShipAssembly(
       shipType,
       origin,
       originSlot,
@@ -253,20 +253,8 @@ const AssembleShip = ({ asteroid, lot, dryDockManager, stage, ...props }) => {
   ]);
 
   const onFinish = useCallback(() => {
-    finishShipAssembly(destination);
+    return finishShipAssembly(destination);
   }, [destination]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (['READY', 'READY_TO_FINISH', 'FINISHING'].includes(lastStatus.current)) {
-      if (assemblyStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = assemblyStatus;
-  }, [assemblyStatus]);
 
   const isOriginSufficient = useMemo(() => {
     if (!originInventory) return false;

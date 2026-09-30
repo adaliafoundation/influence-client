@@ -1,5 +1,5 @@
 import AuthorizationNotice from '~/components/AuthorizationNotice';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Building, Crewmate, Ship, Station, Time } from '@influenceth/sdk';
 
 import { EjectMyCrewIcon, EjectPassengersIcon, WarningIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -41,7 +41,7 @@ import { ActionDialogInner } from '../ActionDialog';
 
 const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage, ...props }) => {
   const blockTime = useBlockTime();
-  const { currentEjection, ejectCrew, actionStage: ejectionStatus } = manager;
+  const { currentEjection, ejectCrew } = manager;
 
   // TODO: only if specified id
   const { crew, authorize } = useCrewContext();
@@ -100,18 +100,8 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
   const targetCrewHasPermission = crewHasPermission(targetCrew);
 
   const onEject = useCallback(() => {
-    ejectCrew(targetCrewId);
+    return ejectCrew(targetCrewId);
   }, [ejectCrew, targetCrewId]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && ejectionStatus !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = ejectionStatus;
-  }, [ejectionStatus]);
 
   const actionDetails = useMemo(() => {
     const icon = myCrewIsTarget ? <EjectMyCrewIcon /> : <EjectPassengersIcon />;

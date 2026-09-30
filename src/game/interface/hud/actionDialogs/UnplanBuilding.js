@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Building, Inventory } from '@influenceth/sdk';
 
@@ -37,29 +37,13 @@ const UnplanWarning = styled.div`
 `;
 
 const UnplanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) => {
-  const { currentConstructionAction, constructionStatus, unplanConstruction } = useConstructionManager(lot?.id);
+  const { currentConstructionAction, unplanConstruction } = useConstructionManager(lot?.id);
   const { crew } = useCrewContext();
 
   const siteEmpty = useMemo(() => {
     const inv = (lot?.building?.Inventories || []).find((i) => Inventory.TYPES[i.inventoryType].category === Inventory.CATEGORIES.SITE);
     return ((inv?.mass + inv?.reservedMass) === 0);
   }, [lot?.building]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (always close if not in planned or canceling state)
-    if (!['PLANNED', 'CANCELING'].includes(constructionStatus)) {
-      props.onClose();
-    }
-    // (close on status change from)
-    else if (['PLANNED'].includes(lastStatus.current)) {
-      if (constructionStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = constructionStatus;
-  }, [constructionStatus]);
 
   const buildingType = currentConstructionAction?.buildingType || 0;
 

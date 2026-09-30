@@ -7,7 +7,7 @@ const { QueryClient, QueryClientProvider } = require('@tanstack/react-query');
 const { Entity } = require('@influenceth/sdk');
 jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
-jest.mock('~/lib/api', () => ({}), { virtual: true });
+jest.mock('~/lib/api', () => ({ getEntityById: jest.fn() }), { virtual: true });
 jest.mock('~/lib/shipEjectionEligibility', () => ({ ...jest.requireActual('../lib/shipEjectionEligibility'), loadShipEjectionEligibility: jest.fn() }), { virtual: true });
 const useCrewContext = require('~/hooks/useCrewContext');
 const useSession = require('~/hooks/useSession');
@@ -83,4 +83,25 @@ test('failed reads remain checking', async () => {
   const { result } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
   await waitFor(() => expect(loadShipEjectionEligibility).toHaveBeenCalled());
   expect(result.current.eligibility.status).toBe('checking');
+});
+
+
+test('display uses cached dependency reads while explicit rechecks remain fresh', async () => {
+  const api = require('~/lib/api');
+  client.setDefaultOptions({ queries: { retry: false, staleTime: 300000 } });
+  const controller = { label: Entity.IDS.CREW, id: 22, Crew: {} };
+  client.setQueryData(['entity', Entity.IDS.CREW, 22], controller);
+  api.getEntityById.mockReset().mockResolvedValue(controller);
+  loadShipEjectionEligibility.mockImplementation(async ({ api: source }) => {
+    await source.getEntityById({ label: Entity.IDS.CREW, id: 22 });
+    return { status: 'allowed' };
+  });
+  const { result } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
+  await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
+  expect(api.getEntityById).not.toHaveBeenCalled();
+  const query = client.getQueryCache().find({ queryKey: ['shipEjectionEligibility'], exact: false });
+  expect(query.meta.affectsEntity(controller)).toBe(true);
+  expect(query.meta.affectsEntity({ label: Entity.IDS.CREW, id: 999 })).toBe(false);
+  await result.current.recheck({ shipId: 9, crewId: 1 });
+  expect(api.getEntityById).toHaveBeenCalledTimes(1);
 });

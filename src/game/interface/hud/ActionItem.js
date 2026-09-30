@@ -218,7 +218,7 @@ const ActionItem = ({ data, getActivityConfig }) => {
   const item = useMemo(() => {
     return formatActionItem(
       data,
-      !['randomEvent', 'plan', 'agreement', 'pending'].includes(data.type) ? getActivityConfig(data)?.actionItem : {}
+      !['randomEvent', 'plan', 'agreement', 'pending', 'failed'].includes(data.type) ? getActivityConfig(data)?.actionItem : {}
     );
   }, [data, getActivityConfig]);
 

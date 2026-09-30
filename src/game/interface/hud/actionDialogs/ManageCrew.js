@@ -1,5 +1,5 @@
 import { errorMessages } from '../../../../lib/errorMessages';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useThrottle } from '@react-hook/throttle';
 import styled from 'styled-components';
@@ -250,14 +250,14 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
   const onSaveChanges = useCallback(() => {
     if (!(crew?.id > 0 && orderedCrewmates.length > 0)) return;
     if (exchangeCrew) {
-      swapCrewmates({
+      return swapCrewmates({
         crewId1: crew.id,
         newRoster1: orderedCrewmates.slice(0, 5).map((c) => c?.id).filter((c) => !!c),
         crewId2: exchangeCrew.id,
         newRoster2: orderedCrewmates.slice(5).map((c) => c?.id).filter((c) => !!c),
       })
     } else {
-      reorderRoster({
+      return reorderRoster({
         crewId: crew.id,
         newRoster: orderedCrewmates.slice(0, 5).map((c) => c?.id).filter((c) => !!c),
       });
@@ -341,16 +341,6 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
       document.querySelector('html').removeEventListener('mouseup', mouseUpHandler);
     }
   }, [onMouseUp]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current === actionStages.COMPLETING && stage !== actionStages.COMPLETING) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   const isPristine = useMemo(() => {
     if (!pristine || !orderedCrewmates) return true;

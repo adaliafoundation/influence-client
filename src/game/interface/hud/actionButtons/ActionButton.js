@@ -1,3 +1,4 @@
+import LoadingBorder from '~/components/LoadingBorder';
 import useActionButtonClick from '~/hooks/useActionButtonClick';
 import ActionAuthorizationContext from './ActionAuthorizationContext';
 import useFailureReporter from '~/hooks/useFailureReporter';
@@ -31,11 +32,6 @@ const cornerAnimation = keyframes`
   0% { stroke-width: 2px; bottom: -1px; right: -1px; }
   50% { stroke-width: 3px; bottom: -2px; right: -2px; }
   100% { stroke-width: 2px; bottom: -1px; right: -1px; }
-`;
-
-const rotationAnimation = keyframes`
-  0% { transform: rotate(0); }
-  100% { transform: rotate(360deg); }
 `;
 
 const HoverContent = styled.div``;
@@ -240,41 +236,6 @@ const ActionButton = styled.div`
   }
 `;
 
-const LoadingAnimation = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - ${cornerSize}px),
-    calc(100% - ${cornerSize}px) 100%,
-    0 100%,
-    0 0,
-    ${padding}px ${padding}px,
-    ${padding}px calc(100% - ${padding}px),
-    calc(100% - ${cornerSize + padding - 1}px) calc(100% - ${padding}px),
-    calc(100% - ${padding}px) calc(100% - ${cornerSize + padding - 1}px),
-    calc(100% - ${padding}px) ${padding}px,
-    ${padding}px ${padding}px
-  );
-
-  &:before {
-    animation: ${rotationAnimation} 4000ms linear infinite;
-    background: currentColor;
-    content: '';
-    height: 100%;
-    width: 200%;
-    opacity: 0.75;
-    position: absolute;
-    left: -50%;
-    bottom: 50%;
-    transform-origin: bottom center;
-  }
-`;
-
 const TooltipContents = styled.div`
   color: white;
 `;
@@ -428,7 +389,7 @@ const ActionButtonComponent = forwardRef(({
       onMouseLeave={handleHover}
       {...safeFlags}
       {...props}>
-      {(flags.loading || checking) && <LoadingAnimation />}
+      {(flags.loading || checking) && <LoadingBorder $cornerSize={cornerSize} $thickness={padding} />}
       {safeFlags.badge ? <BubbleBadge {...badgeProps}>{safeFlags.badge}</BubbleBadge> : null}
       <ActionButton {...safeFlags} overrideColor={props.overrideColor} overrideBgColor={props.overrideBgColor}>
         <ClipCorner dimension={cornerSize} />
@@ -463,9 +424,9 @@ isSequenceable = false,
   requireSurface = true,
   requireReady = true
 }) => {
+  if (!crew) return 'access restricted';
   if (crew?._isSimulation && !isAllowedInSimulation) return 'simulation restricted';
   if (permission && permissionTarget) {
-    if (!crew) return 'access restricted';
     const decision = crewAuthorization?.(permission, permissionTarget);
     if (decision?.status !== 'allowed' && !prepaidLeaseConfig) return decision?.status === 'denied' ? 'access restricted' : 'checking permissions';
   }

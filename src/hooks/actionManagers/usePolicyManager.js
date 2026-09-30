@@ -60,7 +60,7 @@ const usePolicyManager = (target, permission) => {
   const updateAllowlists = useCallback(async (newAllowlist, newAccountAllowlist) => {
     const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
     if (decision.status !== 'allowed') return reportBlocked(decision);
-    execute(
+    return execute(
       'UpdateAllowlists',
       {
         additions: (newAllowlist || []).filter((a) => !(currentPolicy?.allowlist || []).find((b) => Authorization.sameEntity(a, b))),
@@ -101,7 +101,7 @@ const usePolicyManager = (target, permission) => {
       const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
     if (decision.status !== 'allowed') return reportBlocked(decision);
       const params = getPolicyUpdateParams(newPolicyType, newPolicyDetails);
-      execute('UpdatePolicy', params, meta);
+      return execute('UpdatePolicy', params, meta);
     },
     [reportBlocked, recheckAuthorization, crew, controlTarget, target, execute, getPolicyUpdateParams, meta]
   );
@@ -110,7 +110,7 @@ const usePolicyManager = (target, permission) => {
     async ({ mode, gracePeriod }) => {
       const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
     if (decision.status !== 'allowed') return reportBlocked(decision);
-      execute(
+      return execute(
         'ConfigurePrepaidAuction',
         {
           asteroid: { id: target?.id, label: Entity.IDS.ASTEROID },
@@ -128,7 +128,7 @@ const usePolicyManager = (target, permission) => {
     async (newPolicyType, newPolicyDetails, auctionDetails) => {
       const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
     if (decision.status !== 'allowed') return reportBlocked(decision);
-      execute(
+      return execute(
         'UpdatePolicyAndAuctionSettings',
         {
           ...getPolicyUpdateParams(newPolicyType, newPolicyDetails),

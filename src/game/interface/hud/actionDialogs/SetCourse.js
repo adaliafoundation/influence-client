@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import cloneDeep from 'lodash/cloneDeep';
 import { Crewmate, Product, Ship, Time } from '@influenceth/sdk';
@@ -327,25 +327,12 @@ const SetCourse = ({ origin, destination, manager, ship, stage, travelSolution, 
   ]), [arrivingIn, cargoInv, travelSolution, exhaustBonus, propellantInv, shipConfig]);
 
   const onDepart = useCallback(() => {
-    depart();
-  }, []);
+    return depart();
+  }, [depart]);
 
   const onArrive = useCallback(() => {
-    arrive();
-  }, []);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change)
-    if (lastStatus.current && travelStatus !== lastStatus.current) {
-      // (close travel details)
-      dispatchHudMenuOpened();
-      dispatchTravelMode(false);
-      props.onClose();
-    }
-    lastStatus.current = travelStatus;
-  }, [travelStatus]);
+    return arrive();
+  }, [arrive]);
 
   useEffect(() => {
     if (travelStatus === 'READY' && delay <= 0) {

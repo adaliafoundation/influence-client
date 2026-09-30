@@ -1,5 +1,5 @@
 import { useMissionActionDetails } from '~/contexts/MissionActionContext';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crew, Crewmate, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 
@@ -16,7 +16,7 @@ import useEntity from '~/hooks/useEntity';
 import useFeedCrewManager from '~/hooks/actionManagers/useFeedCrewManager';
 import useAsteroid from '~/hooks/useAsteroid';
 import useBlockTime from '~/hooks/useBlockTime';
-import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
+
 import { hasStarterFoodSupplyEntitlement } from '~/lib/starterPacks';
 import useCrew from '~/hooks/useCrew';
 
@@ -225,24 +225,24 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
   const { data: sellerCrew } = useCrew(exchangeSelection?.crew?.id);
 
   const onStartFeedingFromExchange = useCallback(() => {
-    feedCrew({
+    return feedCrew({
       ...exchangeSelection,
       sellerAccount: sellerCrew?.Crew?.delegatedTo,
       exchangeOwnerAccount: exchangeOwnerCrew?.Crew?.delegatedTo,
     });
-  }, [exchangeSelection, exchangeOwnerCrew, sellerCrew]);
+  }, [exchangeSelection, exchangeOwnerCrew, sellerCrew, feedCrew]);
   
   const onStartFeedingFromInventory = useCallback(() => {
-    feedCrew({
+    return feedCrew({
       origin,
       originSlot: originInventory?.slot,
       amount: Math.floor(selectedItems[Product.IDS.FOOD])
     });
-  }, [origin, originInventory, selectedItems]);
+  }, [origin, originInventory, selectedItems, feedCrew]);
 
   const onStartFeeding = useCallback(() => {
-    if (exchangeSelection) onStartFeedingFromExchange();
-    else onStartFeedingFromInventory();
+    if (exchangeSelection) return onStartFeedingFromExchange();
+    return onStartFeedingFromInventory();
   }, [exchangeSelection, onStartFeedingFromExchange, onStartFeedingFromInventory]);
 
   const foodStats = useMemo(() => {
@@ -576,17 +576,6 @@ const Wrapper = (props) => {
   const { data: asteroid, isLoading: asteroidIsLoading } = useAsteroid(crew?._location?.asteroidId);
 
   const stage = feedCrewManager.actionStage || actionStages.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    if (!feedCrewManager.isLoading) {
-      lastStatus.current = stage;
-    }
-  }, [feedCrewManager.isLoading, stage]);
 
   return (
     <ActionDialogInner

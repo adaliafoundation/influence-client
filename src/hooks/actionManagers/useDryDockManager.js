@@ -89,7 +89,7 @@ const useDryDockManager = (lotId, slot = 1) => {
   }, [actionItems, blockTime, getPendingTx, getStatus, payload, slotDryDock, authorize, crew, crewCan, lot?.building]);
 
   const startShipAssembly = useCallback((shipType, origin, originSlot, leaseDetails) => {
-    execute(
+    return execute(
       leaseDetails ? 'LeaseAndAssembleShipStart' : 'AssembleShipStart',
       {
         ...payload,
@@ -116,7 +116,7 @@ const useDryDockManager = (lotId, slot = 1) => {
       const access = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
       if (access.status !== 'allowed') return reportBlocked(access);
     }
-    execute(
+    return execute(
       'AssembleShipFinish', 
       {
         ...payload,

@@ -1,22 +1,36 @@
-import { useCallback, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Entity } from '@influenceth/sdk';
+import { createEligibilityDependencies } from '../lib/eligibilityDependencies';
+import { entityQueryOptions } from './useEntity';
+import { useCallback, useMemo, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import useCrewContext from '~/hooks/useCrewContext';
 import useSession from '~/hooks/useSession';
 import api from '~/lib/api';
 import { checkingShipEjection, isForceLaunch, isLandedShip, loadShipEjectionEligibility } from '~/lib/shipEjectionEligibility';
 
 const useShipEjectionEligibility = (ship) => {
+  const queryClient = useQueryClient();
   const { crew } = useCrewContext();
   const { accountAddress, blockTime, blockNumber, provider } = useSession();
+  const dependencies = useMemo(() => createEligibilityDependencies([{ label: Entity.IDS.CREW, id: crew?.id }, { label: Entity.IDS.SHIP, id: ship?.id }]), [ship?.id, crew?.id]);
+  [{ ...ship, label: Entity.IDS.SHIP }, { ...crew, label: Entity.IDS.CREW }].forEach(dependencies.add);
   const params = { api, provider, shipId: ship?.id, crewId: crew?.id, accountAddress, blockTime, blockNumber };
   const current = useRef(params);
   current.current = params;
   const enabled = isForceLaunch(crew, ship) && isLandedShip(ship) && blockTime != null;
   const query = useQuery({
     queryKey: ['shipEjectionEligibility', ship?.id, crew?.id, accountAddress, blockTime != null, ship?.Location, ship?.Control, crew?.Crew, crew?.Location],
-    queryFn: () => loadShipEjectionEligibility(params),
+    queryFn: () => loadShipEjectionEligibility({ ...params, api: {
+      ...api,
+      getEntityById: async (entity) => {
+        dependencies.add(entity);
+        const data = await queryClient.fetchQuery(entityQueryOptions(entity));
+        dependencies.add(data);
+        return data;
+      }
+    } }),
     enabled,
-    meta: { recheck: () => recheck({ shipId: ship?.id, crewId: crew?.id }) },
+    meta: { affectsEntity: dependencies.affects, recheck: () => recheck({ shipId: ship?.id, crewId: crew?.id }) },
     staleTime: Infinity,
     retry: false
   });

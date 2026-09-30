@@ -181,10 +181,7 @@ const Wrapper = (props) => {
       }
     }
 
-    if (asteroid && lot && repoManager.authorization.status === 'denied') {
-      if (props.onClose) props.onClose();
-    }
-  }, [asteroid, lot, isLoading, repoManager.authorization]);
+  }, [asteroid, lot, isLoading]);
 
   return (
     <ActionDialogInner

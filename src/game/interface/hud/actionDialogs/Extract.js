@@ -1,11 +1,11 @@
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
 import { useMissionActionDetails } from '~/contexts/MissionActionContext';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Asteroid, Crewmate, Deposit, Extractor, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import cloneDeep from 'lodash/cloneDeep';
 
-import { CrewCaptainCardFramed } from '~/components/CrewmateCardFramed';
+
 import { AgreementIcon, CoreSampleIcon, ExtractionIcon, InventoryIcon, LocationIcon, ResourceIcon, SwayIcon, WarningIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useActionCrew from '~/hooks/useActionCrew';
@@ -47,7 +47,7 @@ const Warning = styled.div`
 
 const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const { currentExtraction, extractionStatus, startExtraction, finishExtraction } = extractionManager;
+  const { currentExtraction, startExtraction, finishExtraction } = extractionManager;
   const crew = useActionCrew(currentExtraction);
   const blockTime = useBlockTime();
   const { accountCrewIds, crewCan, crewAuthorization } = useCrewContext();
@@ -315,7 +315,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       return;
     }
 
-    startExtraction(
+    return startExtraction(
       safeAmount,
       selectedCoreSample,
       destination,
@@ -340,18 +340,6 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     isPurchase,
     resource
   ]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (['READY', 'READY_TO_FINISH', 'FINISHING'].includes(lastStatus.current)) {
-      if (extractionStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = extractionStatus;
-  }, [extractionStatus]);
 
   const [extraDepositProps, extraDepositThumbnailProps] = useMemo(() => {
     if (isPurchase && stage === actionStage.NOT_STARTED) {

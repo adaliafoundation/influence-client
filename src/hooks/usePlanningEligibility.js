@@ -1,9 +1,12 @@
-import { useCallback, useRef } from 'react';
+import { Entity } from '@influenceth/sdk';
+import { createEligibilityDependencies } from '../lib/eligibilityDependencies';
+import { useCallback, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import useCrewContext from '~/hooks/useCrewContext';
 import useSession from '~/hooks/useSession';
 import useConstants from '~/hooks/useConstants';
+import { entityQueryOptions } from './useEntity';
 import api from '~/lib/api';
 import { checkingPlanning, loadPlanningEligibility } from '~/lib/planningEligibility';
 
@@ -14,6 +17,9 @@ const usePlanningEligibility = (lot) => {
   const { crew } = useCrewContext();
   const { provider, blockTime, blockNumber, accountAddress } = useSession();
   const current = useRef();
+  const dependencies = useMemo(() => createEligibilityDependencies([{ label: Entity.IDS.CREW, id: crew?.id }], { lotId }), [lotId, crew?.id]);
+  [lot?._permissionTargets?.lot, lot?._permissionTargets?.asteroid,
+    { ...crew, label: Entity.IDS.CREW }, ...(lot?._planningOccupants || [])].forEach(dependencies.add);
   const snapshot = {
     ...lot?._permissionTargets,
     crew,
@@ -29,9 +35,21 @@ const usePlanningEligibility = (lot) => {
   current.current = crew?._isSimulation ? { ...params, snapshot } : params;
   const query = useQuery({
     queryKey: ['planningEligibility', Number(lotId), crew?.id, accountAddress, blockTime != null, lot?._permissionTargets, lot?._planningOccupants, crew?.Crew, crew?.Location, launchTime],
-    queryFn: () => loadPlanningEligibility({ ...params, snapshot }),
+    queryFn: () => loadPlanningEligibility({
+      ...params,
+      snapshot,
+      api: crew?._isSimulation ? planningApi : {
+        ...api,
+        getEntityById: async (entity) => {
+          dependencies.add(entity);
+          const data = await queryClient.fetchQuery(entityQueryOptions(entity));
+          dependencies.add(data);
+          return data;
+        }
+      }
+    }),
     enabled: !!(lotId && crew?.id && blockTime != null && lot?._permissionTargets?.lot && lot?._permissionTargets?.asteroid && launchTime != null),
-    meta: { recheck: () => recheck({ lotId, crewId: crew?.id }) },
+    meta: { affectsEntity: dependencies.affects, recheck: () => recheck({ lotId, crewId: crew?.id }) },
     staleTime: Infinity,
     retry: false
   });

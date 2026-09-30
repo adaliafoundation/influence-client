@@ -6,6 +6,7 @@ import { Crewmate, Entity, RandomEvent, Ship, System } from '@influenceth/sdk';
 import { appConfig } from '~/appConfig';
 import useAuthorizationService from '~/hooks/useAuthorizationService';
 import useConstants from '~/hooks/useConstants';
+import useMissedBlockRecovery from '~/hooks/useMissedBlockRecovery';
 import useEntity from '~/hooks/useEntity';
 import useSession from '~/hooks/useSession';
 import useSimulationState from '~/hooks/useSimulationState';
@@ -31,7 +32,7 @@ const simulationNftConfig = {
 const CrewContext = createContext();
 
 export function CrewProvider({ children }) {
-  const { accountAddress, authenticated, blockNumber, blockTime, provider, token, isBlockMissing } = useSession();
+  const { accountAddress, authenticated, blockNumber, blockTime, provider, token, isBlockMissing, setIsBlockMissing } = useSession();
   const simulationState = useSimulationState();
 
   const queryClient = useQueryClient();
@@ -360,44 +361,7 @@ export function CrewProvider({ children }) {
   const crewControls = useCallback((target) =>
     authorize('controls', [finalSelectedCrew, target], [finalSelectedCrew, target]).status === 'allowed', [authorize, finalSelectedCrew]);
 
-  const isBlurred = useRef(false);
-  const onBlur = useCallback(() => {
-    isBlurred.current = true;
-  }, []);
-
-  // if window was unfocused for long enough to miss a block, when it refocuses...
-  // reload the page
-  // TODO: could try just clearing the cache and making sure caught up on blocks)
-  //       i.e. blockHasBeenMissed.current = false; initializeBlockData().then(() => { queryClient.clear(); });
-  // TODO: could potentially miss still have missed websocket info for a short enough window
-  //       that didn't miss a block...
-  // TODO: could they potentially miss a block without blurring? in that case, we would
-  //       probably also want to reload
-  // TODO: when first create crew, should probably reload all queries since they were not being updated
-  //       in the time before crew creation
-  const onFocus = useCallback(() => {
-    if (isBlurred.current) {
-      isBlurred.current = false;
-
-      // reload if explicitly missed a block and window has returned to focus
-      if (isBlockMissing) {
-        // window.location.reload();
-        console.log('block was missed, invalidating all queries...');
-        queryClient.invalidateQueries({}, { cancelRefetch: false});
-      }
-    }
-  }, [isBlockMissing]);
-
-  useEffect(() => {
-    if (!!finalSelectedCrew) {
-      window.addEventListener('blur', onBlur);
-      window.addEventListener('focus', onFocus);
-      return () => {
-        window.removeEventListener('blur', onBlur);
-        window.removeEventListener('focus', onFocus);
-      }
-    }
-  }, [!!finalSelectedCrew, onBlur, onFocus]);
+  useMissedBlockRecovery(!!finalSelectedCrew, isBlockMissing, setIsBlockMissing);
 
   const [crewMovementActivity, setCrewMovementActivity] = useState(null);
   useEffect(() => setCrewMovementActivity(null), [selectedCrew?.id]);

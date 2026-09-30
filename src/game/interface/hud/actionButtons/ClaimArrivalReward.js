@@ -5,7 +5,7 @@ import { ClaimRewardIcon } from '~/components/Icons';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
 
 const isVisible = ({ account, asteroid, crew }) => {
-  if (!account || !asteroid?.Nft?.owner) return false;
+  if (!account || !crew?.id || !asteroid?.Nft?.owner) return false;
   const controller = asteroid?.Control?.controller?.id === crew?.id;
   return controller && asteroid?.AsteroidReward?.hasArrivalStarterPack;
 };

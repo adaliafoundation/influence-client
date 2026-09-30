@@ -97,7 +97,7 @@ const useExtractionManager = (lotId, slot = 1, missionId) => {
   }, [actionItems, blockTime, crew?.id, crewCan, getPendingTx, getStatus, payload, slotExtractor?.status]);
 
   const startExtraction = useCallback((amount, deposit, destination, destinationSlot, depositRecipient, lease) => {
-    execute(
+    return execute(
       'FlexibleExtractResourceStart',
       {
         ...payload,
@@ -119,7 +119,7 @@ const useExtractionManager = (lotId, slot = 1, missionId) => {
   }, [execute, payload]);
 
   const finishExtraction = useCallback(() => {
-    execute('ExtractResourceFinish', payload, { lotId });
+    return execute('ExtractResourceFinish', payload, { lotId });
   }, [execute, payload]);
 
   return {

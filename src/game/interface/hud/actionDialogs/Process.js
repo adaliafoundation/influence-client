@@ -1,6 +1,6 @@
 import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Building, Crewmate, Lot, Permission, Process, Processor, Product, Time } from '@influenceth/sdk';
 
 import {
@@ -33,7 +33,7 @@ import theme from '~/theme';
 const SECTION_WIDTH = 1150;
 
 const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...props }) => {
-  const { currentProcess, processStatus, startProcess, finishProcess } = processManager;
+  const { currentProcess, startProcess, finishProcess } = processManager;
   const processor = useMemo(
     () => (lot?.building?.Processors || []).find((e) => e.slot === processorSlot) || {},
     [lot?.building, processorSlot]
@@ -293,7 +293,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
   }, [blockTime, crew?.Crew?.readyAt, prepaidLeaseConfig, taskTimeRequirement?.total]);
 
   const onFinishProcess = useCallback(() => {
-    finishProcess();
+    return finishProcess();
   }, [finishProcess]);
 
   const productionAuthorization = useProductionAuthorization({
@@ -304,7 +304,7 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
   const onStartProcess = useCallback(async () => {
     if ((await productionAuthorization.recheck()).status !== 'allowed') return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
-    startProcess({
+    return startProcess({
       processId,
       primaryOutputId: primaryOutput,
       recipeTally: amount,
@@ -328,18 +328,6 @@ const ProcessIO = ({ asteroid, lot, processorSlot, processManager, stage, ...pro
     primaryOutput,
     processId
   ]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (['READY', 'READY_TO_FINISH', 'FINISHING'].includes(lastStatus.current)) {
-      if (processStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = processStatus;
-  }, [processStatus]);
 
   const isOriginSufficient = useMemo(() => {
     if (!originInventory || !process) return false;

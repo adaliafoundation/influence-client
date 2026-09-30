@@ -52,7 +52,7 @@ const useShipDockingManager = (shipId) => {
       const permission = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
       if (permission.status !== 'allowed') return reportBlocked(permission);
     }
-    execute(
+    return execute(
       'DockShip',
       {
         target: destination,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 import { Asteroid, Building, Crewmate, Entity, Permission, Station } from '@influenceth/sdk';
 
@@ -113,17 +113,8 @@ const StationCrew = ({ asteroid, destination: rawDestination, lot, origin: rawOr
   ]), [crewTravelBonus, travelTime?.total]);
 
   const onStation = useCallback(() => {
-    stationCrew();
+    return stationCrew();
   }, [stationCrew]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   const actionDetails = useMemo(() => {
     const icon = destination?.label === Entity.IDS.SHIP && !crewIsController

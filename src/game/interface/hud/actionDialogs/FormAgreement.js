@@ -1,5 +1,5 @@
 import { errorMessages } from '../../../../lib/errorMessages';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Entity, Permission, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 import numeral from 'numeral';
@@ -419,20 +419,20 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const onEnterAgreement = useCallback(() => {
     if (lotLeaseCreationBlocked) return;
     const recipient = controller?.Crew?.delegatedTo;
-    enterAgreement({ auctionPayment, isStarterLotLease: usingStarterLotLease, recipient, term, termPrice });
+    return enterAgreement({ auctionPayment, isStarterLotLease: usingStarterLotLease, recipient, term, termPrice });
   }, [lotLeaseCreationBlocked, auctionPayment, controller?.Crew?.delegatedTo, enterAgreement, term, termPrice, usingStarterLotLease]);
 
   const onExtendAgreement = useCallback(() => {
     const recipient = controller?.Crew?.delegatedTo;
     if (!extensionAllowed) return;
-    extendAgreement({
+    return extendAgreement({
       recipient, term, termPrice,
       ...(isExpiredLeaseRenewal ? { permitted: getEntityCrew(crew?.id) } : {})
     });
   }, [controller?.Crew?.delegatedTo, crew?.id, extendAgreement, extensionAllowed, isExpiredLeaseRenewal, term, termPrice]);
 
   const onTerminateAgreement = useCallback(() => {
-    cancelAgreement({
+    return cancelAgreement({
       recipient: permitted?.Crew?.delegatedTo,
       refundAmount: Math.ceil(refundableAmount * TOKEN_SCALE[TOKEN.SWAY])
     })
@@ -772,17 +772,6 @@ const Wrapper = ({ entity: entityId, permission, isExtension, agreementPath, ...
 
   const agreementManager = useAgreementManager(entity, permission, agreementPath);
   const stage = agreementManager.pendingChange ? actionStages.STARTING : actionStages.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    if (!lastStatus.current) {
-      lastStatus.current = stage;
-    }
-  }, [stage, props]);
 
   useEffect(() => {
     if (!entityIsLoading && !entity) {

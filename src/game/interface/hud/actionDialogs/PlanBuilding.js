@@ -1,6 +1,4 @@
-import useStore from '~/hooks/useStore';
-import { reportFailure } from '../../../../lib/errorReporting';
-import { errorMessages } from '../../../../lib/errorMessages';
+
 import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
@@ -48,19 +46,7 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
 
   const crewTimeRequirement = useMemo(() => formatTimeRequirements([[0, 'Initiate Building Plan']]), []);
   const stats = [{ label: 'Task Duration', value: formatTimer(0), isTimeStat: true }];
-  const createAlert = useStore(s => s.dispatchAlertLogged);
-  const [submitting, setSubmitting] = useState(false);
-  const onPlan = async () => {
-    setSubmitting(true);
-    try {
-      const result = await planConstruction(buildingType);
-      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: result.status === 'blocked' || result.status === 'denied' ? 'accessChanged' : 'accessUnavailable' });
-    } catch (error) {
-      reportFailure(createAlert, error, { message: 'accessUnavailable' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const onPlan = () => planConstruction(buildingType);
 
   useEffect(() => {
     if (currentConstructionAction?.buildingType) setBuildingType(currentConstructionAction.buildingType)
@@ -138,7 +124,6 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
           />
         )}
 
-
         <ActionDialogStats
           stage={stage}
           stats={stats}
@@ -149,7 +134,7 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
       <ActionDialogFooter
         {...props}
         crewAvailableTime={crewTimeRequirement}
-        disabled={!buildingType || submitting || planningEligibility.status !== 'allowed'}
+        disabled={!buildingType || planningEligibility.status !== 'allowed'}
         goLabel="Create Site"
         onGo={onPlan}
         stage={stage}

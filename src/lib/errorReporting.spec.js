@@ -47,3 +47,15 @@ test('funding recovery carries both the precise deficit and the full target in t
   expect(error.fundingRequirement).toEqual({ amount: '9007199254740993', token: '0xETH', total: '9007199254741993' });
   expect(error.additionalUSDCRequired).toBeUndefined();
 });
+
+
+test('recognizes Ready X timeouts wrapped in UNKNOWN_ERROR', () => {
+  const error = new Error('An error occurred (UNKNOWN_ERROR)');
+  error.cause = new Error('Timeout');
+  expect(classifyFailure(error)).toBe('unknownOutcome');
+  const notify = jest.fn();
+  reportFailure(notify, error);
+  expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ content: errorMessages.unknownOutcome })
+  }));
+});

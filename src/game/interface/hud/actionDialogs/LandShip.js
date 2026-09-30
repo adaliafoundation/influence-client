@@ -1,5 +1,5 @@
 import AuthorizationNotice from '~/components/AuthorizationNotice';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Dock, Entity, Inventory, Lot, Product, Ship, Time } from '@influenceth/sdk';
 
 import { LandShipIcon, RouteIcon, ShipIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -101,7 +101,6 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
     ];
   }, [ship]);
 
-
   const launchTime = useMemo(() => {
     return formatTimeRequirements([
       [groundDelay, 'Ground Delay'],
@@ -153,22 +152,12 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
 
   const onLand = useCallback(() => {
     if (!destinationLot) return;
-    dockShip(
+    return dockShip(
       destinationLot.building || { label: Entity.IDS.LOT, id: destinationLot.id },
       !powered,
       destinationLot.id
     );
   }, [destinationLot, powered]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 

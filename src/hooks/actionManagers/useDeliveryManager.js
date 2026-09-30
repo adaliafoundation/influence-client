@@ -231,7 +231,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
   }, [currentDeliveries, deliveryId, execute, payload, crew, recheckAuthorization, createAlert]);
 
   const cancelDelivery = useCallback((selectedDeliveryId, meta) => {
-    execute(
+    return execute(
       'CancelDelivery',
       {
         delivery: { id: selectedDeliveryId || deliveryId, label: Entity.IDS.DELIVERY },
@@ -244,7 +244,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
   const packageDelivery = useCallback(async ({ origin, originSlot, destination, destinationSlot, contents, price }, meta) => {
     const decision = await recheckAuthorization('packageDelivery', [crew, origin], [crew, origin]);
     if (decision.status !== 'allowed') return reportBlocked(decision);
-    execute(
+    return execute(
       'PackageDelivery',
       {
         origin,
@@ -260,7 +260,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
   }, [reportBlocked, execute, payload, crew, recheckAuthorization]);
 
   const startDelivery = useCallback(({ origin, originSlot, destination, destinationSlot, contents }, meta) => {
-    execute(
+    return execute(
       'SendDelivery',
       {
         origin,
@@ -275,7 +275,7 @@ const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, 
   }, [execute, payload]);
 
   const finishDelivery = useCallback((selectedDeliveryId, meta) => {
-    execute(
+    return execute(
       'ReceiveDelivery',
       {
         delivery: { id: selectedDeliveryId || deliveryId, label: Entity.IDS.DELIVERY },

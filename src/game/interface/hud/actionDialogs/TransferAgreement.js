@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Entity, Permission, Time } from '@influenceth/sdk';
 
 import { WarningIcon, TransferAgreementIcon } from '~/components/Icons';
@@ -8,7 +8,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useEntity from '~/hooks/useEntity';
 import useHydratedLocation from '~/hooks/useHydratedLocation';
 import useLot from '~/hooks/useLot';
-import useStore from '~/hooks/useStore';
+
 import actionStages from '~/lib/actionStages';
 import { reactBool, locationsArrToObj, formatFixed, secondsToMonths } from '~/lib/utils';
 import theme from '~/theme';
@@ -60,7 +60,7 @@ const TransferAgreement = ({
   
   const onTransferAgreement = useCallback(() => {
     if (!targetCrewId) return;
-    transferAgreement({ id: targetCrewId, label: Entity.IDS.CREW });
+    return transferAgreement({ id: targetCrewId, label: Entity.IDS.CREW });
   }, [targetCrewId]);
 
   return (
@@ -136,17 +136,6 @@ const Wrapper = ({ entity: entityId, permission, ...props }) => {
 
   const agreementManager = useAgreementManager(entity, permission);
   const stage = agreementManager.pendingChange ? actionStages.STARTING : actionStages.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    if (!lastStatus.current) {
-      lastStatus.current = stage;
-    }
-  }, [stage, props]);
 
   useEffect(() => {
     if (!entityIsLoading && !entity) {

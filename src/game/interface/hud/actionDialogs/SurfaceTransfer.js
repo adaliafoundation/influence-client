@@ -1,5 +1,5 @@
 import { useMissionActionDetails, useMissionDeliveryTarget } from '~/contexts/MissionActionContext';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 import styled from 'styled-components';
 
@@ -326,7 +326,7 @@ const SurfaceTransfer = ({
       return;
     }
 
-    (senderHasDestPerm ? startDelivery : packageDelivery)({
+    return (senderHasDestPerm ? startDelivery : packageDelivery)({
       origin,
       originSlot: originInventory?.slot,
       destination,
@@ -337,7 +337,7 @@ const SurfaceTransfer = ({
   }, [crew?._inventoryBonuses, packageDelivery, startDelivery, originInventory, destinationInventory, selectedItems, sway, checkingDestinationAccess, senderHasDestPerm, origin, destination, asteroid?.id, originLot?.id, willBeOverCapacity]);
 
   const onFinishDelivery = useCallback(() => {
-    finishDelivery(deliveryId, {
+    return finishDelivery(deliveryId, {
       asteroidId: asteroid?.id,
       lotId: destinationLot?.id,
     });
@@ -711,19 +711,6 @@ const Wrapper = (props) => {
   }, [asteroid, origin, isLoading, originLoading, deliveryManager.isLoading]);
 
   const stage = currentDeliveryAction?.stage || actionStage.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (stage !== 'READY_TO_FINISH') {
-      if (lastStatus.current && stage !== lastStatus.current) {
-        if (props.onClose) props.onClose();
-      }
-    }
-    if (!deliveryManager.isLoading) {
-      lastStatus.current = stage;
-    }
-  }, [deliveryManager.isLoading, stage]);
 
   return (
     <ActionDialogInner

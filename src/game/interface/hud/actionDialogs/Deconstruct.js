@@ -128,7 +128,6 @@ const Deconstruct = ({ asteroid, lot, constructionManager, stage, ...props }) =>
   );
 };
 
-
 const Wrapper = (props) => {
   const { asteroid, lot, isLoading } = useAsteroidAndLot(props);
   const constructionManager = useConstructionManager(lot?.id);

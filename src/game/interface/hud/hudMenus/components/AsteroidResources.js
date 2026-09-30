@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
+import ResourceScanWarning from './ResourceScanWarning';
 import { Asteroid } from '@influenceth/sdk';
 
 import { PlusIcon, ResourceGroupIcons } from '~/components/Icons';
-import AsteroidBonuses from '~/game/interface/details/asteroidDetails/AsteroidBonuses';
+import BonusBar from '~/components/BonusBar';
 import useAsteroid from '~/hooks/useAsteroid';
 import useAsteroidAbundances from '~/hooks/useAsteroidAbundances';
 import useStore from '~/hooks/useStore';
 import { keyify } from '~/lib/utils';
 import { hexToRGB } from '~/theme';
-import { majorBorderColor, HudMenuCollapsibleSection, Scrollable } from './components';
+import { majorBorderColor, Scrollable } from './components';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
-import SIMULATION_CONFIG from '~/simulation/simulationConfig';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 
 const ResourceWrapper = styled.div`
@@ -42,10 +42,41 @@ const Title = styled(Row)`
   border-bottom: 1px solid ${majorBorderColor};
   font-size: 16px;
   padding-top: 0;
+  & > label {
+    flex: 0 0 auto;
+  }
+  & > span {
+    margin-left: auto;
+  }
   & > *:first-child {
     height: 24px;
     width: 24px;
   }
+`;
+
+const YieldBonus = styled.div`
+  align-items: center;
+  color: ${p => p.theme.colors.resources[p.category] || 'white'};
+  display: flex;
+  flex-shrink: 0;
+  font-size: 14px;
+  gap: 5px;
+  margin-right: 8px;
+  white-space: nowrap;
+`;
+
+const OverallBonus = styled.div`
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 0 0 4px;
+  & > ${YieldBonus} {
+    font-size: 16px;
+  }
+`;
+
+const BonusSeparator = styled.span`
+  color: #999;
+  margin: 0 6px;
 `;
 
 const Circle = styled.div`
@@ -57,11 +88,15 @@ const Circle = styled.div`
   width: 8px;
 `;
 
+const ResourceGroups = styled.div`
+  padding-top: 16px;
+`;
+
 const ResourceList = styled.div``;
 const Resource = styled(Row)`
-  cursor: ${p => p.theme.cursors.active};
+  cursor: ${p => p.$disabled ? 'default' : p.theme.cursors.active};
   &:hover {
-    background: rgba(${p => hexToRGB(p.theme.colors.resources[p.category])}, 0.15);
+    background: ${p => p.$disabled ? 'transparent' : `rgba(${hexToRGB(p.theme.colors.resources[p.category])}, 0.15)`};
   }
   ${p => p.selected && `
     background: rgba(${hexToRGB(p.theme.colors.resources[p.category])}, 0.3);
@@ -100,24 +135,26 @@ const AsteroidResources = ({ onClose }) => {
 
   const asteroidId = useStore(s => s.asteroids.origin);
   const { data: asteroid } = useAsteroid(asteroidId);
-  const groupAbundances = useAsteroidAbundances(asteroid);
+  const groupAbundances = useAsteroidAbundances(asteroid, { includeUnscanned: true });
+  const scanned = asteroid?.Celestial?.scanStatus === Asteroid.SCAN_STATUSES.RESOURCE_SCANNED;
   const dispatchResourceMapSelect = useStore(s => s.dispatchResourceMapSelect);
   const dispatchResourceMapToggle = useStore(s => s.dispatchResourceMapToggle);
   const resourceMap = useStore(s => s.asteroids.resourceMap);
   const coachmarks = useStore(s => s.coachmarks);
 
   const onClick = useCallback((i) => () => {
+    if (!scanned) return;
     if (resourceMap.active && resourceMap.selected === Number(i)) {
       dispatchResourceMapSelect();
     } else {
       dispatchResourceMapSelect(i);
       dispatchResourceMapToggle(true);
     }
-  }, [resourceMap]);
+  }, [resourceMap, scanned]);
 
   // default to most abundant emissive map when panel is opened...
   useEffect(() => {
-    if (!resourceMap.active && groupAbundances.length > 0) {
+    if (scanned && !resourceMap.active && groupAbundances.length > 0) {
       if (!resourceMap.selected) {
         dispatchResourceMapSelect(groupAbundances[0].resources[0].id);
       }
@@ -125,51 +162,61 @@ const AsteroidResources = ({ onClose }) => {
     }
   }, []);
 
-  const unpackedBonuses = useMemo(() => (asteroid && Asteroid.Entity.getBonuses(asteroid)) || [], [asteroid]);
-  const nonzeroBonuses = useMemo(() => unpackedBonuses.filter((b) => b.level > 0), [unpackedBonuses]);
+  const overallBonus = useMemo(() => (
+    asteroid && Asteroid.Entity.getBonuses(asteroid).find((bonus) => bonus.type === 'yield' && bonus.level > 0)
+  ), [asteroid]);
 
   return (
     <Scrollable>
       <ResourceWrapper>
-        <HudMenuCollapsibleSection titleText="Resource Map">
-          <div>
-            {groupAbundances.map(({ categoryKey, category, resources, abundance: groupAbundance }) => (
-              <ResourceGroup key={categoryKey} category={categoryKey}>
-                <Title>
-                  {ResourceGroupIcons[keyify(category).toLowerCase()]}
-                  <label>{category}</label>
-                  <span>{(groupAbundance * 100).toFixed(1)}%</span>
-                </Title>
-                <ResourceList>
-                  {resources.map((resource) => {
-                    const coachmarked = Number(resource.i) === coachmarks[COACHMARK_IDS.hudMenuTargetResource];
-                    const isSelected = resourceMap.active && resourceMap.selected === Number(resource.i);
-                    return (
-                      <Resource
-                        key={resource.i}
-                        ref={coachmarked ? setCoachmarkRef(COACHMARK_IDS.hudMenuTargetResource) : undefined}
-                        category={resource.categoryKey}
-                        onClick={onClick(resource.i)}
-                        selected={isSelected}>
-                        {isSelected ? <PlusIcon /> : <Circle />}
-                        <label>{resource.name}</label>
-                        <span>{(resource.abundance * 100).toFixed(1)}%</span>
-                      </Resource>
-                    );
-                  })}
-                </ResourceList>
-              </ResourceGroup>
-            ))}
-          </div>
-        </HudMenuCollapsibleSection>
+        {!scanned && <ResourceScanWarning />}
+        {overallBonus && (
+          <OverallBonus>
+            <YieldBonus>
+              <BonusBar bonus={overallBonus.level} />
+              <span>Overall Yield + {overallBonus.modifier}%</span>
+            </YieldBonus>
+          </OverallBonus>
+        )}
+        <ResourceGroups>
+          {groupAbundances.map(({ categoryKey, category, resources, bonus, abundance: groupAbundance }) => (
+            <ResourceGroup key={categoryKey} category={categoryKey}>
+              <Title>
+                {ResourceGroupIcons[keyify(category).toLowerCase()]}
+                <label>{category}</label>
+                {bonus?.level > 0 && (
+                  <YieldBonus category={categoryKey}>
+                    <BonusSeparator> - </BonusSeparator>
+                    <BonusBar bonus={bonus.level} />
+                    <span>Yield + {bonus.modifier}%</span>
+                  </YieldBonus>
+                )}
+                {scanned && <span>{(groupAbundance * 100).toFixed(1)}%</span>}
+              </Title>
+              <ResourceList>
+                {resources.map((resource) => {
+                  const coachmarked = Number(resource.i) === coachmarks[COACHMARK_IDS.hudMenuTargetResource];
+                  const isSelected = scanned && resourceMap.active && resourceMap.selected === Number(resource.i);
+                  return (
+                    <Resource
+                      key={resource.i}
+                      ref={coachmarked ? setCoachmarkRef(COACHMARK_IDS.hudMenuTargetResource) : undefined}
+                      category={resource.categoryKey}
+                      aria-disabled={!scanned}
+                      $disabled={!scanned}
+                      onClick={scanned ? onClick(resource.i) : undefined}
+                      selected={isSelected}>
+                      {isSelected ? <PlusIcon /> : <Circle />}
+                      <label>{resource.name}</label>
+                      {scanned && <span>{(resource.abundance * 100).toFixed(1)}%</span>}
+                    </Resource>
+                  );
+                })}
+              </ResourceList>
+            </ResourceGroup>
+          ))}
+        </ResourceGroups>
       </ResourceWrapper>
-      {nonzeroBonuses?.length > 0 && (
-        <div>
-          <HudMenuCollapsibleSection titleText="Yield Bonuses" borderless>
-            <AsteroidBonuses bonuses={nonzeroBonuses} fullWidth />
-          </HudMenuCollapsibleSection>
-        </div>
-      )}
     </Scrollable>
   );
 };

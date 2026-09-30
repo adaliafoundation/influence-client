@@ -8,7 +8,7 @@ import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import { appConfig } from '~/appConfig';
 import api from '~/lib/api';
 import { starterMissionsQueryKey } from '~/lib/starterMissions';
-import { missionBindingKey } from '~/lib/missionBindings';
+import { missionBindingKey, missionBindingRefetchInterval } from '~/lib/missionBindings';
 
 const useMissionBindings = (requests) => {
   const { chainId, token } = useSession();
@@ -33,7 +33,7 @@ const useMissionBindings = (requests) => {
       staleTime: 0,
       retry: false,
       // An idle processor can temporarily retain evidence while completion is indexed.
-      refetchInterval: data => data?.status === 'matched' || data?.status === 'mismatched' ? false : 5000
+      refetchInterval: missionBindingRefetchInterval
     };
   }) });
   const subscriptionKey = JSON.stringify(requests.map(r => missionBindingKey(chainId, apiUrl, r)));

@@ -163,7 +163,7 @@ const useConstructionManager = (lotId, missionId) => {
   }, [reportBlocked, execute, lotId, planPayload, recheck]);
 
   const unplanConstruction = useCallback(() => {
-    execute(
+    return execute(
       'ConstructionAbandon',
       payload,
       { ...txMeta, buildingType: lot?.building?.Building?.buildingType }
@@ -171,15 +171,15 @@ const useConstructionManager = (lotId, missionId) => {
   }, [execute, payload]);
 
   const startConstruction = useCallback(() => {
-    execute('ConstructionStart', payload, txMeta)
+    return execute('ConstructionStart', payload, txMeta)
   }, [execute, payload]);
 
   const finishConstruction = useCallback(() => {
-    execute('ConstructionFinish', payload, txMeta)
+    return execute('ConstructionFinish', payload, txMeta)
   }, [execute, payload]);
 
   const deconstruct = useCallback(() => {
-    execute(
+    return execute(
       'ConstructionDeconstruct',
       payload,
       { ...txMeta, buildingType: lot?.building?.Building?.buildingType }

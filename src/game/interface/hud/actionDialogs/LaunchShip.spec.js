@@ -66,12 +66,13 @@ test.each(['blocked', 'checking'])('shared %s state disables the dialog', (statu
   expect(screen.getByRole('button').disabled).toBe(true);
 });
 
-test('submission displays a newly granted protection without proceeding', async () => {
+test('submission leaves permission failure reporting to the shared manager', async () => {
   manager.undockShip.mockResolvedValue({ status: 'blocked', reason: 'Ship has permission to remain' });
   render(<LaunchShip shipId={9} onClose={jest.fn()} />);
   fireEvent.click(screen.getByRole('button'));
-  await waitFor(() => expect(createAlert).toHaveBeenCalledTimes(1));
-  expect(createAlert.mock.calls[0][0].data.report).toContain('Ship has permission to remain');
+  await waitFor(() => expect(manager.undockShip).toHaveBeenCalledWith(true));
+  expect(createAlert).not.toHaveBeenCalled();
+  expect(screen.getByText('Force Launch Ship')).toBeTruthy();
   expect(screen.queryByRole('status')).toBeNull();
 });
 

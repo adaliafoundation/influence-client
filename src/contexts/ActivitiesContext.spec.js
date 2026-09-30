@@ -1,0 +1,119 @@
+import React, { useContext, useEffect } from 'react';
+import { act, render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import ActivitiesContext, { ActivitiesProvider } from './ActivitiesContext';
+import useSession from '~/hooks/useSession';
+import useCrewContext from '~/hooks/useCrewContext';
+import useGetActivityConfig from '~/hooks/useGetActivityConfig';
+import useStore from '~/hooks/useStore';
+import useWebsocket from '~/hooks/useWebsocket';
+import api from '~/lib/api';
+
+jest.mock('@influenceth/sdk', () => ({ Address: {}, Entity: { IDS: {} } }));
+jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
+jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
+jest.mock('~/hooks/useGetActivityConfig', () => jest.fn(), { virtual: true });
+jest.mock('~/hooks/useStore', () => jest.fn(), { virtual: true });
+jest.mock('~/hooks/useWebsocket', () => jest.fn(), { virtual: true });
+jest.mock('~/hooks/useSimulationState', () => () => null, { virtual: true });
+jest.mock('~/lib/activities', () => ({ hydrateActivities: jest.fn(async () => {}) }), { virtual: true });
+jest.mock('~/lib/api', () => ({ getTransactionActivities: jest.fn() }), { virtual: true });
+jest.mock('~/appConfig', () => ({ appConfig: { get: () => false } }), { virtual: true });
+jest.mock('~/lib/debugFlags', () => ({ areWebsocketLogsEnabled: () => false }), { virtual: true });
+jest.mock('~/lib/priceUtils', () => ({ TOKEN: {} }), { virtual: true });
+
+const activity = { id: 'document-1', event: { id: 'event-1', name: 'SellOrderFilled', transactionHash: '0x123' } };
+let client, socket, session, state, invalidate, consume;
+const advance = async ms => {
+  await act(async () => { jest.advanceTimersByTime(ms); });
+};
+const Consumer = () => {
+  const activities = useContext(ActivitiesContext);
+  useEffect(() => { consume(activities); }, [activities]);
+  return null;
+};
+const tree = () => <QueryClientProvider client={client}><ActivitiesProvider><Consumer /></ActivitiesProvider></QueryClientProvider>;
+
+beforeEach(() => {
+  jest.useFakeTimers();
+  jest.clearAllMocks();
+  client = new QueryClient();
+  invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue();
+  consume = jest.fn();
+  state = { pendingTransactions: [{ txHash: '0x123' }], dispatchAlertLogged: jest.fn() };
+  session = { token: 'token', blockNumber: 1, setBlockNumber: jest.fn(), setBlockTime: jest.fn() };
+  socket = {
+    wsReady: true,
+    registerConnectionHandler: jest.fn(), unregisterConnectionHandler: jest.fn(),
+    registerMessageHandler: jest.fn(), unregisterMessageHandler: jest.fn()
+  };
+  useSession.mockImplementation(() => session);
+  useStore.mockImplementation(selector => selector(state));
+  useWebsocket.mockImplementation(() => socket);
+  // Refetching creates new crew/config identities, as it does in the application.
+  useCrewContext.mockImplementation(() => ({ crew: { id: 1 }, refreshReadyAt: jest.fn() }));
+  useGetActivityConfig.mockImplementation(() => () => ({
+    onBeforeReceived: async () => [], invalidations: [['walletBalance', 'sway']],
+    triggerAlert: true, logContent: { content: 'Purchased core drills' }
+  }));
+  api.getTransactionActivities.mockResolvedValue({ activities: [activity] });
+});
+afterEach(() => {
+  client.clear();
+  jest.useRealTimers();
+});
+
+test('refreshes a recovered purchase once and preserves completion across state updates', async () => {
+  let finishRefresh;
+  invalidate.mockImplementation(() => new Promise(resolve => { finishRefresh = resolve; }));
+  const { rerender } = render(tree());
+  await advance(0);
+  await advance(2500);
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(1);
+  expect(consume).toHaveBeenLastCalledWith([]);
+
+  for (let i = 0; i < 5; i += 1) {
+    session = { ...session, blockNumber: i + 2 };
+    rerender(tree());
+    await advance(3000);
+  }
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  expect(socket.registerMessageHandler).toHaveBeenCalledTimes(2);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  await act(async () => { finishRefresh(); });
+  expect(consume.mock.calls.at(-1)[0]).toEqual([expect.objectContaining({ key: 'event-1' })]);
+  state.pendingTransactions = [];
+  rerender(tree());
+  await advance(5000);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(1);
+});
+
+test('deduplicates API and websocket copies while retaining separate fills in one transaction', async () => {
+  render(tree());
+  await advance(0);
+  const onMessage = socket.registerMessageHandler.mock.calls[0][0];
+  act(() => {
+    onMessage({ type: 'SellOrderFilled', body: { ...activity, id: 'socket-id' } });
+    onMessage({ type: 'SellOrderFilled', body: { ...activity, event: { ...activity.event, id: 'event-2' } } });
+  });
+  await advance(1000);
+  await advance(2500);
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(2);
+  expect(consume.mock.calls.at(-1)[0].map(a => a.key).sort()).toEqual(['event-1', 'event-2']);
+  act(() => onMessage({ type: 'SellOrderFilled', body: activity }));
+  await advance(1000);
+  await advance(2500);
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(2);
+});
+
+test('does not process a scheduled activity after logout', async () => {
+  const { rerender } = render(tree());
+  await advance(0);
+  session = { ...session, token: null };
+  rerender(tree());
+  await advance(5000);
+  expect(invalidate).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
+  expect(consume).toHaveBeenLastCalledWith([]);
+});

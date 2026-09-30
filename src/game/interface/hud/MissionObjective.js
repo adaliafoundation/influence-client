@@ -58,7 +58,7 @@ const MissionObjective = ({ row, onDetails }) => {
       {type === 'ready' ? <ReadyIcon /> : <span><TargetIcon /></span>}
     </ActionItemIcon>
     <Content>
-      <h3>{row.invitation ? 'Begin your starter campaign' : `Mission: ${row.mission.title}`}</h3>
+      <h3>{row.invitation ? 'Begin campaign: Your Foothold in Adalia' : `Mission: ${row.mission.title}`}</h3>
       <Action onClick={event => { event.stopPropagation(); onDetails(); }}>
         Show details
       </Action>

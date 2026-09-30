@@ -895,6 +895,7 @@ const AsteroidComponent = () => {
       const onZoomComplete = () => {
         dispatchLotCameraSettled(lotId);
         if (closestChunk) {
+          controls.minDistance = getMinDistance(closestChunk);
           setCameraAltitude(controls.object.position.length() - closestChunk.sphereCenterHeight);
         }
         selectedLotTween.current = null;
@@ -928,6 +929,9 @@ const AsteroidComponent = () => {
           }
         }
       }
+
+      // The overview or departure terrain limit must not clamp the final descent.
+      controls.minDistance = Math.min(controls.minDistance, currentCameraHeight, lotPosition.length());
 
       const samplePath = createLotCameraPath({
         start: controls.object.position,

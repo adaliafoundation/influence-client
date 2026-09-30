@@ -1,3 +1,4 @@
+import { notifyTransactionSettlement } from '../lib/transactionSettlement';
 import create from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import produce from 'immer';
@@ -900,10 +901,13 @@ const useStore = create(
           }
         })),
 
-        dispatchPendingTransactionComplete: (txHash) => set(produce(state => {
-          if (!state.pendingTransactions) state.pendingTransactions = [];
-          state.pendingTransactions = state.pendingTransactions.filter((tx) => tx.txHash !== txHash);
-        })),
+        dispatchPendingTransactionComplete: (txHash, status = 'indexed') => {
+          set(produce(state => {
+            if (!state.pendingTransactions) state.pendingTransactions = [];
+            state.pendingTransactions = state.pendingTransactions.filter((tx) => tx.txHash !== txHash);
+          }));
+          notifyTransactionSettlement(txHash, status);
+        },
 
         dispatchCanvasStacked: (id) => set(produce(state => {
           if (!state.canvasStack) state.canvasStack = [];

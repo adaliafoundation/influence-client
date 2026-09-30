@@ -98,7 +98,7 @@ const useProcessManager = (lotId, slot, missionId) => {
   }, [actionItems, blockTime, crew?.id, crewCan, getPendingTx, getStatus, payload, processor?.status]);
 
   const startProcess = useCallback(({ processId, primaryOutputId, recipeTally, origin, originSlot, destination, destinationSlot, leaseDetails }) => {
-    execute(
+    return execute(
       leaseDetails ? 'LeaseAndProcessProductsStart' : 'ProcessProductsStart',
       {
         ...payload,
@@ -118,7 +118,7 @@ const useProcessManager = (lotId, slot, missionId) => {
   }, [execute, lotId, payload, processor?.processorType]);
 
   const finishProcess = useCallback(() => {
-    execute('ProcessProductsFinish', payload, { lotId, process: processor?.runningProcess });
+    return execute('ProcessProductsFinish', payload, { lotId, process: processor?.runningProcess });
   }, [execute, lotId, payload, processor?.runningProcess]);
 
   return {

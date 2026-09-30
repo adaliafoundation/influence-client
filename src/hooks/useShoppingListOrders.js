@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import useMarketQuery from './useMarketQuery';
 import { Order } from '@influenceth/sdk';
 
 import api from '~/lib/api';
@@ -6,7 +6,7 @@ import { locationsArrToObj } from '~/lib/utils';
 
 const useShoppingListOrders = (asteroidId, productIds, mode = 'buy') => {
   // TODO: ideally could somehow partion this by productId in cache keys
-  return useQuery({
+  return useMarketQuery({
     queryKey: [ 'shoppingOrderList', Number(asteroidId), productIds, mode ],
     queryFn: async () => {
       const empties = productIds.reduce((a, p) => ({ ...a, [p]: {} }), {});
@@ -30,7 +30,7 @@ const useShoppingListOrders = (asteroidId, productIds, mode = 'buy') => {
       }, empties);
     },
     enabled: !!asteroidId && !!productIds?.length
-  });
+  }, { asteroidId, products: productIds });
 }
 
 export default useShoppingListOrders;

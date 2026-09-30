@@ -166,7 +166,7 @@ const useCoreSampleManager = (lotId, missionId) => {
     const source = coreDrillSource || getStarterCoreSampleSource(crew);
     if (!source) return;
 
-    execute('SampleDepositStart', {
+    return execute('SampleDepositStart', {
       resource: resourceId,
       origin: { id: source.id, label: source.label },
       origin_slot: source.slot,
@@ -182,7 +182,7 @@ const useCoreSampleManager = (lotId, missionId) => {
       const originPermission = await recheckAuthorization('can', [crew, coreDrillSource, Permission.IDS.REMOVE_PRODUCTS], [crew, coreDrillSource]);
       if (originPermission.status !== 'allowed') return reportBlocked(originPermission);
     }
-    execute(
+    return execute(
       depositOwnerCrew ? 'PurchaseDepositAndImprove' : 'SampleDepositImprove',
       {
         ...payload,
@@ -202,7 +202,7 @@ const useCoreSampleManager = (lotId, missionId) => {
   const finishSampling = useCallback((sampleId) => {
     const selectedAction = currentSamplings.find((c) => c.action?.sampleId === sampleId);
     if (!selectedAction) return;
-    execute(
+    return execute(
       'SampleDepositFinish',
       {
         deposit: { id: selectedAction.action?.sampleId, label: Entity.IDS.DEPOSIT },

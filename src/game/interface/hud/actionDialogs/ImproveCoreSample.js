@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Permission, Asteroid, Crewmate, Deposit, Lot, Product, Time } from '@influenceth/sdk';
 
 import { CoreSampleIcon, ImproveCoreSampleIcon, ResourceIcon, SwayIcon, WarningIcon } from '~/components/Icons';
@@ -153,7 +153,6 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const originalYield = useMemo(() => selectedSample?.Deposit?.initialYield, [selectedSample?.id]); // only update on id change
   const originalTonnage = useMemo(() => originalYield ? originalYield * Product.TYPES[selectedSample?.Deposit.resource]?.massPerUnit : 0, [selectedSample, originalYield]);
 
-
   useEffect(() => {
     // if open to a different resource map, switch... if a resource map is not open, don't open one
     if (resourceId && resourceMap?.active && resourceMap.selected !== resourceId) {
@@ -269,21 +268,6 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
     },
   ]), [crew?._timeAcceleration, crewTravelBonus, crewTravelTime, sampleBounds, sampleQualityBonus, sampleTime, tripDetails]);
 
-  // handle auto-closing
-  const miniStatus = useRef();
-  useEffect(() => {
-    let newMiniStatus = 1;
-    if (currentSamplingAction) newMiniStatus = 2;
-    if (currentSamplingAction?.sampleId) newMiniStatus = 3;
-
-    // (close on status change from no sampleId to sampleId)
-    if (miniStatus.current && miniStatus.current !== newMiniStatus) {
-      props.onClose();
-    }
-
-    miniStatus.current = newMiniStatus;
-  }, [currentSamplingAction]);
-
   const isPurchase = useMemo(
     () => selectedSample && crewAuthorization(Permission.IDS.USE_DEPOSIT, selectedSample).status === 'denied' && selectedSample?.PrivateSale?.amount > 0,
     [crewAuthorization, selectedSample]
@@ -294,11 +278,11 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const onImprove = useCallback(() => {
     if (isPurchase && !depositOwner) return;
 
-    startImproving(selectedSample?.id, drillSource, depositOwner);
+    return startImproving(selectedSample?.id, drillSource, depositOwner);
   }, [startImproving, selectedSample, drillSource, isPurchase, depositOwner]);
 
   const onFinish = useCallback(() => {
-    finishSampling(currentSamplingAction?.sampleId)
+    return finishSampling(currentSamplingAction?.sampleId)
   }, [finishSampling, currentSamplingAction]);
 
   return (

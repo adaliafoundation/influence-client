@@ -10,7 +10,7 @@ import { reactBool, formatTimer, formatFixed, formatPrice, locationsArrToObj, ge
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
 import { ActionDialogFooter, ActionDialogHeader, FlexSection, ActionDialogBody, FlexSectionBlock, MarketplaceAlert, ShoppingListPriceField, LiquidityWarning, SectionTitle, Section } from './components';
 import actionStage from '~/lib/actionStages';
-import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
+
 import formatters from '~/lib/formatters';
 import DataTableComponent from '~/components/DataTable';
 import useAsteroidBuildings from '~/hooks/useAsteroidBuildings';
@@ -19,14 +19,14 @@ import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import api from '~/lib/api';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useLot from '~/hooks/useLot';
-import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
-import useStore from '~/hooks/useStore';
+
+
 import ResourceRequirement from '~/components/ResourceRequirement';
 import useInterval from '~/hooks/useInterval';
 import PageLoader from '~/components/PageLoader';
 import Monospace from '~/components/Monospace';
-import UncontrolledTextInput from '~/components/TextInputUncontrolled';
-import { CheckboxButton } from '~/components/filters/components';
+
+
 
 const ProductList = styled.div`
   padding: 1px 0;
@@ -289,7 +289,7 @@ export const ProductMarketSummary = ({
 
 const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect, stage, ...props }) => {
   const { execute } = useContext(ChainTransactionContext);
-  const { crew, pendingTransactions } = useCrewContext();
+  const { crew } = useCrewContext();
 
   const [openProductId, setOpenProductId] = useState();
   const [selected, setSelected] = useState(initialSelection || {});
@@ -449,77 +449,53 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
     });
   }, [resourceMarketplaces, selected])
 
-  const [selling, setSelling] = useState();
   const handleSell = useCallback(async () => {
     // TODO: do syncronous refetch and return if significant change (i.e. > 2% change in price or anything that was satisfied is now unsatisfied)
-    setSelling(true);
-    try {
-      // load all buyerCrews and exchangeControllerCrews
-      // TODO: technically, can skip loading exchangeControllerCrews if fees 0?
-      // TODO: in an upcoming update, crew.delegatedBy may be returned on the exchanges...
-      //  should update to skip redundantly fetching of the controller crew here
-      const allCrewIds = allFills.reduce((acc, fill) => {
-        if (fill.crew?.id) acc.add(fill.crew?.id);
+    // load all buyerCrews and exchangeControllerCrews
+    // TODO: technically, can skip loading exchangeControllerCrews if fees 0?
+    // TODO: in an upcoming update, crew.delegatedBy may be returned on the exchanges...
+    //  should update to skip redundantly fetching of the controller crew here
+    const allCrewIds = allFills.reduce((acc, fill) => {
+      if (fill.crew?.id) acc.add(fill.crew?.id);
 
+      const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
+      if (exchangeControllerId) acc.add(exchangeControllerId);
+      return acc;
+    }, new Set());
+
+    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
+
+    await execute(
+      'EscrowWithdrawalAndFillBuyOrders',
+      allFills.map((fill) => {
         const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
-        if (exchangeControllerId) acc.add(exchangeControllerId);
-        return acc;
-      }, new Set());
-
-      const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
-
-      await execute(
-        'EscrowWithdrawalAndFillBuyOrders',
-        allFills.map((fill) => {
-          const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
-          return {
-            depositCaller: fill.initialCaller,
-            seller_account: crew?.Crew?.delegatedTo,
-            exchange_owner_account: crews.find((c) => c.id === exchangeControllerId)?.Crew?.delegatedTo,
-            makerFee: fill.makerFee,// ? / Order.FEE_SCALE,
-            payments: fill.paymentsUnscaled,
-            origin: { id: origin?.id, label: origin?.label },
-            origin_slot: originSlot,
-            product: fill.product,
-            amount: fill.fillAmount,
-            buyer_crew: { id: fill.crew?.id, label: fill.crew?.label },
-            price: Math.round(fill.price * TOKEN_SCALE[TOKEN.SWAY]),
-            storage: { id: fill.storage?.id, label: fill.storage?.label },
-            storage_slot: fill.storageSlot,
-            exchange: { id: fill.entity.id, label: fill.entity.label },
-            caller_crew: { id: crew?.id, label: crew?.label }
-          };
-        }),
-        {
-          originLotId: originLot?.id,
-        },
-      );
-
-    } catch (e) {
-      console.error(e);
-
-    } finally {
-      setTimeout(() => {
-        setSelling(false);
-      }, 1000);
-    }
-
-  }, [allFills, crew?.id, origin, originLot?.id, originSlot, exchanges, execute]);
+        return {
+          depositCaller: fill.initialCaller,
+          seller_account: crew?.Crew?.delegatedTo,
+          exchange_owner_account: crews.find((c) => c.id === exchangeControllerId)?.Crew?.delegatedTo,
+          makerFee: fill.makerFee,// ? / Order.FEE_SCALE,
+          payments: fill.paymentsUnscaled,
+          origin: { id: origin?.id, label: origin?.label },
+          origin_slot: originSlot,
+          product: fill.product,
+          amount: fill.fillAmount,
+          buyer_crew: { id: fill.crew?.id, label: fill.crew?.label },
+          price: Math.round(fill.price * TOKEN_SCALE[TOKEN.SWAY]),
+          storage: { id: fill.storage?.id, label: fill.storage?.label },
+          storage_slot: fill.storageSlot,
+          exchange: { id: fill.entity.id, label: fill.entity.label },
+          caller_crew: { id: crew?.id, label: crew?.label }
+        };
+      }),
+      {
+        originLotId: originLot?.id,
+      },
+    );
+  }, [allFills, crew?.id, crew?.label, crew?.Crew?.delegatedTo, origin, originLot?.id, originSlot, exchangesById, execute]);
 
   const handleProductClick = useCallback((productId) => () => {
     setOpenProductId((p) => p === productId ? null : productId);
   }, []);
-
-  const sellingListSaleTally = useMemo(() => {
-    return (pendingTransactions || []).filter((tx) => tx.key === 'EscrowWithdrawalAndFillBuyOrders' && tx.meta?.originLotId === originLot?.id);
-  }, [originLot?.id, pendingTransactions]);
-
-  // if sellingListSaleTally on this lot changes while in `selling` mode, close dialog
-  useEffect(() => {
-    if (selling && props.onClose) {
-      props.onClose();
-    }
-  }, [sellingListSaleTally]);
 
   return (
     <>

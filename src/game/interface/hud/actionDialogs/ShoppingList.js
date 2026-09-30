@@ -53,7 +53,7 @@ import useInterval from '~/hooks/useInterval';
 import PageLoader from '~/components/PageLoader';
 import Monospace from '~/components/Monospace';
 import UncontrolledTextInput from '~/components/TextInputUncontrolled';
-import { CheckboxButton } from '~/components/filters/components';
+
 
 const ProductList = styled.div`
   padding: 1px 0;
@@ -316,7 +316,7 @@ export const ProductMarketSummary = ({
 
 const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props }) => {
   const { execute } = useContext(ChainTransactionContext);
-  const { crew, pendingTransactions } = useCrewContext();
+  const { crew } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
@@ -563,65 +563,52 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
     });
   }, [resourceMarketplaces, selected])
 
-  const [purchasing, setPurchasing] = useState();
   const handlePurchase = useCallback(async () => {
     // TODO: do syncronous refetch and return if significant change (i.e. > 2% change in price or anything that was satisfied is now unsatisfied)
-    setPurchasing(true);
-    try {
-      // load all sellerCrews and exchangeControllerCrews
-      // TODO: technically, can skip loading exchangeControllerCrews if fees 0?
-      // TODO: in an upcoming update, crew.delegatedBy may be returned on the exchanges...
-      //  should update to skip redundantly fetching of the controller crew here
-      const allCrewIds = allFills.reduce((acc, fill) => {
-        if (fill.crew?.id) acc.add(fill.crew?.id);
+    // load all sellerCrews and exchangeControllerCrews
+    // TODO: technically, can skip loading exchangeControllerCrews if fees 0?
+    // TODO: in an upcoming update, crew.delegatedBy may be returned on the exchanges...
+    //  should update to skip redundantly fetching of the controller crew here
+    const allCrewIds = allFills.reduce((acc, fill) => {
+      if (fill.crew?.id) acc.add(fill.crew?.id);
 
+      const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
+      if (exchangeControllerId) acc.add(exchangeControllerId);
+      return acc;
+    }, new Set());
+
+    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
+
+    // TODO: could move this all into useMarketplaceManager but would have to rework it the manager some
+    await execute(
+      'BulkFillSellOrder',
+      allFills.map((fill) => {
         const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
-        if (exchangeControllerId) acc.add(exchangeControllerId);
-        return acc;
-      }, new Set());
+        return {
+          seller_account: crews.find((c) => c.id === fill.crew?.id)?.Crew?.delegatedTo,
+          exchange_owner_account: crews.find((c) => c.id === exchangeControllerId)?.Crew?.delegatedTo,
+          takerFee: fill.takerFee,
+          payments: fill.paymentsUnscaled,
 
-      const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
+          seller_crew: { id: fill.crew?.id, label: fill.crew?.label },
+          amount: fill.fillAmount,
+          price: fill.price * TOKEN_SCALE[TOKEN.SWAY],
+          storage: { id: fill.storage?.id, label: fill.storage?.label },
+          storage_slot: fill.storageSlot,
 
-      // TODO: could move this all into useMarketplaceManager but would have to rework it the manager some
-      await execute(
-        'BulkFillSellOrder',
-        allFills.map((fill) => {
-          const exchangeControllerId = exchangesById[fill.entity.id]?.Control?.controller?.id;
-          return {
-            seller_account: crews.find((c) => c.id === fill.crew?.id)?.Crew?.delegatedTo,
-            exchange_owner_account: crews.find((c) => c.id === exchangeControllerId)?.Crew?.delegatedTo,
-            takerFee: fill.takerFee,
-            payments: fill.paymentsUnscaled,
+          product: fill.product,
+          destination: { id: destination?.id, label: destination?.label },
+          destination_slot: destinationSlot,
 
-            seller_crew: { id: fill.crew?.id, label: fill.crew?.label },
-            amount: fill.fillAmount,
-            price: fill.price * TOKEN_SCALE[TOKEN.SWAY],
-            storage: { id: fill.storage?.id, label: fill.storage?.label },
-            storage_slot: fill.storageSlot,
-
-            product: fill.product,
-            destination: { id: destination?.id, label: destination?.label },
-            destination_slot: destinationSlot,
-
-            exchange: { id: fill.entity.id, label: fill.entity.label },
-            caller_crew: { id: crew?.id, label: crew?.label }
-          };
-        }),
-        {
-          destinationLotId: destinationLot?.id,
-        },
-      );
-
-    } catch (e) {
-      console.error(e);
-
-    } finally {
-      setTimeout(() => {
-        setPurchasing(false);
-      }, 1000);
-    }
-
-  }, [allFills, crew?.id, destination, destinationLot?.id, destinationSlot, exchanges, execute]);
+          exchange: { id: fill.entity.id, label: fill.entity.label },
+          caller_crew: { id: crew?.id, label: crew?.label }
+        };
+      }),
+      {
+        destinationLotId: destinationLot?.id,
+      },
+    );
+  }, [allFills, crew?.id, crew?.label, destination, destinationLot?.id, destinationSlot, exchangesById, execute]);
 
   const handleProductClick = useCallback((productId) => () => {
     setOpenProductId((p) => p === productId ? null : productId);
@@ -630,17 +617,6 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
   const goToSwayStore = useCallback(() => {
     dispatchLauncherPage('store', 'sway');
   }, []);
-
-  const shoppingListPurchaseTally = useMemo(() => {
-    return (pendingTransactions || []).filter((tx) => tx.key === 'BulkFillSellOrder' && tx.meta?.destinationLotId === destinationLot?.id);
-  }, [destinationLot?.id, pendingTransactions]);
-
-  // if shoppingListPurchaseTally on this lot changes while in `purchasing` mode, close dialog
-  useEffect(() => {
-    if (purchasing && props.onClose) {
-      props.onClose();
-    }
-  }, [shoppingListPurchaseTally]);
 
   return (
     <>

@@ -1,5 +1,7 @@
+import { useActionSubmission } from '../contexts/ActionSubmissionContext';
 import { useContext, useMemo } from 'react';
-import styled, { css, keyframes } from 'styled-components';
+import styled from 'styled-components';
+import LoadingBorder from './LoadingBorder';
 import { Tooltip } from 'react-tooltip';
 import BarLoader from 'react-spinners/BarLoader';
 import { uniqueId } from 'lodash';
@@ -54,16 +56,7 @@ export const InnerContainer = styled.div`
   }
 `;
 
-const opacityAnimation = keyframes`
-  0% { opacity: 1; }
-  50% { opacity: 0.6; }
-  100% { opacity: 1; }
-`;
-
 export const StyledButton = styled.button`
-  ${p => p.loadingAnimation && css`
-    animation: ${opacityAnimation} 1250ms ease infinite;
-  `}
   background: transparent;
   border: ${p => p.sizeParams.borderWidth}px solid ${p => p.borderless ? 'transparent' : (p.color || (p.isTransaction ? p.theme.colors.txButton : p.theme.colors.main))};
   clip-path: polygon(
@@ -211,12 +204,17 @@ const StandardButton = (props) => {
     <>
       {props.badge ? <StyledBadge value={props.badge} {...nonStyleProps} sizeParams={sizeParams} /> : null}
       <StyledButton
+        aria-busy={props.loadingAnimation || undefined}
         onClick={_onClick}
         data-tooltip-content={dataTip}
         data-tooltip-place={dataPlace || "right"}
         sizeParams={sizeParams}
         background={sizeParams.background}
         {...restProps}>
+        {props.loadingAnimation && (
+          <LoadingBorder $rectangular $cornerSize={sizeParams.line} $thickness={3}
+            style={props.flip ? { transform: 'scaleX(-1)' } : undefined} />
+        )}
         <InnerContainer flip={restProps.flip} sizeParams={sizeParams}>
           {loading && (
             <BarLoader
@@ -250,26 +248,30 @@ const StandardButton = (props) => {
 
 const TransactionButton = (props) => {
   const { promptingTransaction } = useContext(ChainTransactionContext);
+  const submission = useActionSubmission();
+  const busy = submission?.busy || promptingTransaction;
+  const tooltipPlace = props['data-tooltip-place'];
+  const activeButton = submission?.activeButton;
   const tooltipId = useMemo(() => uniqueId('alt_button_tooltip_'), []);
   const extraProps = useMemo(() => {
-    if (promptingTransaction) {
+    if (busy) {
       return {
         disabled: true,
-        loadingAnimation: true,
+        loadingAnimation: !activeButton || activeButton === tooltipId,
         disabledTooltip: {
-          'data-tooltip-content': 'Waiting on Wallet...',
-          'data-tooltip-place': props['data-tooltip-place'] || 'top',
+          'data-tooltip-content': 'Waiting for action confirmation…',
+          'data-tooltip-place': tooltipPlace || 'top',
           'data-tooltip-id': tooltipId
         }
       };
     }
     return {};
-  }, [promptingTransaction, tooltipId]);
+  }, [busy, tooltipId, tooltipPlace, activeButton]);
 
   return (
     <>
       <Tooltip id={tooltipId}></Tooltip>
-      <StandardButton {...props} {...extraProps} />
+      <StandardButton {...props} {...extraProps} loading={submission ? false : props.loading} onClick={submission ? event => submission.run(() => props.onClick?.(event), tooltipId) : props.onClick} />
     </>
   );
 };

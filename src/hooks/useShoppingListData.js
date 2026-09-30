@@ -16,9 +16,10 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
   } = useAsteroidBuildings(asteroidId, 'Exchange', mode === 'buy' ? Permission.IDS.BUY : Permission.IDS.SELL);
 
   const lastValue = useRef();
+  const exchangesById = useMemo(() => new Map((exchanges || []).map(exchange => [Number(exchange.id), exchange])), [exchanges]);
 
   // Fee data depends on controlling crews, not exchange render timestamps.
-  const crewIds = [...new Set((exchanges || []).map(exchange => exchange.Control?.controller?.id).filter(Boolean))].sort((a, b) => a - b);
+  const crewIds = useMemo(() => [...new Set((exchanges || []).map(exchange => exchange.Control?.controller?.id).filter(Boolean))].sort((a, b) => a - b), [exchanges]);
   const { data: crewmates, isLoading: crewmatesLoading, isError: crewmatesError, dataUpdatedAt: crewmatesUpdatedAt, refetch: refetchCrewmates } = useQuery({
     queryKey: entitiesCacheKey(Entity.IDS.CREWMATE, `controllers:${crewIds.join(',')}`),
     queryFn: () => api.getCrewmatesOfCrews(crewIds),
@@ -63,7 +64,7 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
         finalData[productId] = [];
         Object.keys(orders[productId]).forEach((buildingId) => {
           const o = orders[productId][buildingId];
-          const marketplace = exchanges.find((e) => e.id === Number(buildingId));
+          const marketplace = exchangesById.get(Number(buildingId));
 
           if (marketplace) {
             finalData[productId].push({
@@ -84,7 +85,7 @@ const useShoppingListData = (asteroidId, lotId, productIds, mode = 'buy') => {
       isLoading: false,
       refetch
     };
-  }, [asteroidId, lotId, isLoading, feeEnforcements, exchanges, dataUpdatedAt, orders, refetchExchanges, refetchOrders, refetchCrewmates, crewIds.length]);
+  }, [asteroidId, lotId, isLoading, feeEnforcements, exchanges, exchangesById, dataUpdatedAt, orders, refetchExchanges, refetchOrders, refetchCrewmates, crewIds.length]);
 };
 
 export default useShoppingListData;

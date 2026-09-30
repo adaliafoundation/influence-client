@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
 
@@ -16,7 +16,6 @@ import theme from '~/theme';
 import useControlShip from '~/hooks/actionManagers/useControlShip';
 import useEntity from '~/hooks/useEntity';
 import useShip from '~/hooks/useShip';
-
 
 const AsteroidImageWrapper = styled.div`
   position: relative;
@@ -39,15 +38,6 @@ const Note = styled.div`
 const ControlShip = ({ asteroid, lot, ship, controlManager, stage, ...props }) => {
   const { controlShip } = controlManager;
   const { captain, crew } = useCrewContext();
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   return (
     <>

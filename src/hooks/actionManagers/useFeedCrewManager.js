@@ -17,7 +17,7 @@ const useFeedCrewManager = (missionId) => {
   const feedCrew = useCallback(
     ({ origin, originSlot, amount, _orderPath, ...fillProps }) => {
       if (_orderPath) {
-        execute('ResupplyFoodFromExchange', {
+        return execute('ResupplyFoodFromExchange', {
           seller_account: fillProps.sellerAccount,
           exchange_owner_account: fillProps.exchangeOwnerAccount,
           seller_crew: fillProps.crew,
@@ -34,7 +34,7 @@ const useFeedCrewManager = (missionId) => {
         const source = origin || getStarterFoodSupplySource(crew);
         if (!source) return;
 
-        execute('ResupplyFood', {
+        return execute('ResupplyFood', {
           origin: { id: source.id, label: source.label },
           origin_slot: originSlot ?? source.slot,
           food: amount,

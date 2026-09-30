@@ -51,11 +51,10 @@ const ClaimArrivalReward = ({ asteroid, crew, onClose }) => {
 
   const handleClaim = useCallback(async () => {
     await execute('ClaimArrivalReward', payload);
-    onClose();
   }, [execute, payload]);
 
   return (
-    <ActionDialogInner>
+    <ActionDialogInner showClose>
       <Wrapper>
         <ConfirmationDialog
           title="Claim Arrival Reward"

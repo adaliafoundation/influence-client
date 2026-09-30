@@ -204,3 +204,5 @@ export const verifyMissionAction = async ({ key, vars, assignment, view, getBind
   if (binding.status !== 'matched') throw new Error(bindingUnavailableMessage(binding));
   return true;
 };
+
+export const missionBindingRefetchInterval = query => ['matched', 'mismatched'].includes(query.state.data?.status) ? false : 5000;

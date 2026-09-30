@@ -1,8 +1,9 @@
+import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
 import withOpenDialog from '~/components/withOpenDialog';
 import { getInstantTransferDetails, getTripTiming } from '~/lib/transport';
 import { useMissionAction } from '~/contexts/MissionActionContext';
 import MissionActionNotice from './MissionActionNotice';
-import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { createPortal } from 'react-dom';
 import { Tooltip } from 'react-tooltip';
@@ -2454,7 +2455,7 @@ const InventorySelectionDialogContent = ({
   open,
   requirePresenceOfItemIds
 }) => {
-  const { crew, authorize, crewAuthorization } = useCrewContext();
+  const { crew } = useCrewContext();
 
   const simulationEnabled = useSimulationEnabled();
   const setCoachmarkRef = useCoachmarkRefSetter();
@@ -2473,53 +2474,25 @@ const InventorySelectionDialogContent = ({
     return locationsArrToObj(otherEntity.Location?.locations || []);
   }, [otherEntity]);
 
-  // if off the surface, cannot access inventories on the surface...
-  const { data: inventoryData } = useAccessibleAsteroidInventories(otherLocation.lotIndex === 0 ? null : asteroidId, isSourcing);
-  const permission = isSourcing ? Permission.IDS.REMOVE_PRODUCTS : Permission.IDS.ADD_PRODUCTS;
-
-  // ... but can access inventories on their crewed ship (assuming not sending things elsewhere)
-  const { data: crewedShip } = useShip((otherLocation.lotIndex === 0 && crew?._location?.shipId === otherLocation.shipId) ? otherLocation.shipId : null);
+  // Orbit transfers are restricted to the crewed ship; fixed pickers need no discovery.
+  const { data: crewedShip } = useShip((!limitToPrimary && otherLocation.lotIndex === 0 && crew?._location?.shipId === otherLocation.shipId) ? otherLocation.shipId : null);
+  const productIds = useMemo(() => {
+    if (requirePresenceOfItemIds) return itemIds;
+    if (!isSourcing) return undefined;
+    return filterItemIds ? Object.keys(filterItemIds).filter(id => filterItemIds[id]).map(Number) : itemIds;
+  }, [requirePresenceOfItemIds, itemIds, isSourcing, filterItemIds]);
+  const { data: inventoryData, checking, isLoading: inventoriesLoading, isError: inventoriesError } = useAccessibleAsteroidInventories(
+    otherLocation.lotIndex === 0 ? null : asteroidId,
+    { isSourcing, limitToPrimary, limitToControlled, crewedShip, productIds, excludeSites, itemIds, itemIdsRequireAllAllowed, otherEntity, otherInvSlot }
+  );
 
   const inventories = useMemo(() => {
-    const allInventoryEntities = [];
-
-    if (limitToPrimary) {
-      allInventoryEntities.push(limitToPrimary);
-    } else {
-      if (inventoryData) allInventoryEntities.push(...inventoryData);
-      if (crewedShip) allInventoryEntities.push(crewedShip);
-    }
-
     const display = [];
-    allInventoryEntities.forEach((entity) => {
+    inventoryData.forEach((entity) => {
       if (!entity.Inventories) return;
-      const access = entity._authorization || crewAuthorization(permission, entity);
-      const control = entity._controlAuthorization || authorize('controls', [crew, entity], [crew, entity]);
-      if (access.status === 'denied') return;
+      const access = entity._authorization;
+      const control = entity._controlAuthorization;
       entity.Inventories.forEach((inv) => {
-        // (can't send to same entity and slot)
-        if (otherEntity) {
-          if (entity.id === otherEntity.id && entity.label === otherEntity.label) {
-            if (!otherInvSlot || otherInvSlot === inv.slot) return;
-          }
-        }
-
-        // filter uncontrolled if limitToControlled
-        if (limitToControlled && control.status === 'denied') return;
-
-        // skip if locked (or inventory type is 0, which should not happen but has in staging b/c of dev bugs)
-        if (inv.status !== Inventory.STATUSES.AVAILABLE || inv.inventoryType === 0) return;
-
-        // skip if site and excludeSites is set
-        if (excludeSites && Inventory.TYPES[inv.inventoryType].category === Inventory.CATEGORIES.SITE) return;
-
-        // skip if itemIds are specified and cannot contain ANY (or if itemIdsRequireAllAllowed is specified and cannot contain ALL)
-        if (itemIds && Inventory.TYPES[inv.inventoryType].productConstraints) {
-          const allowedMaterials = Object.keys(Inventory.TYPES[inv.inventoryType].productConstraints).map((i) => Number(i));
-          if (itemIdsRequireAllAllowed && itemIds.find((i) => !allowedMaterials.includes(Number(i)))) return;
-          else if (!itemIds.find((i) => allowedMaterials.includes(Number(i)))) return;
-        }
-
         const entityLotId = entity.Location.locations.find((l) => l.label === Entity.IDS.LOT)?.id;
         const entityLotIndex = Lot.toIndex(entityLotId);
 
@@ -2564,7 +2537,7 @@ const InventorySelectionDialogContent = ({
     });
 
     return display;
-  }, [crewedShip, inventoryData, itemIds, otherLocation, sort, authorize, crewAuthorization, crew, permission, limitToPrimary, limitToControlled, otherEntity, otherInvSlot, excludeSites, itemIdsRequireAllAllowed, isSourcing, requirePresenceOfItemIds, asteroidId]);
+  }, [inventoryData, itemIds, otherLocation, limitToControlled, isSourcing, requirePresenceOfItemIds, asteroidId]);
 
   const onComplete = useCallback(() => {
     if (selection && !inventories.some((inventory) => inventory.key === selection && !inventory.disabled)) return;
@@ -2619,7 +2592,7 @@ const InventorySelectionDialogContent = ({
         key: 'permission',
         label: 'Permission',
         sortField: 'isControlled',
-        selector: (row) => <PermType type={row.authorization?.status !== 'allowed' ? 'Checking access' : row.isControlled ? 'Controller' : (row.isPermitted ? 'Permitted' : 'Public')}></PermType>,
+        selector: (row) => <PermType type={row.isControlled ? 'Controller' : (row.isPermitted ? 'Permitted' : 'Public')}></PermType>,
         noMinWidth: true,
       },
       (
@@ -2679,7 +2652,7 @@ const InventorySelectionDialogContent = ({
   useEffect(() => {
     setFilterItemIds(
       itemIds?.length
-      ? itemIds
+      ? [...itemIds]
         .sort((a, b) => Product.TYPES[a].name < Product.TYPES[b].name ? -1 : 1)
         .reduce((acc, k) => ({ ...acc, [k]: true }), {})
       : null
@@ -2712,7 +2685,7 @@ const InventorySelectionDialogContent = ({
         };
       })
       .filter((inv) => {
-        if (inv.disabled && inv.authorization?.status !== 'unresolved') return false;
+        if (inv.disabled) return false;
         if (filterValue) {
           const lcFilterValue = (filterValue || '').toLowerCase();
           if (!inv.name.toLowerCase().includes(lcFilterValue)) return false;
@@ -2744,7 +2717,7 @@ const InventorySelectionDialogContent = ({
       title={isSourcing && soloItem
         ? `Available ${Product.TYPES[soloItem].name}s`
         : 'Available Inventories'}>
-      {/* TODO: isLoading */}
+      {(inventoriesLoading || checking) && <div role="status">Checking additional inventories…</div>}
       <FilterRow>
         <div>
           <TextInput
@@ -2804,7 +2777,7 @@ const InventorySelectionDialogContent = ({
         </ItemFilterRow>
       )}
 
-      {inventories.length > 0
+      {filteredInventories.length > 0
         ? (
           <InvSelectionTableWrapper>
             <DataTableComponent
@@ -2818,7 +2791,7 @@ const InventorySelectionDialogContent = ({
             />
           </InvSelectionTableWrapper>
         )
-        : (
+        : (inventoriesLoading || checking || inventoriesError) ? null : (
           requirePresenceOfItemIds
           ? <EmptyMessage>You have no accessible inventories with these items on this asteroid.</EmptyMessage>
           : <EmptyMessage>You have no {otherEntity ? 'other ' : ''}available inventories on this asteroid.</EmptyMessage>
@@ -3779,13 +3752,14 @@ const PillTime = styled(Monospace)`
   line-height: 18px;
 `;
 export const ActionDialogHeader = ({ action, actionBarTitle, actionCrew, crewAvailableTime, delayUntil, location, onClose, overrideColor, stage, taskCompleteTime, wide }) => {
+  const submission = useActionSubmission();
   const simulationEnabled = useSimulationEnabled();
   return (
     <>
       <ActionDialogActionBar
         actionBarTitle={actionBarTitle}
         location={location}
-        onClose={onClose}
+        onClose={submission?.dismiss || onClose}
         overrideColor={overrideColor}
         stage={stage}
       />
@@ -5327,6 +5301,7 @@ const NotificationEnabler = styled.label`
 `;
 
 const NotificationSettingsPrompt = ({ onFinished }) => {
+  const submission = useActionSubmission();
   // TODO: disable finish if form is in invalid state (i.e. email but invalid email)
   // TODO: is isTransaction always true?
   const [loading, setLoading] = useState(false);
@@ -5339,6 +5314,7 @@ const NotificationSettingsPrompt = ({ onFinished }) => {
       loading={loading}
       onConfirm={onFinished}
       confirmText="Continue Action">
+      {submission && <IconButton aria-label="Close action dialog" onClick={submission.dismiss} style={{ position: 'absolute', top: 8, right: 8 }}><CloseIcon /></IconButton>}
       <div style={{ alignItems: 'center', border: 'solid #222', borderWidth: '1px 0', display: 'flex', minHeight: 152 }}>
         <NotificationSettings standalone onLoading={setLoading} onValid={setValid} />
       </div>
@@ -5363,6 +5339,8 @@ export const ActionDialogFooter = ({
   waitForCrewReady,
   wide
 }) => {
+  const submission = useActionSubmission();
+  const dismiss = submission?.dismiss || onClose;
   const mission = useMissionAction();
   const missionBlocked = (mission && !mission.ready) || mission?.checking || (mission?.pending && mission?.selected) || (mission?.selected && (!mission.eligible || mission.unavailable))
     || (stage === actionStage.READY_TO_COMPLETE && mission?.unavailable);
@@ -5382,6 +5360,11 @@ export const ActionDialogFooter = ({
     }
     return [{ finalizeLabel, onFinalize }];
   }, [finalizeLabel, onFinalize]);
+
+  // Keep the clicked button mounted even when pending data changes the stage or actions.
+  const idleActions = useRef({ stage, goLabel, goLabelPrice, finalizeActions });
+  if (!submission?.busy) idleActions.current = { stage, goLabel, goLabelPrice, finalizeActions };
+  const { stage: displayStage, goLabel: displayGoLabel, goLabelPrice: displayGoLabelPrice, finalizeActions: displayFinalizeActions } = idleActions.current;
 
   // only show notification option if i've disabled all and this would have one
   const showNotificationOption = useMemo(() => {
@@ -5403,13 +5386,16 @@ export const ActionDialogFooter = ({
     if (showNotificationOption && notificationsEnabled) {
       setPromptForNotifications(true);
     } else {
-      onGo();
+      return onGo();
     }
   }, [onGo, notificationsEnabled, showNotificationOption]);
 
-  const onCloseNotificationPrompt = useCallback(() => {
-    setPromptForNotifications(false);
-    onGo();
+  const onCloseNotificationPrompt = useCallback(async () => {
+    try {
+      return await onGo();
+    } finally {
+      setPromptForNotifications(false);
+    }
   }, [onGo]);
 
   const isReady = isSequenceable ? crew?._readyToSequence : crew?._ready;
@@ -5428,47 +5414,45 @@ export const ActionDialogFooter = ({
 
         <Spacer />
 
-        {stage === actionStage.NOT_STARTED
+        {displayStage === actionStage.NOT_STARTED
           ? (
             <>
               <Button
-                loading={reactBool(buttonsLoading)}
-                onClick={onClose}>
+                onClick={dismiss}>
                 Cancel
               </Button>
-              {waitForCrewReady && !allowedOrLaunched && <CrewNotLaunchedButton />}
-              {waitForCrewReady && allowedOrLaunched && !isReady && <CrewBusyButton isSequenceable={isSequenceable} />}
-              {(!waitForCrewReady || (isReady && allowedOrLaunched)) && (
+              {!submission?.busy && waitForCrewReady && !allowedOrLaunched && <CrewNotLaunchedButton />}
+              {!submission?.busy && waitForCrewReady && allowedOrLaunched && !isReady && <CrewBusyButton isSequenceable={isSequenceable} />}
+              {(submission?.busy || !waitForCrewReady || (isReady && allowedOrLaunched)) && (
                 <Button
                   disabled={nativeBool(disabled || userIsLoading || missionBlocked)}
                   isTransaction
                   loading={reactBool(buttonsLoading)}
                   onClick={onBeforeGo}>
-                  {goLabelPrice > 0
+                  {displayGoLabelPrice > 0
                     ? (
                       <PurchaseButtonInner>
-                        <label>{goLabel}</label>
+                        <label>{displayGoLabel}</label>
                         <span style={{ marginLeft: 10 }}>
-                          <SwayIcon /> {Math.round(goLabelPrice / TOKEN_SCALE[TOKEN.SWAY]).toLocaleString()}
+                          <SwayIcon /> {Math.round(displayGoLabelPrice / TOKEN_SCALE[TOKEN.SWAY]).toLocaleString()}
                         </span>
                       </PurchaseButtonInner>
                     )
-                    : goLabel
+                    : displayGoLabel
                   }
                 </Button>
               )}
             </>
           )
           : (
-            stage === actionStage.READY_TO_COMPLETE
+            displayStage === actionStage.READY_TO_COMPLETE
               ? (
                 <>
-                  {finalizeActions?.length === 1 && (
+                  {displayFinalizeActions?.length === 1 && (
                     <Button
-                      loading={reactBool(buttonsLoading)}
-                      onClick={onClose}>Close</Button>
+                      onClick={dismiss}>Close</Button>
                   )}
-                  {finalizeActions.map((a, i) => (
+                  {displayFinalizeActions.map((a, i) => (
                     <Button
                       key={i}
                       disabled={nativeBool(disabled || missionBlocked)}
@@ -5480,15 +5464,14 @@ export const ActionDialogFooter = ({
               )
               : (
                 <Button
-                  loading={reactBool(buttonsLoading)}
-                  onClick={onClose}>Close</Button>
+                  onClick={dismiss}>Close</Button>
               )
           )}
       </SectionBody>
 
       {promptForNotifications && createPortal(
         <NotificationSettingsPrompt
-          goLabel={goLabel}
+          goLabel={displayGoLabel}
           onFinished={onCloseNotificationPrompt}
         />,
         document.body

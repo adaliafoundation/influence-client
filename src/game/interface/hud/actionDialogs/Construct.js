@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Building, Crewmate, Lot, Time } from '@influenceth/sdk';
 
@@ -35,7 +35,7 @@ import actionStage from '~/lib/actionStages';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 import useActionCrew from '~/hooks/useActionCrew';
 import Button from '~/components/ButtonAlt';
-import AssetBlock from '~/components/AssetBlock';
+
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
@@ -143,22 +143,6 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
       return 'DURING';
     }
     return 'AFTER';
-  }, [constructionStatus]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (always close on)
-    if (['OPERATIONAL'].includes(constructionStatus)) {
-      props.onClose();
-    }
-    // (close on status change from)
-    else if (['PLANNED', 'READY_TO_FINISH'].includes(lastStatus.current)) {
-      if (constructionStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = constructionStatus;
   }, [constructionStatus]);
 
   const transferToSite = useCallback(() => {
@@ -293,7 +277,6 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
             totalTime={crewTravelTime + constructionTime}
           />
         )}
-
 
         <ActionDialogStats
           stage={stage}

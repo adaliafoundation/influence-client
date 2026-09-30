@@ -33,6 +33,11 @@ export const isUserCancellation = error => [4001, '4001', 'ACTION_REJECTED', 'US
 export const classifyFailure = error => {
   const knownMessage = Object.keys(errorMessages).find(key => typeof errorMessages[key] === 'string' && errorMessages[key] === error?.userMessage);
   if (knownMessage) return knownMessage;
+  const seen = new Set([error]);
+  for (let cause = error?.cause; cause && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+    if (/timeout|timed out/i.test(cause.message || '')) return 'unknownOutcome';
+  }
   const message = error?.message || '';
   if (/session expired|session\/(expired|revoked)/i.test(message)) return 'signIn';
   if (message === 'Timeout') return 'busy';

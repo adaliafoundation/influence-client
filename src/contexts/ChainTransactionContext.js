@@ -614,6 +614,7 @@ export function ChainTransactionProvider({ children }) {
     upgradeInsecureSession,
     walletAccount,
     walletCapabilities,
+    walletReadyForTransactions,
     walletId
   } = useSession();
   const queryClient = useQueryClient();
@@ -638,7 +639,8 @@ export function ChainTransactionProvider({ children }) {
   usdcRef.current = usdcBalanceSource;
 
   const walletAccountRef = useRef();
-  walletAccountRef.current = walletAccount;
+  // Account discovery precedes login/session approval; signing must wait for both.
+  walletAccountRef.current = walletReadyForTransactions ? walletAccount : undefined;
 
   const walletConnectionWaiters = useRef([]);
 
@@ -676,14 +678,14 @@ export function ChainTransactionProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!walletAccount) return;
+    if (!walletAccount || !walletReadyForTransactions) return;
 
     walletConnectionWaiters.current.forEach(({ resolve, timeout }) => {
       clearTimeout(timeout);
       resolve(walletAccount);
     });
     walletConnectionWaiters.current = [];
-  }, [walletAccount]);
+  }, [walletAccount, walletReadyForTransactions]);
 
   useEffect(() => {
     const waiters = walletConnectionWaiters;
@@ -1138,7 +1140,8 @@ export function ChainTransactionProvider({ children }) {
     prependEventAutoresolve,
     provider,
     sessionWallet,
-    usdcPerEth
+    usdcPerEth,
+    walletAccount
   ]);
 
   const contractsRef = useRef();
@@ -1147,7 +1150,7 @@ export function ChainTransactionProvider({ children }) {
   const getTxEvent = useCallback((txHash) => {
     const txHashBInt = safeBigInt(txHash);
     return (activities || []).find((a) => a.event?.transactionHash && safeBigInt(a.event?.transactionHash) === txHashBInt)?.event;
-  }, [activities?.length]);
+  }, [activities]);
 
   const transactionWaiters = useRef([]);
 
@@ -1181,7 +1184,7 @@ export function ChainTransactionProvider({ children }) {
             txHash,
             err: err?.message || 'Transaction was rejected.'
           });
-          dispatchPendingTransactionComplete(txHash);
+          dispatchPendingTransactionComplete(txHash, 'failed');
         }
       }
 
@@ -1203,7 +1206,7 @@ export function ChainTransactionProvider({ children }) {
       pendingTransactions.forEach(({ key, vars, meta, txHash }) => {
         // (sanity check) this should not be possible since pendingTransaction should not be created
         // without txHash... so we aren't even reporting this error to user since should not happen
-        if (!txHash) return dispatchPendingTransactionComplete(txHash);
+        if (!txHash) return dispatchPendingTransactionComplete(txHash, 'failed');
 
         if (!transactionWaiters.current.includes(txHash)) {
           transactionWaiters.current.push(txHash);
@@ -1259,7 +1262,7 @@ export function ChainTransactionProvider({ children }) {
         }
       });
     }
-  }, [getTxEvent, pendingTransactions?.length]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getTxEvent, pendingTransactions, contracts]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // on every new block, check for reverted tx's
   // TODO: parse revert_reason to be more readible
@@ -1282,7 +1285,7 @@ export function ChainTransactionProvider({ children }) {
                   txHash,
                   err: receipt.revert_reason || 'Transaction was rejected.'
                 });
-                dispatchPendingTransactionComplete(txHash);
+                dispatchPendingTransactionComplete(txHash, 'failed');
               }
             })
             .catch((err) => {
@@ -1384,6 +1387,7 @@ export function ChainTransactionProvider({ children }) {
   // Allows for multiple explicit / manual calls to be executed in a single transaction
   const executeCalls = useCallback(async (calls, options = {}) => {
     let activeWalletAccount = walletAccountRef.current;
+    const reconnecting = !activeWalletAccount;
     if (!activeWalletAccount) {
       setPromptingTransaction(true);
       try {
@@ -1417,7 +1421,8 @@ export function ChainTransactionProvider({ children }) {
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isWalletAccountLocked(activeWalletAccount)) {
+    // Reconnecting already requests account access from the extension.
+    if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
       createAlert({
         type: 'GenericAlert',
         data: { content: errorMessages.unavailable },
@@ -1467,21 +1472,18 @@ export function ChainTransactionProvider({ children }) {
         txHash: uuid,
         waitingOn: 'TRANSACTION'
       });
-      return;
+      return { status: 'submitted', txHash: uuid };
     }
 
-    const dialogAtSubmission = useStore.getState().actionDialog;
     const authorization = await recheckTransactionAuthorization(key, vars, recheckAuthorization);
     if (authorization.status !== 'allowed') {
-      if (authorization.status === 'denied' && useStore.getState().actionDialog === dialogAtSubmission) {
-        useStore.getState().dispatchActionDialog();
-      }
       reportFailure(createAlert, authorization, { message: authorization.status === 'denied' ? 'accessChanged' : 'accessUnavailable', context: { action: key } });
       return authorization;
     }
 
     let activeWalletAccount = walletAccountRef.current;
     let activeContracts = contractsRef.current;
+    const reconnecting = !activeWalletAccount;
 
     if (!activeWalletAccount) {
       setPromptingTransaction(true);
@@ -1512,7 +1514,8 @@ export function ChainTransactionProvider({ children }) {
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isWalletAccountLocked(activeWalletAccount)) {
+    // Reconnecting already requests account access from the extension.
+    if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
       createAlert({
         type: 'GenericAlert',
         data: { content: errorMessages.unavailable },
@@ -1522,6 +1525,7 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
+    let submission;
     let assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
     let missionKey;
     let ownsMissionSubmission = false;
@@ -1565,6 +1569,7 @@ export function ChainTransactionProvider({ children }) {
         txHash: cleanseTxHash(tx),
         waitingOn: 'TRANSACTION'
       });
+      submission = { status: 'submitted', txHash: cleanseTxHash(tx) };
     } catch (e) {
       handleExecutionExeption(e, executeCalls, { key, vars, meta });
       onTransactionError(e, vars);
@@ -1573,6 +1578,7 @@ export function ChainTransactionProvider({ children }) {
     }
 
     setPromptingTransaction(false);
+    return submission;
   }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPendingTx = useCallback((key, vars) => {

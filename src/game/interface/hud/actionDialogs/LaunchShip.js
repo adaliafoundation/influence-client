@@ -1,6 +1,5 @@
-import { reportFailure } from '../../../../lib/errorReporting';
-import { errorMessages } from '../../../../lib/errorMessages';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Dock, Inventory, Lot, Product, Ship, Time } from '@influenceth/sdk';
 
 import { LaunchShipIcon, RouteIcon, ShipIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -25,11 +24,9 @@ import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useHydratedCrew from '~/hooks/useHydratedCrew';
 import { isForceLaunch } from '~/lib/shipEjectionEligibility';
 
-
 const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 
 const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], stage, ...props }) => {
-  const createAlert = useStore(s => s.dispatchAlertLogged);
 
   const { undockShip } = manager;
   const blockTime = useBlockTime();
@@ -145,24 +142,7 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
     },
   ]), [escapeVelocity, hopperBonus, launchTime?.total, exhaustBonus, propellantRequirement, ship]);
 
-  const onLaunch = useCallback(async () => {
-    try {
-      const result = await undockShip(!powered);
-      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: 'accessChanged' });
-    } catch (error) {
-      reportFailure(createAlert, error);
-    }
-  }, [createAlert, powered, undockShip]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
+  const onLaunch = useCallback(() => undockShip(!powered), [powered, undockShip]);
 
   const simulationEnabled = useSimulationEnabled();
   const simulationActions = useStore((s) => s.simulationActions);
@@ -291,24 +271,8 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
 const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, ...props }) => {
   const { crew } = useCrewContext();
   const { ejectionEligibility, undockShip } = manager;
-  const [submitting, setSubmitting] = useState(false);
-  const createAlert = useStore(s => s.dispatchAlertLogged);
-  const onLaunch = async () => {
-    setSubmitting(true);
-    try {
-      const result = await undockShip(true);
-      if (result?.status && result.status !== 'allowed') reportFailure(createAlert, result, { message: result.status === 'blocked' || result.status === 'denied' ? 'accessChanged' : 'accessUnavailable' });
-    } catch (error) {
-      reportFailure(createAlert, error, { message: 'accessUnavailable' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  const lastStage = useRef(stage);
-  useEffect(() => {
-    if (lastStage.current !== stage) onClose();
-    lastStage.current = stage;
-  }, [stage, onClose]);
+  const onLaunch = () => undockShip(true);
+
   return (
     <>
       <ActionDialogHeader
@@ -330,8 +294,7 @@ const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, .
       <ActionDialogFooter
         {...props}
         onClose={onClose}
-        disabled={submitting || ejectionEligibility.status !== 'allowed'}
-        buttonsLoading={submitting}
+        disabled={ejectionEligibility.status !== 'allowed'}
         goLabel="Force Launch"
         onGo={onLaunch}
         stage={stage}

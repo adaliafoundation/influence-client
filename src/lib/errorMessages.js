@@ -1,5 +1,6 @@
 // Player-facing failure and recovery copy. Keep provider diagnostics out of these messages.
 export const errorMessages = {
+  inventoryLoadFailed: 'Inventories could not be loaded. Close and reopen the picker to try again.',
   deviceSize: 'Device size is not well supported.',
   messageFailed: 'Your message could not be sent. Please try again.',
   fundingFailed: 'Funding order was not completed. Check its status before trying again.',

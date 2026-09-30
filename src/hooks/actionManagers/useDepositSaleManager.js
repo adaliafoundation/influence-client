@@ -17,7 +17,7 @@ const useDepositSaleManager = (deposit) => {
   }), [deposit]);
 
   const purchaseListing = useCallback(() => {
-    execute(
+    return execute(
       'PurchaseDeposit',
       payload,
       meta
@@ -27,13 +27,13 @@ const useDepositSaleManager = (deposit) => {
   const updateListing = useCallback(
     (price) => {
       if (price > 0) {
-        execute(
+        return execute(
           'ListDepositForSale',
           { ...payload, price: price * 1e6 },
           meta
         )
       } else {
-        execute(
+        return execute(
           'UnlistDepositForSale',
           payload,
           meta

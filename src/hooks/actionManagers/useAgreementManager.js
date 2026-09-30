@@ -60,7 +60,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
       ? 'AcceptPrepaidAgreement'
       : 'AcceptContractAgreement';
     // TODO: AcceptPrepaidMerkleAgreement (needs `term` and `merkle_proof`)
-    execute(
+    return execute(
       agreementSystem,
       { ...payload, ...details },
       meta
@@ -69,7 +69,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
 
   const extendAgreement = useCallback((details = {}) => {
     const { term, ...params } = details;
-    execute(
+    return execute(
       'ExtendPrepaidAgreement',
       { ...payload, added_term: term, ...params },
       meta
@@ -77,7 +77,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
   }, [execute, meta, payload]);
 
   const cancelAgreement = useCallback((params = {}) => {
-    execute(
+    return execute(
       'CancelPrepaidAgreement',
       { agreementPath, ...params, ...payload },
       meta
@@ -85,7 +85,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
   }, [agreementPath, execute, meta, payload]);
 
   const transferAgreement = useCallback((newPermitted) => {
-    execute(
+    return execute(
       'TransferPrepaidAgreement',
       { new_permitted: newPermitted, ...payload },
       meta

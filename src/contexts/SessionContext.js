@@ -876,18 +876,6 @@ export function SessionProvider({ children }) {
   }, [authenticated, currentSession?.token, queryClient]);
   useEffect(() => { bootstrapAuthenticatedUser(); }, [bootstrapAuthenticatedUser]);
 
-  // reset any cached, but time-dependent queries
-  useEffect(() => {
-    [
-      [ 'orderList' ],
-      [ 'inventoryOrders' ],
-      [ 'exchangeOrderSummary' ],
-      [ 'productOrderSummary' ],
-    ].forEach((queryKey) => {
-      queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
-    });
-  }, [blockTime, queryClient]);
-
   const login = useCallback(async (enabledConnectors, launcherDestination) => {
     if (status === STATUSES.AUTHENTICATING || (status === STATUSES.AUTHENTICATED && walletConnected)) return;
 
@@ -964,6 +952,7 @@ export function SessionProvider({ children }) {
       walletCapabilities,
       walletAccount,
       walletConnected,
+      walletReadyForTransactions: walletConnected && status === STATUSES.AUTHENTICATED,
       walletId: authenticated ? currentSession?.walletId : null,
 
       // NOTE:
