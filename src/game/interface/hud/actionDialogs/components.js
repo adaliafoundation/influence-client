@@ -3557,7 +3557,7 @@ export const MiniBarChart = ({ color, deltaColor, deltaValue, label, valueLabel,
   </MiniBarWrapper>
 );
 
-export const SwayInput = ({ inputLabel = "SWAY", onChange, value: defaultValue, ...props }) => {
+export const SwayInput = ({ helpText, inputLabel = "SWAY", onChange, value: defaultValue, ...props }) => {
   const [value, setValue] = useState(0);
 
   const internalOnChange = useCallback((e) => {
@@ -3582,7 +3582,10 @@ export const SwayInput = ({ inputLabel = "SWAY", onChange, value: defaultValue, 
           onChange={internalOnChange}
           {...props} />
       </SwayInputFieldWrapper>
-      <SwayInputHelp>{/* TODO: this doesn't do anything */}
+      <SwayInputHelp
+        data-tooltip-id="actionDialogTooltip"
+        data-tooltip-html={helpText}
+        data-tooltip-place="top">
         <QuestionIcon />
       </SwayInputHelp>
     </SwayInputRow>

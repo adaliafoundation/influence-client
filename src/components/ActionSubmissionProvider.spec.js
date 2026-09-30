@@ -148,3 +148,30 @@ test('closing during preparation prevents a late wallet submission', async () =>
   expect(execute).not.toHaveBeenCalled();
   expect(onSuccess).not.toHaveBeenCalled();
 });
+
+
+test.each(['indexed', 'failed', 'rejected'])('automatic closure waits through the wallet and only follows indexed success (%s)', async outcome => {
+  let finishWallet;
+  execute.mockImplementation(() => new Promise(resolve => { finishWallet = resolve; }));
+  render(<View />);
+  await submit();
+  fireEvent.click(screen.getByText('Automatic close'));
+  expect(onClose).not.toHaveBeenCalled();
+  expect(onSuccess).not.toHaveBeenCalled();
+  await act(async () => finishWallet(outcome === 'rejected' ? undefined : { status: 'submitted', txHash: '0x123' }));
+  expect(onClose).not.toHaveBeenCalled();
+  if (outcome !== 'rejected') await act(async () => notifyTransactionSettlement('0x123', outcome));
+  expect(onClose).toHaveBeenCalledTimes(outcome === 'indexed' ? 1 : 0);
+  expect(screen.getByText('ready')).toBeTruthy();
+});
+
+test('dialogs with no success navigation remain open after indexed success', async () => {
+  onSuccess = undefined;
+  render(<View />);
+  await submit();
+  await act(async () => notifyTransactionSettlement('0x123', 'indexed'));
+  expect(onClose).not.toHaveBeenCalled();
+  expect(onSetAction).not.toHaveBeenCalled();
+  expect(reportFailure).not.toHaveBeenCalled();
+  expect(screen.getByText('ready')).toBeTruthy();
+});

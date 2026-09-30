@@ -514,7 +514,7 @@ const SurfaceTransfer = ({
                                 ? (
                                   <SwayInputBlockInner
                                     inputLabel="REQUESTED SWAY"
-                                    instruction="OPTIONAL: You may request a SWAY payment from the accepting crew in exchange for goods delivered."
+                                    helpText="OPTIONAL: You may request a SWAY payment<br />from the accepting crew in exchange<br />for goods delivered."
                                     onChange={onSwayChange}
                                     value={sway} />
                                 )

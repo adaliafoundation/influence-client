@@ -40,7 +40,7 @@ const ActionSubmissionProvider = ({ children, onClose, onSetAction, onSuccess })
       if (mounted.current && result.status === 'indexed') {
         if (queuedNavigation.current) callbacks.current.onSetAction(...queuedNavigation.current);
         else if (queuedClose.current) callbacks.current.onClose();
-        else callbacks.current.onSuccess(args[0]);
+        else callbacks.current.onSuccess?.(args[0]);
       }
       return result;
     } catch (error) {
