@@ -10,6 +10,7 @@ import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useStore from '~/hooks/useStore';
 import useWebsocket from '~/hooks/useWebsocket';
 import { hydrateActivities } from '~/lib/activities';
+import { safeBigInt } from '~/lib/utils';
 import api from '~/lib/api';
 import useSimulationState from '~/hooks/useSimulationState';
 import { appConfig } from '~/appConfig';
@@ -142,7 +143,7 @@ export function ActivitiesProvider({ children }) {
 
     // this timeout is to hopefully give enough time for all relevant assets to be updated
     // in mongo and/or elasticsearch before invaliding/re-requesting them
-    setTimeout(async () => {
+    const processActivities = async () => {
       if (generation !== activityGeneration.current) return;
       let shouldRefreshReadyAt = false;
 
@@ -338,6 +339,14 @@ export function ActivitiesProvider({ children }) {
         refreshReadyAt();
       }
 
+    };
+    setTimeout(() => {
+      processActivities().catch((error) => {
+        if (generation !== activityGeneration.current) return;
+        // A failed refresh must remain eligible for recovery on the next poll.
+        transformedActivities.forEach(({ key }) => receivedActivityIds.current.delete(key));
+        console.warn('Unable to process transaction activities', error);
+      });
     }, 2500);
   }, [accountAddress, crew, getActivityConfig, gasTokens, pendingTransactions, refreshReadyAt, queryClient, createAlert, debugInvalidation]);
 
@@ -410,25 +419,11 @@ export function ActivitiesProvider({ children }) {
   // Listener callbacks must see current state without tearing down subscriptions
   // whenever an activity refresh changes the crew or pending transactions.
   const latest = useRef();
-  latest.current = { onWSConnection, onWSMessage, handleActivities, pendingTransactions };
+  latest.current = { onWSConnection, onWSMessage, handleActivities, pendingTransactions, activities, blockNumber };
 
   useEffect(() => {
     if (!wsReady || !token) return undefined;
-    let cancelled = false;
     const receivedIds = receivedActivityIds.current;
-    const pendingTxHashes = latest.current.pendingTransactions
-      .map((tx) => tx.txHash)
-      .filter(Boolean);
-    if (pendingTxHashes.length > 0) {
-      api.getTransactionActivities(pendingTxHashes).then(async (data) => {
-        await hydrateActivities(data.activities, queryClient);
-        if (cancelled) return;
-        latest.current.handleActivities(data.activities);
-        if (data.blockNumber > 0) setBlockNumber(data.blockNumber);
-        if (data.blockTimestamp > 0) setBlockTime(data.blockTimestamp);
-      });
-    }
-
     const crewRoom = crew?.id ? `Crew::${crew.id}` : null;
 
     // setup ws listeners
@@ -442,7 +437,6 @@ export function ActivitiesProvider({ children }) {
 
     // reset on logout / disconnect
     return () => {
-      cancelled = true;
       activityGeneration.current += 1;
       receivedIds.clear();
       clearTimeout(pendingTimeout.current);
@@ -453,6 +447,44 @@ export function ActivitiesProvider({ children }) {
     }
   }, [crew?.id, token, wsReady, queryClient, registerConnectionHandler, registerMessageHandler,
     unregisterConnectionHandler, unregisterMessageHandler, setBlockNumber, setBlockTime]);
+
+  const hasPendingTransactions = pendingTransactions.some((tx) => tx.txHash);
+  useEffect(() => {
+    if (!token || simulation || !hasPendingTransactions) return undefined;
+    let cancelled = false;
+    let timeout;
+    const recover = async () => {
+      const confirmedHashes = new Set(latest.current.activities
+        .filter((activity) => activity.event?.transactionHash)
+        .map((activity) => safeBigInt(activity.event.transactionHash)));
+      const hashes = [...new Set(latest.current.pendingTransactions
+        .filter((tx) => tx.txHash && !confirmedHashes.has(safeBigInt(tx.txHash))
+          && (!tx.timestamp || Date.now() - tx.timestamp >= 30000))
+        .map((tx) => tx.txHash))];
+      try {
+        if (hashes.length > 0) {
+          const data = await api.getTransactionActivities(hashes);
+          if (cancelled) return;
+          await hydrateActivities(data.activities, queryClient);
+          if (cancelled) return;
+          latest.current.handleActivities(data.activities);
+          if (data.blockNumber > (latest.current.blockNumber || 0)) {
+            setBlockNumber(data.blockNumber);
+            if (data.blockTimestamp > 0) setBlockTime(data.blockTimestamp);
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to recover pending transaction activities', error);
+      } finally {
+        if (!cancelled) timeout = setTimeout(recover, 30000);
+      }
+    };
+    recover();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [crew?.id, token, simulation, hasPendingTransactions, queryClient, setBlockNumber, setBlockTime]);
 
   return (
     <ActivitiesContext.Provider value={activities}>

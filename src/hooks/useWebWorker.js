@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { BACKGROUND_JOB_TIMEOUT_MS, reportBackgroundWorkError } from '../lib/backgroundWork';
 
 import Worker from 'worker-loader!../worker'; // eslint-disable-line
 
@@ -9,26 +10,15 @@ const maxWorkerTally = 6;
 const defaultWorkerTally = Math.max(1, (navigator?.hardwareConcurrency || 4) - 1);
 const totalWorkers = Math.min(defaultWorkerTally, maxWorkerTally);
 
-// TODO: remove debug 
-// let taskTotal = 0;
-// let taskTally = 0;
-// let resetPending = true;
-
-// setInterval(() => {
-//   if (!resetPending && taskTally > 0) {
-//     console.log(
-//       `avg response time (over ${taskTally}): ${Math.round(taskTotal / taskTally)}ms`,
-//     );
-//   }
-// }, 5000);
-
 class WorkerThread {
-  constructor() {
+  constructor(onError) {
     this.id = workerIds++;
     this.paramCache = {};
     this.messageCallback = null;
 
     this.worker = new Worker();
+    this.worker.onerror = (event) => onError(new Error(event.message || 'Scene worker failed'));
+    this.worker.onmessageerror = () => onError(new Error('Unable to read scene worker response'));
     this.worker.onmessage = (event) => {
       this.onMessage(event);
     };
@@ -59,19 +49,41 @@ class WorkerThread {
 }
 
 export class WorkerThreadPool {
-  constructor(tally) {
-    this.workers = [...Array(tally)].map(_ => new WorkerThread());
-    this.available = [...this.workers];
+  constructor(tally, onError = reportBackgroundWorkError) {
+    this.onError = onError;
+    this.error = null;
+    this.workers = [];
+    this.available = [];
     this.busy = {};
     this.activeByGroup = {};
     this.workQueue = [];
+    try {
+      for (let i = 0; i < tally; i++) {
+        this.workers.push(new WorkerThread((error) => this.fail(error)));
+      }
+      this.available = [...this.workers];
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
-  // i.e. post to all workers in pool
-  broadcast(msg) {
-    for(let i = 0; i < this.workers.length; i++) {
-      this.workers[i].postMessage(msg);
-    }
+  // A failed pool cannot safely resume consumers expecting geometry or transferred buffers.
+  // Stop it and surface a reload instead of returning malformed success results.
+  fail(error) {
+    if (this.error) return;
+    this.error = error;
+    Object.values(this.busy).forEach(({ work }) => clearTimeout(work.timer));
+    this.workers.forEach(({ worker }) => {
+      worker.onmessage = null;
+      worker.onerror = null;
+      worker.onmessageerror = null;
+      worker.terminate();
+    });
+    this.workQueue = [];
+    this.available = [];
+    this.busy = {};
+    this.activeByGroup = {};
+    this.onError(error);
   }
 
   getWorkerTally() {
@@ -83,6 +95,7 @@ export class WorkerThreadPool {
   }
 
   addToQueue(workItem, resolve, transfer, options = {}) {
+    if (this.error) return;
     const meta = {
       onTiming: options.onTiming,
       queuedAt: options.onTiming ? performance.now() : undefined,
@@ -138,6 +151,7 @@ export class WorkerThreadPool {
     if (busyWork?.group) {
       this.activeByGroup[busyWork.group] = Math.max(0, (this.activeByGroup[busyWork.group] || 0) - 1);
     }
+    clearTimeout(busyWork?.timer);
     delete this.busy[worker.id];
   }
 
@@ -150,24 +164,33 @@ export class WorkerThreadPool {
       const { workItem, resolve: workResolve, transfer, ...work } = this.workQueue.splice(nextIndex, 1)[0];
 
       const startedAt = work.onTiming ? performance.now() : undefined;
+      work.timer = setTimeout(() => this.fail(new Error(`Scene worker job ${workItem.topic} timed out`)), BACKGROUND_JOB_TIMEOUT_MS);
       this.trackWorkStart(w, work);
 
-      w.postMessage(
-        workItem,
-        (v) => {
-          this.trackWorkEnd(w);
-          this.available.push(w);
-          if (work.onTiming) {
-            work.onTiming({
-              queueMs: startedAt - work.queuedAt,
-              executionMs: performance.now() - startedAt
-            });
-          }
-          if (workResolve) workResolve(v);
-          this.processQueue();
-        },
-        transfer || []
-      );
+      try {
+        w.postMessage(
+          workItem,
+          (v) => {
+            this.trackWorkEnd(w);
+            this.available.push(w);
+            if (work.onTiming) {
+              work.onTiming({
+                queueMs: startedAt - work.queuedAt,
+                executionMs: performance.now() - startedAt
+              });
+            }
+            try {
+              if (workResolve) workResolve(v);
+              this.processQueue();
+            } catch (error) {
+              this.fail(error);
+            }
+          },
+          transfer || []
+        );
+      } catch (error) {
+        this.fail(error);
+      }
     }
   }
 }
@@ -176,7 +199,6 @@ const workerThreadPool = new WorkerThreadPool(totalWorkers);
 
 const useWebWorker = () => {
   return useMemo(() => ({
-    broadcast: (message) => workerThreadPool.broadcast(message),
     getWorkerTally: () => workerThreadPool.getWorkerTally(),
     processInBackground: (message, callback, transfer, options) => workerThreadPool.addToQueue(message, callback, transfer, options),
     cancelBackgroundProcesses: (filterFunc) => workerThreadPool.removeFromQueue(filterFunc)

@@ -577,7 +577,7 @@ const ShoppingList = ({ asteroid, destination, destinationSlot, stage, ...props 
       return acc;
     }, new Set());
 
-    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
+    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, components: ['Crew'] });
 
     // TODO: could move this all into useMarketplaceManager but would have to rework it the manager some
     await execute(

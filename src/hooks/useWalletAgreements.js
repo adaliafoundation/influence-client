@@ -11,11 +11,11 @@ const useWalletAgreements = () => {
 
   const crewIds = useMemo(() => {
     if (crewsLoading) return null;
-    return (crews || []).map((c) => c.id);
+    return (crews || []).map((c) => c.id).sort((a, b) => a - b);
   }, [crews, crewsLoading]);
 
   return useQuery({
-    queryKey: [ 'agreements', accountAddress ],
+    queryKey: [ 'agreements', accountAddress, crewIds ],
     queryFn: async () => api.getCrewAgreements(crewIds, accountAddress),
     enabled: !!(accountAddress && crewIds)
   });

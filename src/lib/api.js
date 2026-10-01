@@ -371,7 +371,7 @@ const api = {
   },
 
   getTransactionActivities: async (txHashes) => {
-    const response = await instance.get(`/${apiVersion}/activity?${buildQuery({ txHash: txHashes.join(',') })}`);
+    const response = await instance.get(`/${apiVersion}/activity?${buildQuery({ txHash: txHashes.join(',') })}`, { timeout: 15000 });
     return {
       activities: response.data,
       blockNumber: parseBlockHeader(response.headers['starknet-block-number']),
@@ -955,7 +955,7 @@ const api = {
   },
 
   getBanxaOrder: async (orderId) => {
-    const response = await instance.get(`/${apiVersion}/banxa/orders/${orderId}`);
+    const response = await instance.get(`/${apiVersion}/banxa/orders/${orderId}`, { timeout: 15000 });
     return response.data;
   },
 

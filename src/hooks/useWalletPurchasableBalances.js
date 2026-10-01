@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import usePriceHelper from '~/hooks/usePriceHelper';
 import useSession from '~/hooks/useSession';
@@ -59,9 +59,16 @@ const useWalletPurchasableBalances = (overrideAccount) => {
     return allTokens;
   }, [ethBalance, strkBalance, strkGasReserveBalance, usdcBalance, usdcGasReserveBalance]);
 
+  const refetch = useCallback(() => Promise.all([
+    refetch1({ cancelRefetch: false }),
+    refetch2({ cancelRefetch: false }),
+    refetch3({ cancelRefetch: false }),
+    refetch4({ cancelRefetch: false }),
+  ]), [refetch1, refetch2, refetch3, refetch4]);
+
   const isLoading = isLoading1 || isLoading2 || isLoading3 || isLoading4;
   return useMemo(() => {
-    if (isLoading) return { data: null, refetch: () => {}, isLoading: true };
+    if (isLoading) return { data: null, refetch, isLoading: true };
 
     const combinedBalance = priceHelper.from(0n, TOKEN.USDC);
     Object.keys(swappableTokenBalances).forEach((tokenAddress) => {
@@ -77,15 +84,10 @@ const useWalletPurchasableBalances = (overrideAccount) => {
         usdcGasReserveBalance,
         tokenBalances: swappableTokenBalances
       },
-      refetch: () => {
-        refetch1();
-        refetch2();
-        refetch3();
-        refetch4();
-      },
+      refetch,
       isLoading
     };
-  }, [strkGasReserveBalance, usdcGasReserveBalance, isLoading, maintainGasReserve, priceHelper, refetch1, refetch2, refetch3, refetch4, swappableTokenBalances]);
+  }, [strkGasReserveBalance, usdcGasReserveBalance, isLoading, maintainGasReserve, priceHelper, refetch, swappableTokenBalances]);
 }
 
 export default useWalletPurchasableBalances;

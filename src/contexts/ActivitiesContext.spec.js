@@ -20,6 +20,7 @@ jest.mock('~/lib/activities', () => ({ hydrateActivities: jest.fn(async () => {}
 jest.mock('~/lib/api', () => ({ getTransactionActivities: jest.fn() }), { virtual: true });
 jest.mock('~/appConfig', () => ({ appConfig: { get: () => false } }), { virtual: true });
 jest.mock('~/lib/debugFlags', () => ({ areWebsocketLogsEnabled: () => false }), { virtual: true });
+jest.mock('~/lib/utils', () => ({ safeBigInt: BigInt }), { virtual: true });
 jest.mock('~/lib/priceUtils', () => ({ TOKEN: {} }), { virtual: true });
 
 const activity = { id: 'document-1', event: { id: 'event-1', name: 'SellOrderFilled', transactionHash: '0x123' } };
@@ -116,4 +117,62 @@ test('does not process a scheduled activity after logout', async () => {
   expect(invalidate).not.toHaveBeenCalled();
   expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
   expect(consume).toHaveBeenLastCalledWith([]);
+});
+
+test('recovers a missed websocket event without remounting or repeated invalidations', async () => {
+  state.pendingTransactions[0].timestamp = Date.now();
+  render(tree());
+  await advance(29999);
+  expect(api.getTransactionActivities).not.toHaveBeenCalled();
+  await advance(1);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  await advance(2500);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+  await advance(60000);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+});
+
+test('retries failed recovery at a fixed cadence without overlapping requests', async () => {
+  let reject;
+  api.getTransactionActivities.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  render(tree());
+  await advance(90000);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  await act(async () => { reject(new Error('Offline')); });
+  await advance(29999);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  await advance(1);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(2);
+  await advance(2500);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+});
+
+test('ignores a recovery response that arrives after logout', async () => {
+  let finish;
+  api.getTransactionActivities.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const { rerender } = render(tree());
+  session = { ...session, token: null };
+  rerender(tree());
+  await act(async () => { finish({ activities: [activity] }); });
+  await advance(60000);
+  expect(invalidate).not.toHaveBeenCalled();
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  expect(consume).toHaveBeenLastCalledWith([]);
+});
+
+test('retries an activity when preparing its refresh failed', async () => {
+  const onBeforeReceived = jest.fn()
+    .mockRejectedValueOnce(new Error('Entity API unavailable'))
+    .mockResolvedValue([]);
+  useGetActivityConfig.mockReturnValue(() => ({ onBeforeReceived, invalidations: [['entity', 1, 1]] }));
+  render(tree());
+  await advance(0);
+  await advance(2500);
+  expect(consume).toHaveBeenLastCalledWith([]);
+  await advance(27500);
+  await advance(2500);
+  expect(onBeforeReceived).toHaveBeenCalledTimes(2);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
 });

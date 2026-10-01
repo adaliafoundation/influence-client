@@ -1202,6 +1202,7 @@ export function ChainTransactionProvider({ children }) {
   // on initial load, set provider.waitForTransaction for any pendingTransactions
   // so that we can throw any extension-related or timeout errors needed
   useEffect(() => {
+    transactionWaiters.current = transactionWaiters.current.filter((hash) => pendingTransactions.some((tx) => tx.txHash === hash));
     if (provider && contracts && pendingTransactions?.length) {
       pendingTransactions.forEach(({ key, vars, meta, txHash }) => {
         // (sanity check) this should not be possible since pendingTransaction should not be created
@@ -1237,11 +1238,9 @@ export function ChainTransactionProvider({ children }) {
             //     dispatchPendingTransactionComplete(txHash);
             //   }
             // })
-            .catch((err) => setNewlyFailedTx({ err, key, vars, txHash }))
-            .finally(() => {
-              // NOTE: keep this in "finally" so also performed on success (even though not handling success)
-              transactionWaiters.current = transactionWaiters.current.filter((tx) => tx !== txHash);
-            });
+            .catch((err) => setNewlyFailedTx({ err, key, vars, txHash }));
+          // Keep settled waiters registered until indexing clears the transaction.
+          // Recreating them on renders repeats receipt-driven invalidations.
         }
       });
     }
@@ -1264,15 +1263,22 @@ export function ChainTransactionProvider({ children }) {
     }
   }, [getTxEvent, pendingTransactions, contracts]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // on every new block, check for reverted tx's
-  // TODO: parse revert_reason to be more readible
-  // TODO: time out eventually?
+  // Retry receipt checks after a waiter times out, at most once per 30 seconds.
+  const receiptChecks = useRef(new Map());
   useEffect(() => {
-    if (contracts && pendingTransactions?.length) {
+    for (const hash of receiptChecks.current.keys()) {
+      if (!pendingTransactions.some((tx) => tx.txHash === hash)) receiptChecks.current.delete(hash);
+    }
+    if (provider && contracts && pendingTransactions?.length) {
       pendingTransactions.filter((tx) => !tx.txEvent).forEach((tx) => {
         // if it's been X+ seconds since submitted, check if it was reverted
         if (Math.floor(Date.now() / 1000) > Math.floor(tx.timestamp / 1000) + 30) {
           const { key, vars, txHash } = tx;
+          if (!txHash || getTxEvent(txHash)) return;
+          const previous = receiptChecks.current.get(txHash);
+          if (previous?.inFlight || Date.now() - (previous?.checkedAt || 0) < 30000) return;
+          const check = { inFlight: true, checkedAt: Date.now() };
+          receiptChecks.current.set(txHash, check);
 
           provider.getTransactionReceipt(txHash)
             .then((receipt) => {
@@ -1290,7 +1296,8 @@ export function ChainTransactionProvider({ children }) {
             })
             .catch((err) => {
               console.warn(err);
-            });
+            })
+            .finally(() => { check.inFlight = false; });
         }
       });
     }
@@ -1386,6 +1393,11 @@ export function ChainTransactionProvider({ children }) {
 
   // Allows for multiple explicit / manual calls to be executed in a single transaction
   const executeCalls = useCallback(async (calls, options = {}) => {
+    if (!(calls?.length > 0)) {
+      console.error('no calls included in executeCalls input');
+      return;
+    }
+
     let activeWalletAccount = walletAccountRef.current;
     const reconnecting = !activeWalletAccount;
     if (!activeWalletAccount) {
@@ -1413,27 +1425,19 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
-    if (!(calls?.length > 0)) {
-      console.error('no calls included in executeCalls input');
-      return;
-    }
-
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    // Reconnecting already requests account access from the extension.
-    if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: errorMessages.unavailable },
-        level: 'warning',
-      });
-      setPromptingTransaction(false);
-      return;
-    }
-
-    // execute
     try {
+      // Reconnecting already requests account access from the extension.
+      if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
+        createAlert({
+          type: 'GenericAlert',
+          data: { content: errorMessages.unavailable },
+          level: 'warning',
+        });
+        return;
+      }
       await requireExplicitAuthorization(activeWalletAccount, options);
       const tx = await executeWithAccount(calls, options);
 
@@ -1445,15 +1449,16 @@ export function ChainTransactionProvider({ children }) {
         if (txHash) {
           provider.waitForTransaction(txHash, { retryInterval: RETRY_INTERVAL })
             .then((receipt) => { if (receipt) upgradeInsecureSession(); })
+            .catch((error) => reportFailure(createAlert, error, { message: 'unknownOutcome', context: { transactionHash: txHash } }));
         }
       }
 
-      setPromptingTransaction(false);
       return tx;
     } catch (e) {
-      setPromptingTransaction(false);
       handleExecutionExeption(e, executeCalls);
-      throw e;  // rethrow
+      throw e;
+    } finally {
+      setPromptingTransaction(false);
     }
   }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, waitForWalletConnection])
 
@@ -1514,23 +1519,21 @@ export function ChainTransactionProvider({ children }) {
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    // Reconnecting already requests account access from the extension.
-    if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: errorMessages.unavailable },
-        level: 'warning',
-      });
-      setPromptingTransaction(false);
-      return;
-    }
-
     let submission;
     let assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
     let missionKey;
     let ownsMissionSubmission = false;
     const { execute: contractExecute, onTransactionError } = activeContracts[key];
     try {
+      // Reconnecting already requests account access from the extension.
+      if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
+        createAlert({
+          type: 'GenericAlert',
+          data: { content: errorMessages.unavailable },
+          level: 'warning',
+        });
+        return;
+      }
       if (key === 'MissionAction') throw new Error('Use a native action with missionAssignment for starter missions.');
       if (assignment) {
         if (options.missionAssignment) assertStarterMissionAction(key);
@@ -1561,23 +1564,25 @@ export function ChainTransactionProvider({ children }) {
       }
       await requireExplicitAuthorization(activeWalletAccount, options);
       const tx = await contractExecute(vars, options);
+      const txHash = cleanseTxHash(tx);
+      if (!txHash) throw new Error('Wallet returned no transaction hash.');
       dispatchPendingTransaction({
         key,
         vars,
         meta,
         timestamp: blockTime ? (blockTime * 1000) : null,
-        txHash: cleanseTxHash(tx),
+        txHash,
         waitingOn: 'TRANSACTION'
       });
-      submission = { status: 'submitted', txHash: cleanseTxHash(tx) };
+      submission = { status: 'submitted', txHash };
     } catch (e) {
       handleExecutionExeption(e, executeCalls, { key, vars, meta });
       onTransactionError(e, vars);
     } finally {
       if (ownsMissionSubmission) missionSubmissions.current.delete(missionKey);
+      setPromptingTransaction(false);
     }
 
-    setPromptingTransaction(false);
     return submission;
   }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 

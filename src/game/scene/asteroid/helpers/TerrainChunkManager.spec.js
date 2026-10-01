@@ -1,7 +1,8 @@
 import { Matrix4, Vector3 } from 'three';
 import TerrainChunkManager from './TerrainChunkManager';
+import { BACKGROUND_JOB_TIMEOUT_MS, useBackgroundWorkError } from '../../../../lib/backgroundWork';
 import terrainPerformance from '../../../../lib/terrainPerformance';
-import { rebuildChunkMaps } from './TerrainChunkUtils';
+import { initChunkTextures, rebuildChunkMaps } from './TerrainChunkUtils';
 
 jest.mock('~/lib/constants', () => ({
   TERRAIN_CHUNK_POOL_SIZE_MIN: 4,
@@ -12,7 +13,7 @@ jest.mock('~/lib/workerQueue', () => require('../../../../lib/workerQueue'), { v
 jest.mock('~/lib/terrainPerformance', () => require('../../../../lib/terrainPerformance'), { virtual: true });
 
 jest.mock('./TerrainChunkUtils', () => ({
-  initChunkTextures: () => Promise.resolve(),
+  initChunkTextures: jest.fn(() => Promise.resolve()),
   rebuildChunkMaps: jest.fn()
 }));
 jest.mock('./TerrainChunk', () => function (params) { return {
@@ -27,6 +28,8 @@ jest.mock('./TerrainChunk', () => function (params) { return {
   getTextures: jest.fn(() => ['height', 'color', 'normal']),
   show: jest.fn()
 }; });
+
+beforeEach(() => initChunkTextures.mockResolvedValue(undefined));
 
 const setup = () => {
   const jobs = [];
@@ -246,4 +249,48 @@ it.each([
   } finally {
     clock.mockRestore();
   }
+});
+
+
+describe('texture initialization failures', () => {
+  let consoleError;
+  beforeEach(() => {
+    useBackgroundWorkError.setState({ error: null });
+    consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    consoleError.mockRestore();
+    useBackgroundWorkError.setState({ error: null });
+    jest.useRealTimers();
+  });
+
+  it('reports rejected texture initialization instead of silently waiting', async () => {
+    const error = new Error('Texture decode failed');
+    initChunkTextures.mockRejectedValueOnce(error);
+    const manager = new TerrainChunkManager(1, {}, 64, {});
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(manager.ready).toBe(false);
+    expect(useBackgroundWorkError.getState().error).toBe(error);
+  });
+
+  it('reports texture initialization that never settles', async () => {
+    jest.useFakeTimers();
+    initChunkTextures.mockReturnValueOnce(new Promise(() => {}));
+    const manager = new TerrainChunkManager(1, {}, 64, {});
+    jest.advanceTimersByTime(BACKGROUND_JOB_TIMEOUT_MS);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(manager.ready).toBe(false);
+    expect(useBackgroundWorkError.getState().error.message).toContain('timed out');
+  });
+
+  it('ignores initialization failures for a disposed asteroid', async () => {
+    let reject;
+    initChunkTextures.mockReturnValueOnce(new Promise((resolve, fail) => { reject = fail; }));
+    const manager = new TerrainChunkManager(1, {}, 64, { cancelBackgroundProcesses: jest.fn() });
+    manager.dispose();
+    reject(new Error('Old asteroid texture failed'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(useBackgroundWorkError.getState().error).toBeNull();
+  });
 });

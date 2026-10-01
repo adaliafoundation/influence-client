@@ -12,18 +12,14 @@ const useWalletTokenBalance = (tokenLabel, tokenAddress, overrideAccount) => {
     queryKey: [ 'walletBalance', tokenLabel, accountAddress ],
     queryFn: async () => {
       if (!accountAddress || !provider) return 0n;
-      try {
-        const balance = await provider.callContract({
-          contractAddress: tokenAddress,
-          entrypoint: 'balanceOf',
-          calldata: [accountAddress]
-        });
-        const standardized = Array.isArray(balance) ? balance : balance?.result;
-        return standardized ? uint256.uint256ToBN({ low: standardized[0], high: standardized[1] }) : 0n;
-      } catch (e) {
-        console.error(e);
-        return 0n;
-      }
+      const balance = await provider.callContract({
+        contractAddress: tokenAddress,
+        entrypoint: 'balanceOf',
+        calldata: [accountAddress]
+      });
+      const standardized = Array.isArray(balance) ? balance : balance?.result;
+      if (!standardized || standardized.length < 2) throw new Error('Invalid wallet balance response');
+      return uint256.uint256ToBN({ low: standardized[0], high: standardized[1] });
     },
     enabled: !!provider && !!accountAddress,
     // Balance updates are already driven by transaction/activity invalidations.

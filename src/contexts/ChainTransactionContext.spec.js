@@ -13,7 +13,7 @@ jest.mock('@influenceth/sdk', () => ({
 jest.mock('starknet', () => ({ num: { toHex: value => value } }));
 jest.mock('@avnu/avnu-sdk', () => ({}));
 jest.mock('@tanstack/react-query', () => {
-  const client = {};
+  const client = { invalidateQueries: jest.fn() };
   return { useQueryClient: () => client };
 });
 jest.mock('~/appConfig', () => ({ appConfig: { get: () => undefined } }), { virtual: true });
@@ -55,7 +55,7 @@ beforeEach(() => {
     login: jest.fn().mockResolvedValue(),
     getTransactionAccount: jest.fn(async account => account)
   };
-  state = { gameplay: {}, pendingTransactions: [], dispatchAlertLogged: jest.fn(), dispatchPendingTransaction: jest.fn() };
+  state = { gameplay: {}, pendingTransactions: [], dispatchAlertLogged: jest.fn(), dispatchPendingTransaction: jest.fn(), dispatchFailedTransaction: jest.fn() };
   useSession.mockImplementation(() => session);
   useStore.mockImplementation(selector => selector(state));
   executePaidTransaction.mockResolvedValue({ transaction_hash: '0xabc' });
@@ -128,4 +128,64 @@ test('does not submit while the connected wallet is still authenticating', async
   await act(async () => { await submitted; });
   await expect(submitted).resolves.toEqual({ status: 'submitted', txHash: '0xabc' });
   expect(executePaidTransaction).toHaveBeenCalledTimes(1);
+});
+
+test('does not open a wallet for an empty direct call', async () => {
+  render(tree());
+  await act(async () => { await chain.executeCalls([]); });
+  expect(session.login).not.toHaveBeenCalled();
+  expect(chain.promptingTransaction).toBe(false);
+});
+
+test('rejects a wallet response without a transaction hash', async () => {
+  session.walletAccount = account;
+  executePaidTransaction.mockResolvedValue({});
+  render(tree());
+  await act(async () => { await chain.execute('ChangeName', {}); });
+  expect(state.dispatchPendingTransaction).not.toHaveBeenCalled();
+  expect(state.dispatchFailedTransaction).toHaveBeenCalled();
+  expect(chain.promptingTransaction).toBe(false);
+});
+
+test('clears prompting when unlocking unexpectedly throws', async () => {
+  session.walletAccount = account;
+  isWalletAccountLocked.mockRejectedValue(new Error('Wallet disconnected'));
+  render(tree());
+  await act(async () => { await chain.execute('ChangeName', {}); });
+  expect(chain.promptingTransaction).toBe(false);
+  expect(executePaidTransaction).not.toHaveBeenCalled();
+});
+
+test('does not restart a successful receipt waiter while waiting for indexing', async () => {
+  session.walletAccount = account;
+  session.isDeployed = true;
+  session.provider = { waitForTransaction: jest.fn().mockResolvedValue({ execution_status: 'SUCCEEDED' }) };
+  state.pendingTransactions = [{ key: 'ChangeName', vars: {}, txHash: '0xabc', timestamp: Date.now() }];
+  const { rerender } = render(tree());
+  await act(async () => {});
+  session = { ...session, walletAccount: { ...account } };
+  rerender(tree());
+  await act(async () => {});
+  expect(session.provider.waitForTransaction).toHaveBeenCalledTimes(1);
+});
+
+test('limits receipt recovery across fast blocks and does not overlap slow RPC calls', async () => {
+  let finish;
+  session.walletAccount = account;
+  session.isDeployed = true;
+  session.blockNumber = 1;
+  session.provider = {
+    waitForTransaction: jest.fn(() => new Promise(() => {})),
+    getTransactionReceipt: jest.fn(() => new Promise(resolve => { finish = resolve; }))
+  };
+  state.pendingTransactions = [{ key: 'ChangeName', vars: {}, txHash: '0xabc', timestamp: Date.now() - 60000 }];
+  const { rerender } = render(tree());
+  expect(session.provider.getTransactionReceipt).toHaveBeenCalledTimes(1);
+  session = { ...session, blockNumber: 2 };
+  rerender(tree());
+  expect(session.provider.getTransactionReceipt).toHaveBeenCalledTimes(1);
+  await act(async () => { finish({ execution_status: 'SUCCEEDED' }); });
+  session = { ...session, blockNumber: 3 };
+  rerender(tree());
+  expect(session.provider.getTransactionReceipt).toHaveBeenCalledTimes(1);
 });

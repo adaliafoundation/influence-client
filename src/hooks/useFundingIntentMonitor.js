@@ -62,6 +62,7 @@ const useFundingIntentMonitor = (intent, { enabled = true, notifyOnComplete = tr
       || ['completed', 'failed', 'cancelled'].includes(intent.status)
     ) return;
     let cancelled = false;
+    let timeout;
 
     const pollOrder = async () => {
       try {
@@ -86,14 +87,15 @@ const useFundingIntentMonitor = (intent, { enabled = true, notifyOnComplete = tr
         }
       } catch (e) {
         console.error('Error checking Banxa order:', e);
+      } finally {
+        if (!cancelled) timeout = setTimeout(pollOrder, 60e3);
       }
     };
 
     pollOrder();
-    const i = setInterval(pollOrder, 60e3);
     return () => {
       cancelled = true;
-      if (i) clearInterval(i);
+      clearTimeout(timeout);
     };
   }, [
     createAlert,

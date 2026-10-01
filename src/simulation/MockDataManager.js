@@ -434,7 +434,7 @@ const MockDataManager = () => {
 
       // wallet agreements
       configs.push({
-        queryKey: [ 'agreements', SIMULATION_CONFIG.accountAddress ],
+        queryKey: [ 'agreements', SIMULATION_CONFIG.accountAddress, [SIMULATION_CONFIG.crewId] ],
         transformer: (data) => simulatedAgreements
       });
 

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ErrorBoundary from './ErrorBoundary';
 import Game from './Game';
+import { resetReloadNavigation } from './lib/startupNavigation';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
@@ -14,6 +15,8 @@ const queryClient = new QueryClient({
     }
   }
 });
+
+resetReloadNavigation(window);
 
 createRoot(document.getElementById('root')).render(
   <ErrorBoundary>

@@ -463,7 +463,7 @@ const SellingList = ({ asteroid, origin, originSlot, initialSelection, preselect
       return acc;
     }, new Set());
 
-    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, component: 'Crew' });
+    const crews = await api.getEntities({ ids: Array.from(allCrewIds), label: Entity.IDS.CREW, components: ['Crew'] });
 
     await execute(
       'EscrowWithdrawalAndFillBuyOrders',

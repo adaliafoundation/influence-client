@@ -7,6 +7,7 @@ import isEqual from 'lodash/isEqual';
 import { Address, Building, Entity, Lot } from '@influenceth/sdk';
 
 import constants from '~/lib/constants';
+import { selectPersistedState } from '../lib/storePersistence';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import { TOKEN } from '~/lib/priceUtils';
 import {
@@ -121,32 +122,11 @@ const useStore = create(
         openHudMenu: null,
         hudMenuState: {},
 
-        // TODO: more encapsulated structure, but might cause unnecessary re-renders more often
-        // simulation: {
-        //   enabled,
-        //   enabledActions: [],
-        //   coachmark: [],
-        //   state: { ...simulationStateDefault }
-        // },
         isNew: true,
         simulationEnabled: false,
         simulation: { ...simulationStateDefault },
         simulationActions: [],
         coachmarks: [],
-
-        // scene: {
-        //   belt: {
-        //     origin, destination, hovered, travelMode, travelSolution, cameraPos/* (zoomedFrom) */,
-        //   },
-        //   asteroid: {
-        //     origin, destination, hovered, resourceMap
-        //   },
-        //   lot: {
-        //     model
-        //   },
-        //   zoomStatus: 'belt', // belt, zooming-in / zooming-out, asteroid, zooming-to-scene, lot
-        //   transitionTo: {}
-        // },
 
         asteroids: {
           origin: null,
@@ -205,7 +185,6 @@ const useStore = create(
 
         gameplay: {
           activeCrewsDisplay: 'all', // selected, delegated, all
-          feeToken: null, // deprecated
           feeTokens: [TOKEN.USDC],
           useSessions: null
         },
@@ -1046,46 +1025,31 @@ const useStore = create(
     }), {
       name: STORE_NAME,
       version: 9,
+      partialize: selectPersistedState,
+      // Filter on read too: older saves include navigation and other transient state.
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...selectPersistedState(persistedState)
+      }),
       migrate: (persistedState, oldVersion) => {
         const migrations = [
           (state, version) => {
-            if (version >= 1) return;
-            const active = state.asteroids.mapResourceId ? true : false;
-            const selected = state.asteroids.mapResourceId || null;
-            state.asteroids.resourceMap = { active, selected };
-            return state;
-          },
-          (state, version) => {
-            if (version >= 3) return;
-            if (state.asteroids.lot?.asteroidId && state.asteroids.lot?.lotId) {
-              state.asteroids.lot = Lot.toId(state.asteroids.lot?.asteroidId, state.asteroids.lot?.lotId);
-            } else {
-              state.asteroids.lot = null;
-            }
-            return state;
-          },
-          (state, version) => {
-            if (version >= 4) return;
-            state.assetSearch = { ...assetSearchDefaults };
-            return state;
-          },
-          (state, version) => {
-            if (version >= 5) return;
+            if (version >= 5) return state;
             state.gameplay = { autoswap: true };
             return state;
           },
           (state, version) => {
-            if (version >= 6) return;
+            if (version >= 6) return state;
             state.crewTutorials = {};
             return state;
           },
           (state, version) => {
-            if (version >= 7) return; // reset simulation to ensure bug fixed
+            if (version >= 7) return state; // reset simulation to ensure bug fixed
             state.simulation = { ...simulationStateDefault };
             return state;
           },
           (state, version) => {
-            if (version >= 8) return;
+            if (version >= 8) return state;
             state.gameplay.feeTokens = [TOKEN.USDC, TOKEN.ETH, TOKEN.STRK];
             if (state.gameplay.feeToken !== 'ETH') {
               state.gameplay.feeTokens.unshift(TOKEN.SWAY);
@@ -1093,7 +1057,7 @@ const useStore = create(
             return state;
           },
           (state, version) => {
-            if (version >= 9) return;
+            if (version >= 9) return state;
             delete state.starterPackWalletIntent;
             state.starterPackCheckout = null;
             state.starterPackCustomizationDrafts = {};
@@ -1107,32 +1071,6 @@ const useStore = create(
 
         return persistedState;
       },
-      blacklist: [
-        // TODO: should these be stored elsewhere if ephemeral?
-        // TODO: the nested values are not supported by zustand
-        'actionDialog',
-        'lotCameraTransition',
-        'missionGuidance',
-        'missionDetails',
-        'asteroids.hovered',
-        'asteroids.lot',
-        'asteroids.travelMode',
-        'asteroids.travelSolution',
-        'asteroids.zoomScene',
-        'asteroids.cinematicInitialPosition',
-        'canvasStack',
-        'cameraNeedsRecenter',
-        'cameraNeedsReorientation',
-        'coachmarks',
-        'cutscene',
-        'draggables',
-        'hudMenuState',
-        'launcherDialogOptions',
-        'lotLoader',
-        'simulationActions',
-        'timeOverride' // should this be in ClockContext?
-      ],
-
       // accomodate bigint's
       serialize: (state) => {
         return JSON.stringify(state, (_, v) => typeof v === 'bigint' ? `${v.toString()}n` : v);
