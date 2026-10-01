@@ -1,3 +1,4 @@
+import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
 import { reportFailure } from '../lib/errorReporting';
 import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -94,7 +95,7 @@ const MissionActionState = ({ type, params, children }) => {
       if (!selected) return options;
       const fresh = await api.getStarterMissions(crew.id);
       if (!active.current) return null;
-      if (String(fresh.campaign) !== String(view?.campaign)) throw new Error('The starter campaign changed. Reopen this action.');
+      if (String(fresh.campaign) !== String(view?.campaign)) throw new Error(`The ${STARTER_CAMPAIGN_NAME} campaign changed. Reopen this action.`);
       const available = fresh.missions.filter(m => m.accepted);
       const assignmentMission = available.find(m => !m.completed) || available[available.length - 1];
       if (!fresh.eligible || !assignmentMission) throw new Error('This crew cannot perform campaign work.');

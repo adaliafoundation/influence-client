@@ -12,6 +12,11 @@ const entries = {
     content: <span>{e.content}</span>
   }),
 
+  WalletConnectionRequired: (e) => ({
+    icon: <WarningIcon />,
+    content: <span>Please try again after connecting your {e.walletName} account: <strong>{e.address}</strong></span>
+  }),
+
   DeployAccount: (e) => ({
     icon: <WalletIcon />,
     content: <span>{errorMessages.setupRequired}</span>

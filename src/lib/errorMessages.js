@@ -26,6 +26,7 @@ export const errorMessages = {
   signIn: 'Please login again to continue.',
   unavailable: 'Account is not ready. Please reconnect and try again.',
   busy: 'Action is taking longer than expected. Check its status before trying again.',
+  walletRequestPending: 'The wallet did not respond, but your request may still be waiting for approval. Open your wallet to check it. Do not submit again until you have cancelled that request or confirmed its outcome.',
   unknownOutcome: 'Action is unconfirmed. Check its status before trying again.',
   reverted: 'Action could not be completed. Review it before trying again.',
   accessChanged: 'Access permissions have changed. Review this action before trying again.',

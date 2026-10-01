@@ -1,3 +1,4 @@
+import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
@@ -60,7 +61,7 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
   return (
     <Details
       edgeToEdge
-      title="Starter campaign"
+      title={STARTER_CAMPAIGN_NAME}
       headerProps={{ background: 'true', v2: 'true' }}
       width="1150px"
       onClose={onClose}

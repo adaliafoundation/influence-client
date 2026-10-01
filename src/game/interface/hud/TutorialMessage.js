@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import Button from '~/components/ButtonAlt';
 import ClipCorner from '~/components/ClipCorner';
 import IconButton from '~/components/IconButton';
-import { CloseIcon } from '~/components/Icons';
+import { ChevronDoubleDownIcon, CloseIcon } from '~/components/Icons';
 import useCrewmate from '~/hooks/useCrewmate';
 import { reactBool } from '~/lib/utils';
 import { getCrewmateCompositorImageUrl } from '~/lib/spriteUtils';
@@ -173,11 +173,11 @@ export const useCrewmateTutorialImageUrl = ({ crewmateImageOptionString, crewmat
   return imageUrl;
 };
 
-const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmateId, isIn, leftButton, messageRef, onClose, rightButton, setButtonRef, step, ...props }) => {
+const TutorialMessage = ({ closeLabel = 'Close guidance', closeIconOverride, crewmateImageOptionString, crewmateId, isIn, leftButton, messageRef, onClose, onMinimize, rightButton, setButtonRef, step, ...props }) => {
   const imageUrl = useCrewmateTutorialImageUrl({ crewmateImageOptionString, crewmateId });
 
   return (
-    <TutorialMessageWrapper ref={messageRef} isIn={reactBool(isIn)} {...props}>
+    <TutorialMessageWrapper aria-hidden={!isIn} inert={!isIn} ref={messageRef} isIn={reactBool(isIn)} {...props}>
       {step && (
         <>
           <CrewmateWrapper>
@@ -189,7 +189,8 @@ const TutorialMessage = ({ closeIconOverride, crewmateImageOptionString, crewmat
           <TutorialContent>
             <h3>
               <span>{step?.title}</span>
-              <IconButton aria-label="Close guidance" onClick={onClose} scale={0.75}>{closeIconOverride || <CloseIcon />}</IconButton>
+              {onMinimize && <IconButton aria-label="Minimize guidance" onClick={onMinimize} scale={0.75}><ChevronDoubleDownIcon /></IconButton>}
+              <IconButton aria-label={closeLabel} onClick={onClose} scale={0.75}>{closeIconOverride || <CloseIcon />}</IconButton>
             </h3>
             <div>
               <div>{step?.content}</div>

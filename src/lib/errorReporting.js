@@ -1,4 +1,5 @@
 import { errorMessages } from './errorMessages';
+import { isWalletRequestTimeout } from './walletErrors';
 
 const reported = new WeakSet();
 const privateField = /token|secret|password|private.?key|sessionDappKey|gameplaySession|authorization|cookie|signature|seed|mnemonic|headers|config|request/i;
@@ -33,6 +34,7 @@ export const isUserCancellation = error => [4001, '4001', 'ACTION_REJECTED', 'US
 export const classifyFailure = error => {
   const knownMessage = Object.keys(errorMessages).find(key => typeof errorMessages[key] === 'string' && errorMessages[key] === error?.userMessage);
   if (knownMessage) return knownMessage;
+  if (isWalletRequestTimeout(error)) return 'walletRequestPending';
   const seen = new Set([error]);
   for (let cause = error?.cause; cause && !seen.has(cause); cause = cause.cause) {
     seen.add(cause);
@@ -54,7 +56,7 @@ export const reportFailure = (notify, error, { message = classifyFailure(error),
     if (reported.has(error)) return;
     reported.add(error);
   }
-  notify({ type: 'GenericAlert', level: 'warning', duration: 10000,
+  notify({ type: 'GenericAlert', level: 'warning', duration: message === 'walletRequestPending' ? 0 : 10000,
     data: { content: errorMessages[message], report: createErrorReport(error, context) } });
 };
 

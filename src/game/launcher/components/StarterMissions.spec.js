@@ -1,3 +1,4 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
@@ -125,7 +126,7 @@ test('available missions show objectives directly in the progress timeline', () 
 });
 
 
-test('shows SDK building thumbnails and clearly marked draft briefings', () => {
+test('shows SDK building thumbnails and mission briefings', () => {
   setup();
   fireEvent.click(screen.getByRole('button', { name: /Your foothold/i }));
   fireEvent.click(screen.getByRole('button', { name: /Make Landfall: Ready/ }));
@@ -135,7 +136,7 @@ test('shows SDK building thumbnails and clearly marked draft briefings', () => {
   expect(screen.getByRole('img', { name: 'Warehouse' })).not.toHaveAttribute('data-tooltip-id');
   expect(screen.getByRole('img', { name: 'Warehouse' }).closest('li')).toHaveTextContent('Plan your campaign Warehouse');
   expect(within(screen.getByRole('dialog')).queryByRole('complementary')).not.toBeInTheDocument();
-  expect(screen.getByRole('region', { name: 'Mission briefing' })).toHaveTextContent('[DRAFT]');
+  expect(screen.getByRole('region', { name: 'Mission briefing' })).toHaveTextContent('Learn how to choose a warehouse location');
 });
 
 test('route previews update the buildings and materials without changing mission actions', () => {

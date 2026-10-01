@@ -1,3 +1,4 @@
+import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import styled from 'styled-components';
@@ -108,13 +109,13 @@ export const StarterCampaign = ({ view, manager, onGuide, initiallyExpanded = fa
   const ready = view.missions.filter((mission) => mission.claimable).length;
 
   return (
-    <section aria-label="Starter campaign">
+    <section aria-label={STARTER_CAMPAIGN_NAME}>
       <CampaignButton
         $image={getLicensedAssetUrl(STARTER_MISSION_IMAGES[2])}
         aria-expanded={expanded} aria-controls="starter-mission-list"
         onClick={() => setExpanded(!expanded)}>
         <Eyebrow>Campaign · {view.missions.length} missions</Eyebrow>
-        <h2>Your Foothold in Adalia</h2>
+        <h2>{STARTER_CAMPAIGN_NAME}</h2>
         <Muted>From your first survey to a working industry. Build a future for your crew.</Muted>
         <CampaignBottom>
           <Reward><SwayIcon /> {total.toLocaleString()} SWAY</Reward>
@@ -170,7 +171,7 @@ const StarterMissionsContent = () => {
   else if (!view && isLoading) content = <Empty aria-label="Loading missions"><Loader /></Empty>;
   else if (!view && isError) content = <Empty role="alert"><h2>Unable to load missions</h2><Muted>Please try again.</Muted><Button onClick={() => refetch()}>Retry</Button></Empty>;
   else if (isStarterCampaignVisible(view)) content = <StarterCampaign key={`${view.campaign}:${view.subject.id}`} view={view} manager={manager} onGuide={startGuidance} initiallyExpanded={expandStarter} />;
-  else content = <Empty><h2>No available campaigns</h2><Muted>{view?.active ? 'This crew is not eligible for the starter campaign. Select another crew to check its missions.' : 'There are no active campaigns available right now.'}</Muted></Empty>;
+  else content = <Empty><h2>No available campaigns</h2><Muted>{view?.active ? `This crew is not eligible for ${STARTER_CAMPAIGN_NAME}. Select another crew to check its missions.` : 'There are no active campaigns available right now.'}</Muted></Empty>;
   return <Page><Header><RewardsIcon /><div><h1>Missions</h1><Muted>Find your next objective. Make your mark on Adalia.</Muted></div></Header>{content}</Page>;
 };
 

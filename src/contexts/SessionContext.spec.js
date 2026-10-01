@@ -1,3 +1,4 @@
+import { isExpired } from 'react-jwt';
 import { act, render } from '@testing-library/react';
 import { useContext } from 'react';
 import SessionContext, { SessionProvider } from './SessionContext';
@@ -9,7 +10,7 @@ import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 
 jest.mock('starknet', () => ({ RpcProvider: jest.fn(), PaymasterRpc: jest.fn(), WalletAccount: jest.fn() }));
-jest.mock('react-jwt', () => ({ isExpired: () => true }));
+jest.mock('react-jwt', () => ({ isExpired: jest.fn(() => true) }));
 jest.mock('~/lib/authFlow', () => jest.requireActual('../lib/authFlow'), { virtual: true });
 jest.mock('@influenceth/sdk', () => ({ Address: { toStandard: (value) => value } }));
 jest.mock('@tanstack/react-query', () => {
@@ -61,6 +62,7 @@ function Probe() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  isExpired.mockReturnValue(true);
   jest.useFakeTimers();
   state = {
     currentSession: {}, gameplay: {}, sessions: {},
@@ -267,4 +269,88 @@ test('returns the connection failure so a pending action does not wait for anoth
   await act(async () => { result = await session.login({ controller: true }); });
   expect(result).toEqual({ error });
   expect(session.loginPrompt.busy).toBe(false);
+});
+
+const renderAuthenticatedSession = () => {
+  isExpired.mockReturnValue(false);
+  state.currentSession = { token: 'valid', walletId: 'controller', accountAddress: '0x123', isDeployed: true };
+  state.sessions = { '0x123': state.currentSession };
+  return render(<SessionProvider><Probe /></SessionProvider>);
+};
+
+test('restores a logged-in wallet silently after an unavailable attempt without logging in again', async () => {
+  connector.connect.mockResolvedValue({});
+  renderAuthenticatedSession();
+  let unavailable;
+  await act(async () => {
+    unavailable = session.refreshWalletConnection();
+  });
+  await act(async () => { jest.advanceTimersByTime(250); });
+  await act(async () => { jest.advanceTimersByTime(250); });
+  await expect(unavailable).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  expect(session.walletReadyForTransactions).toBe(true);
+  expect(session.walletAccount.address).toBe('0x123');
+  expect(connector.connect.mock.calls.every(([options]) => options.auto === true)).toBe(true);
+  expect(api.requestLogin).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
+});
+
+test.each([
+  { account: '0x456', chainId: 'SN_SEPOLIA' },
+  { account: '0x123', chainId: 'SN_MAIN' }
+])('does not silently restore the wrong account or network: %j', async (connection) => {
+  connector.connect.mockResolvedValue(connection);
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(WalletAccount).not.toHaveBeenCalled();
+  expect(api.requestLogin).not.toHaveBeenCalled();
+});
+
+test('recovers after an extension logout clears the signer and removes its listeners', async () => {
+  const on = jest.fn();
+  const off = jest.fn();
+  WalletAccount.mockImplementation(() => ({ address: '0x123', on, off }));
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  const onAccountsChanged = on.mock.calls.find(([event]) => event === 'accountsChanged')[1];
+
+  act(() => onAccountsChanged([]));
+  expect(session.authenticated).toBe(true);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(off).toHaveBeenCalledWith('accountsChanged', onAccountsChanged);
+
+  // The extension is unlocked externally; it need not emit another event to the app.
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  expect(session.walletReadyForTransactions).toBe(true);
+  expect(api.requestLogin).not.toHaveBeenCalled();
+});
+
+test('ignores a silent restore that completes after logout', async () => {
+  const connection = deferred();
+  connector.connect.mockReturnValue(connection.promise);
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { await session.logout(); });
+  await act(async () => { connection.resolve({ account: '0x123', chainId: 'SN_SEPOLIA' }); });
+  await expect(restored).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(WalletAccount).not.toHaveBeenCalled();
 });

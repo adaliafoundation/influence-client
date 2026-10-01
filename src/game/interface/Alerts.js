@@ -86,7 +86,7 @@ const AlertWrapper = styled.div`
   color: ${p => p.theme.colors.mainText};
   display: flex;
   font-size: ${p => p.theme.fontSizes.mainText};
-  margin: 12px 0;
+  margin: 12px 24px 12px 0;
 
   & > * {
     padding: 0 5px;
@@ -105,6 +105,9 @@ const AlertWrapper = styled.div`
 
 const Description = styled.div`
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
   & a {
     color: ${p => p.theme.colors.mainText};
     display: inline-block;

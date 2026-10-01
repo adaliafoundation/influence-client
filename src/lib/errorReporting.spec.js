@@ -49,13 +49,27 @@ test('funding recovery carries both the precise deficit and the full target in t
 });
 
 
-test('recognizes Ready X timeouts wrapped in UNKNOWN_ERROR', () => {
+test('recognizes Ready X timeouts as possibly queued wallet requests', () => {
   const error = new Error('An error occurred (UNKNOWN_ERROR)');
+  error.name = 'WalletRPCError';
   error.cause = new Error('Timeout');
-  expect(classifyFailure(error)).toBe('unknownOutcome');
+  expect(classifyFailure(error)).toBe('walletRequestPending');
   const notify = jest.fn();
   reportFailure(notify, error);
   expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-    data: expect.objectContaining({ content: errorMessages.unknownOutcome })
+    duration: 0,
+    data: expect.objectContaining({ content: errorMessages.walletRequestPending })
   }));
+});
+
+test('does not label an ordinary service timeout as a pending wallet request', () => {
+  const error = new Error('Service failed');
+  error.cause = new Error('Timeout');
+  expect(classifyFailure(error)).toBe('unknownOutcome');
+});
+
+test('does not label a non-timeout wallet rejection as a pending request', () => {
+  const error = new Error('An error occurred (UNKNOWN_ERROR)');
+  error.name = 'WalletRPCError';
+  expect(classifyFailure(error)).toBe('actionFailed');
 });

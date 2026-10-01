@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom';
 import { reportFailure } from '../lib/errorReporting';
 import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -283,7 +284,7 @@ export function SessionProvider({ children }) {
   }, [privyPaymaster, provider]);
 
   // Login entry point, starts by connecting to wallet provider
-  const connect = useCallback(async (auto = false, enabledConnectors = defaultEnabledConnectors, { resumeAuth = false } = {}) => {
+  const connect = useCallback(async (auto = false, enabledConnectors = defaultEnabledConnectors, { resumeAuth = false, restoreOnly = false } = {}) => {
     enabledConnectors = normalizeEnabledConnectors(enabledConnectors);
     const authFlowId = ++authFlowRef.current;
 
@@ -338,6 +339,15 @@ export function SessionProvider({ children }) {
 
         const chainId = resolveChainId(connectorData.chainId);
         const walletId = wallet.id || selectedConnector.id;
+        if (restoreOnly && (
+          !hasValidSession(currentSession)
+          || Address.toStandard(connectorData.account) !== Address.toStandard(currentSession.accountAddress)
+          || !isAllowedChain(chainId)
+        )) {
+          setConnecting(false);
+          setAuthPhase(AUTH_PHASES.AUTHENTICATED);
+          return;
+        }
         setAuthPhase(AUTH_PHASES.VERIFYING_WALLET);
         setConnectedAccount(Address.toStandard(connectorData.account));
         setConnectedChainId(chainId);
@@ -393,7 +403,6 @@ export function SessionProvider({ children }) {
         }
         if (authFlowId !== authFlowRef.current) return;
 
-        setWalletAccount(newAccount);
         setAccountDeploymentData(connectorData.deploymentData);
         const savedSession = useStore.getState().sessions[Address.toStandard(newAccount.address)];
         const walletSession = createWalletSession({
@@ -416,6 +425,17 @@ export function SessionProvider({ children }) {
 
         clearPendingAuthWalletId();
         setStoredWalletId(walletId);
+        if (restoreOnly) {
+          // Commit the restored signer and session before a transaction retries.
+          flushSync(() => {
+            setWalletAccount(newAccount);
+            setStatus(STATUSES.AUTHENTICATED);
+            setConnecting(false);
+            setAuthPhase(AUTH_PHASES.AUTHENTICATED);
+          });
+          return true;
+        }
+        setWalletAccount(newAccount);
         setStatus(STATUSES.CONNECTED);
       } else if (auto) {
         setAuthPhase(AUTH_PHASES.IDLE);
@@ -465,6 +485,20 @@ export function SessionProvider({ children }) {
 
     if (authFlowId === authFlowRef.current) setConnecting(false);
   }, [connectConnector, currentSession, getConnectors, lastConnectedWalletId, provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const walletRestoreRef = useRef(null);
+  const refreshWalletConnection = useCallback(async () => {
+    if (!hasValidSession(currentSession) || connecting || status !== STATUSES.AUTHENTICATED) return false;
+    if (walletRestoreRef.current) return walletRestoreRef.current;
+    const restore = connect(true, { [currentSession.walletId]: true }, { restoreOnly: true })
+      .then(result => result === true);
+    walletRestoreRef.current = restore;
+    try {
+      return await restore;
+    } finally {
+      if (walletRestoreRef.current === restore) walletRestoreRef.current = null;
+    }
+  }, [connect, connecting, currentSession, status]);
 
   const clearWalletConnection = useCallback(() => {
     walletSessionRef.current = null;
@@ -952,6 +986,7 @@ export function SessionProvider({ children }) {
       walletCapabilities,
       walletAccount,
       walletConnected,
+      refreshWalletConnection,
       walletReadyForTransactions: walletConnected && status === STATUSES.AUTHENTICATED,
       walletId: authenticated ? currentSession?.walletId : null,
 

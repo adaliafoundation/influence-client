@@ -1,3 +1,4 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../lib/starterCampaign'), { virtual: true });
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;

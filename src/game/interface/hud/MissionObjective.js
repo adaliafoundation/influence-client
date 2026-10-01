@@ -1,3 +1,4 @@
+import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
 import styled from 'styled-components';
 import { ReadyIcon } from '~/components/AnimatedIcons';
 import { TargetIcon } from '~/components/Icons';
@@ -58,7 +59,7 @@ const MissionObjective = ({ row, onDetails }) => {
       {type === 'ready' ? <ReadyIcon /> : <span><TargetIcon /></span>}
     </ActionItemIcon>
     <Content>
-      <h3>{row.invitation ? 'Begin campaign: Your Foothold in Adalia' : `Mission: ${row.mission.title}`}</h3>
+      <h3>{row.invitation ? `Begin campaign: ${STARTER_CAMPAIGN_NAME}` : `Mission: ${row.mission.title}`}</h3>
       <Action onClick={event => { event.stopPropagation(); onDetails(); }}>
         Show details
       </Action>

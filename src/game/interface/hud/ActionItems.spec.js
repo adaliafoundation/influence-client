@@ -1,3 +1,4 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
 const React = require('react');
 const { render, screen, fireEvent } = require('@testing-library/react');
 require('@testing-library/jest-dom');

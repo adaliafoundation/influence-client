@@ -1,3 +1,5 @@
+import { Address } from '@influenceth/sdk';
+
 export const supportsWalletAccountRequest = (account) => (
   typeof account?.walletProvider?.request === 'function'
 );
@@ -7,12 +9,12 @@ export const isWalletAccountLocked = async (account) => {
   if (!supportsWalletAccountRequest(account)) return false;
 
   try {
-    await account.walletProvider.request({
+    const accounts = await account.walletProvider.request({
       type: 'wallet_requestAccounts',
-      params: { silent_mode: false }
+      params: { silent_mode: true }
     });
 
-    return false;
+    return !accounts.some(address => Address.areEqual(address, account.address));
   } catch (e) {
     return true;
   }

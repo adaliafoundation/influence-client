@@ -1,3 +1,4 @@
+import { STARTER_CAMPAIGN_NAME } from './starterCampaign';
 import { errorMessages } from './errorMessages';
 import { Building, Entity, Product, StarterMission } from '@influenceth/sdk';
 
@@ -136,9 +137,9 @@ const qualifiesCampaignExtraction = (resource, amount) => {
 // False means known unbound work should use the ordinary transaction path.
 export const verifyMissionAction = async ({ key, vars, assignment, view, getBinding, getEntity }) => {
   const rule = MISSION_ACTIONS[key];
-  if (!rule) throw new Error(`${key} cannot contribute to the starter campaign.`);
+  if (!rule) throw new Error(`${key} cannot contribute to ${STARTER_CAMPAIGN_NAME}.`);
   if (key === 'ConstructionPlan') {
-    if (!isCampaignBuildingType(vars.building_type)) throw new Error('This building type does not qualify for the starter campaign.');
+    if (!isCampaignBuildingType(vars.building_type)) throw new Error(`This building type does not qualify for ${STARTER_CAMPAIGN_NAME}.`);
     if (Number(vars.building_type) === StarterMission.TYPES[StarterMission.IDS.MAKE_LANDFALL].requirements.buildingType && view.progress?.warehouseId) {
       throw new Error('This campaign already has a Warehouse. Continue construction on that site.');
     }

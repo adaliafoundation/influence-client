@@ -32,9 +32,10 @@ import {
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
 import { isWalletAccountLocked } from '~/lib/walletLock';
+import { isWalletRequestTimeout } from '../lib/walletErrors';
+import { getWalletLabel } from '~/lib/wallets';
 
 const RETRY_INTERVAL = 5e3; // 5 seconds
-const WALLET_RECONNECT_TIMEOUT = 30e3;
 const ChainTransactionContext = createContext();
 const EXPLICIT_AUTHORIZATION_PRIMARY_TYPE = 'InfluenceTransactionAuthorization';
 const PAYMASTER_FEE_TOKENS = [TOKEN.USDC, TOKEN.SWAY];
@@ -606,8 +607,8 @@ export function ChainTransactionProvider({ children }) {
     blockTime,
     chainId,
     getTransactionAccount,
+    refreshWalletConnection,
     isDeployed,
-    login,
     paymasterTokens,
     provider,
     sessionWallet,
@@ -638,11 +639,10 @@ export function ChainTransactionProvider({ children }) {
   const usdcRef = useRef();
   usdcRef.current = usdcBalanceSource;
 
+  const executionRef = useRef();
   const walletAccountRef = useRef();
   // Account discovery precedes login/session approval; signing must wait for both.
   walletAccountRef.current = walletReadyForTransactions ? walletAccount : undefined;
-
-  const walletConnectionWaiters = useRef([]);
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const gameplay = useStore(s => s.gameplay);
@@ -677,45 +677,22 @@ export function ChainTransactionProvider({ children }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!walletAccount || !walletReadyForTransactions) return;
-
-    walletConnectionWaiters.current.forEach(({ resolve, timeout }) => {
-      clearTimeout(timeout);
-      resolve(walletAccount);
+  const notifyWalletDisconnected = useCallback(() => {
+    const formattedAddress = accountAddress?.length > 10
+      ? `${accountAddress.slice(0, 6)}...${accountAddress.slice(-4)}`
+      : accountAddress;
+    const message = authenticated
+      ? `Please try again after connecting your ${getWalletLabel(walletId)} account: ${formattedAddress}`
+      : errorMessages.connection;
+    createAlert({
+      type: authenticated ? 'WalletConnectionRequired' : 'GenericAlert',
+      data: authenticated
+        ? { walletName: getWalletLabel(walletId), address: formattedAddress }
+        : { content: message },
+      level: 'warning',
     });
-    walletConnectionWaiters.current = [];
-  }, [walletAccount, walletReadyForTransactions]);
-
-  useEffect(() => {
-    const waiters = walletConnectionWaiters;
-    return () => {
-      waiters.current.forEach(({ reject, timeout }) => {
-        clearTimeout(timeout);
-        reject(new Error('Wallet reconnect cancelled'));
-      });
-      waiters.current = [];
-    };
-  }, []);
-
-  const waitForWalletConnection = useCallback(async () => {
-    if (walletAccountRef.current) return walletAccountRef.current;
-
-    const connection = await login(walletId ? { [walletId]: true } : undefined);
-    if (connection?.error) throw connection.error;
-
-    if (walletAccountRef.current) return walletAccountRef.current;
-
-    return new Promise((resolve, reject) => {
-      const waiter = { resolve, reject };
-      waiter.timeout = setTimeout(() => {
-        walletConnectionWaiters.current = walletConnectionWaiters.current.filter((w) => w !== waiter);
-        reject(new Error('Wallet reconnect timed out'));
-      }, WALLET_RECONNECT_TIMEOUT);
-
-      walletConnectionWaiters.current.push(waiter);
-    });
-  }, [login, walletId]);
+    return message;
+  }, [accountAddress, authenticated, createAlert, walletId]);
 
   // Sets the nonce initially to allow for some local management
   useEffect(() => {
@@ -1310,7 +1287,7 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
     reportFailure(createAlert, e, { context: { action: txDetails?.key, transactionHash: txDetails?.txHash } });
-    if (!e?.suppressTransactionFailure && !isUserCancellation(e) && txDetails?.key) {
+    if (!e?.suppressTransactionFailure && !isUserCancellation(e) && !isWalletRequestTimeout(e) && txDetails?.key) {
       dispatchFailedTransaction({ ...txDetails, txHash: null, err: e?.message || e });
     }
   }, [accountAddress, createAlert, dispatchFailedTransaction]);
@@ -1318,17 +1295,12 @@ export function ChainTransactionProvider({ children }) {
   const deployAccount = useCallback(async () => {
     if (isDeployed) return { deployed: true, transaction: null };
 
-    let activeWalletAccount = walletAccountRef.current;
+    const activeWalletAccount = walletAccountRef.current;
     if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-      } catch (e) {
-        reportFailure(createAlert, e, { message: 'connection' });
-        throw e;
-      } finally {
-        setPromptingTransaction(false);
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.deployAccount();
       }
+      throw new Error(notifyWalletDisconnected());
     }
 
     if (!walletCapabilities.requiresSponsoredTransactions) {
@@ -1387,7 +1359,8 @@ export function ChainTransactionProvider({ children }) {
     isDeployed,
     provider,
     requireSessionUpgrade,
-    waitForWalletConnection,
+    notifyWalletDisconnected,
+    refreshWalletConnection,
     walletCapabilities.requiresSponsoredTransactions
   ]);
 
@@ -1398,30 +1371,12 @@ export function ChainTransactionProvider({ children }) {
       return;
     }
 
-    let activeWalletAccount = walletAccountRef.current;
-    const reconnecting = !activeWalletAccount;
+    const activeWalletAccount = walletAccountRef.current;
     if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-      } catch (e) {
-        setPromptingTransaction(false);
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: errorMessages.connection },
-          level: 'warning',
-        });
-        return;
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.executeCalls(calls, options);
       }
-    }
-
-    if (!activeWalletAccount) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: errorMessages.connection },
-        level: 'warning',
-      });
-
+      notifyWalletDisconnected();
       return;
     }
 
@@ -1429,13 +1384,8 @@ export function ChainTransactionProvider({ children }) {
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
     try {
-      // Reconnecting already requests account access from the extension.
-      if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: errorMessages.unavailable },
-          level: 'warning',
-        });
+      if (await isWalletAccountLocked(activeWalletAccount)) {
+        notifyWalletDisconnected();
         return;
       }
       await requireExplicitAuthorization(activeWalletAccount, options);
@@ -1460,7 +1410,7 @@ export function ChainTransactionProvider({ children }) {
     } finally {
       setPromptingTransaction(false);
     }
-  }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, waitForWalletConnection])
+  }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, notifyWalletDisconnected, refreshWalletConnection])
 
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}, options = {}) => {
@@ -1486,33 +1436,22 @@ export function ChainTransactionProvider({ children }) {
       return authorization;
     }
 
-    let activeWalletAccount = walletAccountRef.current;
-    let activeContracts = contractsRef.current;
-    const reconnecting = !activeWalletAccount;
-
+    const activeWalletAccount = walletAccountRef.current;
+    const activeContracts = contractsRef.current;
     if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-        activeContracts = contractsRef.current;
-      } catch (e) {
-        setPromptingTransaction(false);
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: errorMessages.connection },
-          level: 'warning',
-        });
-        return;
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.executeSystem(key, vars, meta, options);
       }
+      notifyWalletDisconnected();
+      return { status: 'failed' };
     }
 
-    if (!activeWalletAccount || !activeContracts || !activeContracts[key]) {
+    if (!activeContracts?.[key]) {
       createAlert({
         type: 'GenericAlert',
-        data: { content: activeWalletAccount ? errorMessages.actionFailed : errorMessages.connection },
+        data: { content: errorMessages.actionFailed },
         level: 'warning',
       });
-      setPromptingTransaction(false);
       return;
     }
 
@@ -1525,14 +1464,9 @@ export function ChainTransactionProvider({ children }) {
     let ownsMissionSubmission = false;
     const { execute: contractExecute, onTransactionError } = activeContracts[key];
     try {
-      // Reconnecting already requests account access from the extension.
-      if (!reconnecting && await isWalletAccountLocked(activeWalletAccount)) {
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: errorMessages.unavailable },
-          level: 'warning',
-        });
-        return;
+      if (await isWalletAccountLocked(activeWalletAccount)) {
+        notifyWalletDisconnected();
+        return { status: 'failed' };
       }
       if (key === 'MissionAction') throw new Error('Use a native action with missionAssignment for starter missions.');
       if (assignment) {
@@ -1578,13 +1512,16 @@ export function ChainTransactionProvider({ children }) {
     } catch (e) {
       handleExecutionExeption(e, executeCalls, { key, vars, meta });
       onTransactionError(e, vars);
+      if (isWalletRequestTimeout(e)) submission = { status: 'unknown' };
     } finally {
       if (ownsMissionSubmission) missionSubmissions.current.delete(missionKey);
       setPromptingTransaction(false);
     }
 
     return submission;
-  }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, notifyWalletDisconnected, refreshWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  executionRef.current = { deployAccount, executeCalls, executeSystem };
 
   const getPendingTx = useCallback((key, vars) => {
     // simulation will only ever have one concurrent?
