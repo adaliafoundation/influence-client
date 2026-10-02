@@ -1,3 +1,5 @@
+
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Building } from '@influenceth/sdk';
@@ -24,7 +26,6 @@ import {
   ProgressBarSection,
   ActionDialogBody,
   getBuildingRequirements,
-  LotControlWarning,
   formatTimeRequirements
 } from './components';
 import actionStage from '~/lib/actionStages';
@@ -41,23 +42,11 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
   const { crew } = useCrewContext();
 
   const [buildingType, setBuildingType] = useState();
+  useMissionActionDetails(useMemo(() => ({ buildingType }), [buildingType]));
 
   const crewTimeRequirement = useMemo(() => formatTimeRequirements([[0, 'Initiate Building Plan']]), []);
   const stats = [{ label: 'Task Duration', value: formatTimer(0), isTimeStat: true }];
-  const [submissionReason, setSubmissionReason] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const onPlan = async () => {
-    setSubmitting(true);
-    setSubmissionReason(null);
-    try {
-      const result = await planConstruction(buildingType);
-      if (result?.reason) setSubmissionReason(result.reason);
-    } catch (error) {
-      setSubmissionReason('Unable to verify planning permission. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const onPlan = () => planConstruction(buildingType);
 
   useEffect(() => {
     if (currentConstructionAction?.buildingType) setBuildingType(currentConstructionAction.buildingType)
@@ -135,19 +124,17 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
           />
         )}
 
-        <LotControlWarning lot={lot} />
-
         <ActionDialogStats
           stage={stage}
           stats={stats}
         />
       </ActionDialogBody>
 
-      {(submissionReason || planningEligibility.reason) && <p role="status">{submissionReason || planningEligibility.reason}</p>}
+      {planningEligibility.reason && <p role="status">{planningEligibility.reason}</p>}
       <ActionDialogFooter
         {...props}
         crewAvailableTime={crewTimeRequirement}
-        disabled={!buildingType || submitting || planningEligibility.status !== 'allowed'}
+        disabled={!buildingType || planningEligibility.status !== 'allowed'}
         goLabel="Create Site"
         onGo={onPlan}
         stage={stage}

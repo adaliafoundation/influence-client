@@ -39,7 +39,10 @@ const useStationedCrews = require('~/hooks/useStationedCrews');
 const useShipDockingManager = require('~/hooks/actionManagers/useShipDockingManager');
 const LaunchShip = require('./LaunchShip').default;
 let manager;
+const createAlert = jest.fn();
 beforeEach(() => {
+  createAlert.mockClear();
+  require('~/hooks/useStore').mockImplementation(selector => selector({ dispatchAlertLogged: createAlert }));
   useCrewContext.mockReturnValue({ crew: { id: 1 }, accountCrewIds: [1, 2] });
   useShip.mockReturnValue({ data: { id: 9, Control: { controller: { id: 2 } }, Ship: { readyAt: 999 }, Inventories: [{ reservedMass: 10 }], _location: { lotId: 5, asteroidId: 1 }, Location: { location: { label: Entity.IDS.LOT, id: 5 } } } });
   useLot.mockReturnValue({ data: { id: 5 } });
@@ -63,11 +66,14 @@ test.each(['blocked', 'checking'])('shared %s state disables the dialog', (statu
   expect(screen.getByRole('button').disabled).toBe(true);
 });
 
-test('submission displays a newly granted protection without proceeding', async () => {
+test('submission leaves permission failure reporting to the shared manager', async () => {
   manager.undockShip.mockResolvedValue({ status: 'blocked', reason: 'Ship has permission to remain' });
   render(<LaunchShip shipId={9} onClose={jest.fn()} />);
   fireEvent.click(screen.getByRole('button'));
-  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Ship has permission to remain'));
+  await waitFor(() => expect(manager.undockShip).toHaveBeenCalledWith(true));
+  expect(createAlert).not.toHaveBeenCalled();
+  expect(screen.getByText('Force Launch Ship')).toBeTruthy();
+  expect(screen.queryByRole('status')).toBeNull();
 });
 
 

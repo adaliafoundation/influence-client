@@ -194,8 +194,9 @@ const AsteroidResourcePrices = ({ asteroid, mode, resource }) => {
 
   const resourceMarketplaces = useMemo(() => {
     if (!orderSummary) return [];
+    const exchangesById = new Map((resourceMarketplaceEntities || []).map(exchange => [exchange.id, exchange]));
     const transformedOrders = orderSummary.map((o) => {
-      const exchange = resourceMarketplaceEntities?.find((mp) => mp.id === o.marketplace.id);
+      const exchange = exchangesById.get(o.marketplace.id);
       const permissions = {
         'Limit Buy': (exchange) ? isPermitted({ exchange, type: 'limit', mode: 'buy' }) : null,
         'Limit Sell': (exchange) ? isPermitted({ exchange, type: 'limit', mode: 'sell' }) : null,
@@ -278,7 +279,7 @@ const AsteroidResourcePrices = ({ asteroid, mode, resource }) => {
       }
     };
 
-    return (resourceMarketplaces || []).sort((a,b) => {
+    return [...(resourceMarketplaces || [])].sort((a,b) => {
       if (['supply', 'sellPrice'].includes(sortField)) {
         if (a.supply > 0 && b.supply === 0) return -1;
         if (b.supply > 0 && a.supply === 0) return 1;

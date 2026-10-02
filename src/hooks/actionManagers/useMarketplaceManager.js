@@ -124,9 +124,9 @@ const useMarketplaceManager = (buildingId) => {
   const fillSellOrders = useCallback(
     async ({ destination, destinationSlot, fillOrders }) => {
       if (!fillOrders?.length) return;
-      const sellerCrewIds = fillOrders.map((order) => order.crew?.id);
-      const sellerCrews = await api.getEntities({ ids: sellerCrewIds, label: Entity.IDS.CREW, component: 'Crew' })
-      execute(
+      const sellerCrewIds = [...new Set(fillOrders.map((order) => order.crew?.id))];
+      const sellerCrews = await api.getEntities({ ids: sellerCrewIds, label: Entity.IDS.CREW, components: ['Crew'] })
+      return execute(
         'BulkFillSellOrder',
         fillOrders.map((order) => ({
           seller_account: sellerCrews.find((c) => c.id === order.crew?.id)?.Crew?.delegatedTo,
@@ -158,7 +158,7 @@ const useMarketplaceManager = (buildingId) => {
 
   const cancelBuyOrder = useCallback(
     ({ amount, buyer, price, product, destination, destinationSlot, initialCaller, makerFee }) => {
-      fillBuyOrders({
+      return fillBuyOrders({
         isCancellation: true,
         origin: destination,
         originSlot: destinationSlot,

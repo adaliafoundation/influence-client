@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crewmate, Dock, Entity, Inventory, Lot, Permission, Product, Ship, Time } from '@influenceth/sdk';
+import AuthorizationNotice from '~/components/AuthorizationNotice';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Asteroid, Crewmate, Dock, Entity, Inventory, Lot, Product, Ship, Time } from '@influenceth/sdk';
 
 import { LandShipIcon, RouteIcon, ShipIcon, WarningOutlineIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -38,7 +39,7 @@ import useAsteroid from '~/hooks/useAsteroid';
 
 const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
   const { currentDockingAction, dockShip } = manager;
-  const { crew, crewCan } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
 
   // TODO: should this default to hopper-assisted if no propellant?
   const [powered, setPowered] = useState(true);
@@ -78,8 +79,12 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
       escapeVelocity,
       propellantRequired,
       0, // TODO: poweredTime may be a thing in the future
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(asteroid?.id, 0, destinationLotIndex, hopperBonus.totalBonus, distBonus.totalBonus),
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        0,
+        destinationLotIndex,
+        hopperBonus.totalBonus,
+        distBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -95,7 +100,6 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
       deltaV
     ];
   }, [ship]);
-
 
   const launchTime = useMemo(() => {
     return formatTimeRequirements([
@@ -148,22 +152,12 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
 
   const onLand = useCallback(() => {
     if (!destinationLot) return;
-    dockShip(
+    return dockShip(
       destinationLot.building || { label: Entity.IDS.LOT, id: destinationLot.id },
       !powered,
       destinationLot.id
     );
   }, [destinationLot, powered]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 
@@ -270,10 +264,11 @@ const LandShip = ({ asteroid, manager, ship, stage, ...props }) => {
 
       </ActionDialogBody>
 
+      {stage === actionStages.NOT_STARTED && destinationLot?.building && <AuthorizationNotice authorization={authorize('spaceportProtection', [crew, ship, destinationLot.building], [crew, ship, destinationLot.building])} deniedMessage="Docking requires permission for your crew or this ship." />}
       <ActionDialogFooter
         crewAvailableTime={launchTime}
         taskCompleteTime={launchTime}
-        disabled={(powered && propellantRequirement > propellantLoaded) || (destinationLot?.building && !crewCan(Permission.IDS.DOCK_SHIP, destinationLot.building))}
+        disabled={(powered && propellantRequirement > propellantLoaded) || (destinationLot?.building && authorize('spaceportProtection', [crew, ship, destinationLot.building], [crew, ship, destinationLot.building]).status !== 'allowed')}
         goLabel="Land"
         onGo={onLand}
         stage={stage}

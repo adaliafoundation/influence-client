@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { Entity } from '@influenceth/sdk';
 
@@ -10,7 +11,8 @@ import { locationsArrToObj } from '~/lib/utils';
 
 
 const useEjectCrewManager = (originEntity) => {
-  const { crew, isLoading, pendingTransactions } = useCrewContext();
+  const reportBlocked = useFailureReporter();
+  const { crew, isLoading, pendingTransactions, recheckAuthorization, recheckActingCrew } = useCrewContext();
   const { execute } = useContext(ChainTransactionContext);
 
   const { data: origin } = useEntity(originEntity);
@@ -26,7 +28,12 @@ const useEjectCrewManager = (originEntity) => {
   }, [originCrews, pendingTransactions]);
 
   const ejectCrew = useCallback(
-    (id) => {
+    async (id) => {
+      const prerequisites = await recheckActingCrew({ requireReady: Number(id) !== Number(crew?.id) });
+      if (prerequisites.status !== 'allowed') return reportBlocked(prerequisites);
+      const guest = { id, label: Entity.IDS.CREW };
+      const decision = await recheckAuthorization('crewEviction', [crew, guest], [crew, guest, origin]);
+      if (decision.status !== 'allowed') return reportBlocked(decision);
       return execute(
         'EjectCrew',
         {
@@ -39,7 +46,7 @@ const useEjectCrewManager = (originEntity) => {
         }
       );
     },
-    [execute, crew, originEntity, origin]
+    [reportBlocked, recheckActingCrew, execute, crew, originEntity, origin, recheckAuthorization]
   );
 
   return {

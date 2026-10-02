@@ -26,7 +26,7 @@ export const usePopper = (referenceEl, popperEl, options = {}) => {
     return next;
   }, [options.modifiers]);
 
-  const { x, y, strategy, refs, placement, update } = useFloating({
+  const { x, y, strategy, refs, placement, update, isPositioned } = useFloating({
     middleware,
     placement: options.placement || 'bottom',
     whileElementsMounted: autoUpdate
@@ -50,7 +50,9 @@ export const usePopper = (referenceEl, popperEl, options = {}) => {
       popper: {
         left: x ?? 0,
         position: strategy,
-        top: y ?? 0
+        top: y ?? 0,
+        // Keep the element measurable without flashing at the initial (0, 0).
+        visibility: referenceEl && popperEl && isPositioned ? 'visible' : 'hidden'
       }
     },
     update

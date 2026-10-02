@@ -46,7 +46,7 @@ const Desc = styled.div`
 `;
 
 const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props }) => {
-  const { startAuction } = actionManager;
+  const { startAuction, tenantAccess, controlAccess } = actionManager;
   const { crew } = useCrewContext();
 
   const auctionDetails = useMemo(() => {
@@ -94,7 +94,7 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
         action={{
           icon: <AgreementIcon />,
           label: 'Start Lease Auction',
-          status: stage === actionStage.NOT_STARTED ? 'Owner Action' : undefined,
+          status: stage === actionStage.NOT_STARTED ? 'Administrator Action' : undefined,
         }}
         overrideColor={stage === actionStage.NOT_STARTED ? theme.colors.orange : undefined}
         actionCrew={crew}
@@ -117,11 +117,14 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
               <span>Start an auction</span>
             </DescTitle>
             <Desc>
-              You have <b>asteroid control</b> and may start a repossession auction.
+              An asteroid administrator may start a repossession auction only after the recorded tenant loses <b>lot access</b>. An expired lease alone is insufficient if another grant still protects the tenant.
               The asteroid controller receives up to six months of lapsed lease payments, rounded up to the nearest hour, from the auction payment; any remainder goes to the building controller.
             </Desc>
           </FlexSectionInputBlock>
         </FlexSection>
+
+        {(controlAccess.status === 'unresolved' || tenantAccess.status === 'unresolved') && <div role="status">Checking auction permissions…</div>}
+        {tenantAccess.status === 'allowed' && <div role="status">The recorded tenant still has permission to use this lot.</div>}
 
         <ActionDialogStats
           stage={stage}
@@ -132,6 +135,7 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
       </ActionDialogBody>
 
       <ActionDialogFooter
+        disabled={controlAccess.status !== 'allowed' || tenantAccess.status !== 'denied'}
         goLabel="Start Auction"
         onGo={startAuction}
         stage={stage}

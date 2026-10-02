@@ -1,5 +1,6 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
-import { Address, Entity, Permission } from '@influenceth/sdk';
+import { Address, Authorization, Entity, Lot, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -7,10 +8,12 @@ import { daysToSeconds, safeBigInt, secondsToDays } from '~/lib/utils';
 import useBlockTime from '../useBlockTime';
 
 const usePolicyManager = (target, permission) => {
+  const reportBlocked = useFailureReporter();
   const blockTime = useBlockTime();
-  const { crew } = useCrewContext();
+  const { crew, authorize, recheckAuthorization } = useCrewContext();
   const { execute, getStatus } = useContext(ChainTransactionContext);
 
+  const controlTarget = target?.label === Entity.IDS.LOT ? { label: Entity.IDS.ASTEROID, id: Lot.toPosition(target.id).asteroidId } : target;
   const payload = useMemo(() => ({
     target: { id: target?.id, label: target?.label },
     permission,
@@ -26,14 +29,20 @@ const usePolicyManager = (target, permission) => {
   // using json to avoid unnecessary re-renders
   const policyJSON = useMemo(() => {
     return target
-      ? JSON.stringify(Permission.getPolicyDetails(target, crew, blockTime)[permission])
+      ? JSON.stringify(Permission.getPolicyDetails(target, undefined, blockTime)[permission])
       : undefined;
   }, [blockTime, crew, target, permission]);
 
+  const authorization = authorize(target?.label === Entity.IDS.LOT ? 'lotUsage' : 'can', target?.label === Entity.IDS.LOT ? [crew, target] : [crew, target, permission], [crew, target]);
   const currentPolicy = useMemo(() => {
     if (!target) return undefined;
     if (!policyJSON) return undefined;
     const pol = JSON.parse(policyJSON);
+    if (!pol) return undefined;
+    pol.authorization = authorization;
+    pol.crewStatus = authorization.status === 'unresolved' ? 'unresolved' : authorization.status === 'allowed'
+      ? (['controller', 'shared-delegate', 'exact-entity'].includes(authorization.reason) ? 'controller' : 'granted')
+      : [Permission.POLICY_IDS.PREPAID, Permission.POLICY_IDS.CONTRACT].includes(pol.policyType) ? 'available' : 'restricted';
 
     if (pol?.policyDetails && pol.policyType === Permission.POLICY_IDS.CONTRACT) pol.policyDetails.contract = pol.policyDetails.address;
     if (pol?.policyDetails && pol.policyType === Permission.POLICY_IDS.PREPAID) {
@@ -46,21 +55,23 @@ const usePolicyManager = (target, permission) => {
     };
 
     return pol;
-  }, [policyJSON]);
+  }, [policyJSON, authorization]);
 
-  const updateAllowlists = useCallback((newAllowlist, newAccountAllowlist) => {
-    execute(
+  const updateAllowlists = useCallback(async (newAllowlist, newAccountAllowlist) => {
+    const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
+    return execute(
       'UpdateAllowlists',
       {
-        additions: (newAllowlist || []).filter((a) => !(currentPolicy?.allowlist || []).find((b) => a.id === b.id)),
-        removals: (currentPolicy?.allowlist || []).filter((a) => !newAllowlist.find((b) => a.id === b.id)),
+        additions: (newAllowlist || []).filter((a) => !(currentPolicy?.allowlist || []).find((b) => Authorization.sameEntity(a, b))),
+        removals: (currentPolicy?.allowlist || []).filter((a) => !newAllowlist.find((b) => Authorization.sameEntity(a, b))),
         accountAdditions: (newAccountAllowlist || []).filter((a) => !(currentPolicy?.accountAllowlist || []).find((b) => Address.areEqual(a, b))),
         accountRemovals: (currentPolicy?.accountAllowlist || []).filter((a) => !newAccountAllowlist.find((b) => Address.areEqual(a, b))),
         ...payload
       },
       meta
     );
-  }, [currentPolicy?.allowlist, currentPolicy?.accountAllowlist, execute, meta, payload]);
+  }, [reportBlocked, recheckAuthorization, crew, controlTarget, target, currentPolicy?.allowlist, currentPolicy?.accountAllowlist, execute, meta, payload]);
 
   const getPolicyUpdateParams = useCallback((newPolicyType, newPolicyDetails) => {
     const params = {
@@ -86,16 +97,20 @@ const usePolicyManager = (target, permission) => {
   }, [currentPolicy, payload]);
 
   const updatePolicy = useCallback(
-    (newPolicyType, newPolicyDetails) => {
+    async (newPolicyType, newPolicyDetails) => {
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
       const params = getPolicyUpdateParams(newPolicyType, newPolicyDetails);
-      execute('UpdatePolicy', params, meta);
+      return execute('UpdatePolicy', params, meta);
     },
-    [execute, getPolicyUpdateParams, meta]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, target, execute, getPolicyUpdateParams, meta]
   );
 
   const updateAuctionSettings = useCallback(
-    ({ mode, gracePeriod }) => {
-      execute(
+    async ({ mode, gracePeriod }) => {
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
+      return execute(
         'ConfigurePrepaidAuction',
         {
           asteroid: { id: target?.id, label: Entity.IDS.ASTEROID },
@@ -106,12 +121,14 @@ const usePolicyManager = (target, permission) => {
         meta
       );
     },
-    [crew?.id, execute, meta, target?.id]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, execute, meta, target?.id]
   );
 
   const updatePolicyAndAuctionSettings = useCallback(
-    (newPolicyType, newPolicyDetails, auctionDetails) => {
-      execute(
+    async (newPolicyType, newPolicyDetails, auctionDetails) => {
+      const decision = await recheckAuthorization('controls', [crew, controlTarget], [crew, controlTarget]);
+    if (decision.status !== 'allowed') return reportBlocked(decision);
+      return execute(
         'UpdatePolicyAndAuctionSettings',
         {
           ...getPolicyUpdateParams(newPolicyType, newPolicyDetails),
@@ -125,7 +142,7 @@ const usePolicyManager = (target, permission) => {
         meta
       );
     },
-    [crew?.id, execute, getPolicyUpdateParams, meta, target?.id]
+    [reportBlocked, recheckAuthorization, crew, controlTarget, execute, getPolicyUpdateParams, meta, target?.id]
   );
 
   const allowlistChangePending = useMemo(

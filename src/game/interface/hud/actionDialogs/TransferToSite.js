@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Asteroid, Crewmate, Entity, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 
 import { ForwardIcon, InventoryIcon, TransferToSiteIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -33,7 +34,8 @@ import actionStage from '~/lib/actionStages';
 
 const TransferToSite = ({ asteroid, lot: destinationLot, deliveryManager, stage, ...props }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const onSetAction = useStore(s => s.dispatchActionDialog);
+  const onSetAction = props.onSetAction;
+  const submission = useActionSubmission();
 
   const { currentDeliveryActions, startDelivery } = deliveryManager;
   const { crew, crewCan } = useCrewContext();
@@ -113,20 +115,22 @@ const TransferToSite = ({ asteroid, lot: destinationLot, deliveryManager, stage,
 
   // reset selectedItems if not in a ready state (to avoid double-counting)
   useEffect(() => {
-    if (stage !== actionStage.NOT_STARTED) {
+    if (!submission?.busy && stage !== actionStage.NOT_STARTED) {
       setSelectedItems({});
     }
-  }, [stage])
+  }, [stage, submission?.busy])
 
   const [transportDistance, transportTime] = useMemo(() => {
     if (!asteroid?.id || !originLot?.id || !destinationLot?.id) return [0, 0];
     const originLotIndex = Lot.toIndex(originLot?.id);
     const destinationLotIndex = Lot.toIndex(destinationLot?.id);
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, originLotIndex, destinationLotIndex);
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid?.id, originLotIndex, destinationLotIndex, crewTravelBonus.totalBonus, crewDistBonus.totalBonus
-      ),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      originLotIndex,
+      destinationLotIndex,
+      crewTravelBonus.totalBonus,
+      crewDistBonus.totalBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, formatTimeRequirements(transportTime)];
@@ -187,7 +191,7 @@ const TransferToSite = ({ asteroid, lot: destinationLot, deliveryManager, stage,
       return;
     }
 
-    startDelivery({
+    return startDelivery({
       origin,
       originSlot: originInventory?.slot,
       destination,
@@ -335,6 +339,8 @@ const Wrapper = (props) => {
   const { asteroid, lot, isLoading } = useAsteroidAndLot(props);
 
   const deliveryManager = useDeliveryManager({ destination: lot?.building });
+  const submission = useActionSubmission();
+  const stableKey = useRef();
 
   const [stage, innerKey] = useMemo(() => {
     if ((deliveryManager.currentDeliveryActions || []).find((d) => d.status === 'DEPARTING')) {
@@ -343,7 +349,7 @@ const Wrapper = (props) => {
     return [actionStage.NOT_STARTED, deliveryManager.currentDeliveryActions?.length || 0];
   }, [deliveryManager.loading, deliveryManager.currentVersion]);
 
-  // TODO (nice-to-have): if requirements are all met, close the dialog
+  if (!submission?.busy) stableKey.current = innerKey;
 
   useEffect(() => {
     if (!asteroid || !lot) {
@@ -359,7 +365,7 @@ const Wrapper = (props) => {
       isLoading={reactBool(isLoading || deliveryManager.isLoading)}
       stage={stage}>
       <TransferToSite
-        key={innerKey}
+        key={stableKey.current}
         asteroid={asteroid}
         lot={lot}
         deliveryManager={deliveryManager}

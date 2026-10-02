@@ -1,10 +1,11 @@
-import { Entity, Lot, Permission } from '@influenceth/sdk';
-import { PERMISSION_COMPONENTS, resolveLotUsage, resolvePermission, sameAccount, checkContractPolicy } from './lotUsageAuthorization';
+import { loadAuthorization } from './authorization';
+import { Authorization, Entity, Lot } from '@influenceth/sdk';
+import { PERMISSION_COMPONENTS, sameAccount, checkContractPolicy } from './lotUsageAuthorization';
 
 export const checkingShipEjection = { status: 'checking', reason: 'Checking ship protection' };
 const blocked = (reason) => ({ status: 'blocked', reason });
 export const isForceLaunch = (crew, ship) => !!crew?.id && !!ship?.Control?.controller?.id
-  && Number(crew.id) !== Number(ship.Control.controller.id);
+  && Authorization.create({ entities: [{ ...ship, label: Entity.IDS.SHIP, Control: { controller: { ...ship.Control.controller, label: Entity.IDS.CREW } } }] }).forceLaunch({ ...crew, label: Entity.IDS.CREW }, { ...ship, label: Entity.IDS.SHIP }).status === 'allowed';
 export const isLandedShip = (ship) => [Entity.IDS.LOT, Entity.IDS.BUILDING].includes(ship?.Location?.location?.label);
 
 const asteroidIdOf = (entity) => entity?.Location?.locations?.find((e) => e.label === Entity.IDS.ASTEROID)?.id;
@@ -25,23 +26,22 @@ export const getShipEjectionEligibility = async ({ ship, crew, controller, lot, 
   if (!asteroidId || !controller?.Crew) return checkingShipEjection;
   if (Number(asteroidIdOf(crew)) !== Number(asteroidId)) return blocked('Crew is away');
 
-  let protectedShip;
-  if (location.label === Entity.IDS.LOT) {
-    const usage = await resolveLotUsage({ lot, asteroid, crew: controller, blockTime, loadCrew, checkPolicy });
-    protectedShip = usage.status === 'checking' ? null : usage.status === 'allowed';
-  } else {
-    if (!building?.Dock) return checkingShipEjection;
-    const grants = await Promise.all([controller, ship].map((permitted) => resolvePermission({
-      target: building, permitted, permission: Permission.IDS.DOCK_SHIP, blockTime, loadCrew, checkPolicy
-    })));
-    protectedShip = grants.includes(true) ? true : (grants.includes(null) ? null : false);
-  }
-  if (protectedShip == null) return checkingShipEjection;
-  return protectedShip ? blocked('Ship has permission to remain') : { status: 'allowed', reason: null };
+  if (location.label === Entity.IDS.BUILDING && !building?.Dock) return checkingShipEjection;
+  const entities = [ship, crew, controller, lot, asteroid, building].filter(Boolean);
+  const result = await loadAuthorization({
+    entities, blockTime, method: 'shipEviction', args: [crew, ship],
+    api: { getEntityById: (entity) => entity.label === Entity.IDS.CREW ? loadCrew(entity.id) : Promise.resolve(entities.find((e) => Authorization.sameEntity(e, entity))) },
+    checkPolicy: async (request) => {
+      const allowed = await checkPolicy({ address: request.address }, request.target, request.permitted, request.permission);
+      return typeof allowed === 'boolean' ? { status: 'resolved', allowed } : { status: 'failed' };
+    }
+  });
+  if (result.status === 'unresolved') return checkingShipEjection;
+  return result.status === 'allowed' ? { status: 'allowed', reason: null } : blocked('Ship has permission to remain');
 };
 
 // Fresh reads are also used by the submission handler; no cached protection result authorizes eviction.
-export const loadShipEjectionEligibility = async ({ api, provider, shipId, crewId, blockTime, accountAddress }) => {
+export const loadShipEjectionEligibility = async ({ api, provider, shipId, crewId, blockTime, blockNumber, accountAddress }) => {
   const crews = new Map();
   const loadCrew = (id) => {
     if (!crews.has(id)) crews.set(id, api.getEntityById({ label: Entity.IDS.CREW, id }));
@@ -63,7 +63,7 @@ export const loadShipEjectionEligibility = async ({ api, provider, shipId, crewI
   const eligibility = await getShipEjectionEligibility({
     ship, crew, controller, lot: isSurface ? target : null, asteroid, building: isSurface ? null : target,
     blockTime, accountAddress, loadCrew,
-    checkPolicy: (agreement, entity, permitted, permission) => checkContractPolicy(provider, agreement, entity, permitted, permission)
+    checkPolicy: (agreement, entity, permitted, permission) => checkContractPolicy(provider, agreement, entity, permitted, permission, blockNumber)
   });
   return { ...eligibility, ship };
 };

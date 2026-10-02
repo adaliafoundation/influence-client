@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Crewmate, Inventory, Lot, Order, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Crewmate, Inventory, Lot, Order, Permission, Product } from '@influenceth/sdk';
 
 import { InventoryIcon, SwayIcon, MarketBuyIcon, MarketSellIcon, LimitBuyIcon, LimitSellIcon, CancelLimitOrderIcon, LocationIcon, CloseIcon } from '~/components/Icons';
 import Button from '~/components/ButtonAlt';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
-import useStore from '~/hooks/useStore';
+
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import UncontrolledTextInput, { TextInputWrapper } from '~/components/TextInputUncontrolled';
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';
@@ -206,16 +206,7 @@ const MarketplaceOrder = ({
 
   const { data: swayBalance } = useSwayBalance();
 
-  const {
-    createBuyOrder,
-    createSellOrder,
-    cancelBuyOrder,
-    cancelSellOrder,
-    fillBuyOrders,
-    fillSellOrders,
-    orderStatus,
-    currentOrder = {}
-  } = manager;
+  const { createBuyOrder, createSellOrder, cancelBuyOrder, cancelSellOrder, fillBuyOrders, fillSellOrders, currentOrder = {} } = manager;
   const { crew, crewCan } = useCrewContext();
   const { data: orders, refetch } = useOrderList(exchange?.id, resourceId);
 
@@ -283,10 +274,12 @@ const MarketplaceOrder = ({
     const exchangeLotIndex = Lot.toIndex(exchange?.Location?.location?.id);
     const storageLotIndex = Lot.toIndex(storageLot?.id);
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, exchangeLotIndex, storageLotIndex);
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid?.id, exchangeLotIndex, storageLotIndex, hopperTransportBonus?.totalBonus, distBonus?.totalBonus
-      ),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      exchangeLotIndex,
+      storageLotIndex,
+      hopperTransportBonus?.totalBonus,
+      distBonus?.totalBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, transportTime];
@@ -466,7 +459,7 @@ const MarketplaceOrder = ({
   const onSubmitOrder = useCallback(() => {
     if (isCancellation) {
       if (mode === 'buy') {
-        cancelBuyOrder({
+        return cancelBuyOrder({
           amount: quantityToUnits(quantity),
           buyer: { id: crew?.id, label: crew?.label },
           price: limitPrice,
@@ -477,7 +470,7 @@ const MarketplaceOrder = ({
           makerFee: cancellationMakerFee
         })
       } else {
-        cancelSellOrder({
+        return cancelSellOrder({
           amount: quantityToUnits(quantity),
           seller: { id: crew?.id, label: crew?.label },
           product: resourceId,
@@ -489,13 +482,13 @@ const MarketplaceOrder = ({
     }
     else if (type === 'market') {
       if (mode === 'buy') {
-        fillSellOrders({
+        return fillSellOrders({
           destination: { id: storage?.id, label: storage?.label },
           destinationSlot: storageInventory?.slot,
           fillOrders: marketFills || []
         })
       } else {
-        fillBuyOrders({
+        return fillBuyOrders({
           origin: { id: storage?.id, label: storage?.label },
           originSlot: storageInventory?.slot,
           fillOrders: marketFills || []
@@ -509,14 +502,14 @@ const MarketplaceOrder = ({
         price: limitPrice
       };
       if (mode === 'buy') {
-        createBuyOrder({
+        return createBuyOrder({
           ...vars,
           destination: { id: storage?.id, label: storage?.label },
           destinationSlot: storageInventory?.slot,
           feeTotal
         });
       } else {
-        createSellOrder({
+        return createSellOrder({
           ...vars,
           origin: { id: storage?.id, label: storage?.label },
           originSlot: storageInventory?.slot
@@ -529,16 +522,6 @@ const MarketplaceOrder = ({
     isCancellation, limitPrice, marketFills, mode, quantity, quantityToUnits, resourceId,
     storage, storageInventory, type
   ]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && orderStatus !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = orderStatus;
-  }, [orderStatus]);
 
   const [, betterOrderTally, bestOrderPrice] = useMemo(() => {
     if (mode === 'buy') {
@@ -816,7 +799,7 @@ const MarketplaceOrder = ({
 
           <InventoryInputBlock
             title={mode === 'buy' ? 'Deliver To' : 'Source From'}
-            titleDetails={<TransferDistanceDetails distance={transportDistance} crewDistBonus={distBonus} />}
+            titleDetails={<TransferDistanceDetails distance={transportDistance} timeBonus={hopperTransportBonus.totalBonus} distanceBonus={distBonus.totalBonus} />}
             disabled={isCancellation || stage !== actionStages.NOT_STARTED}
             entity={storage}
             inventorySlot={storageInventory?.slot}
@@ -949,31 +932,23 @@ const MarketplaceOrder = ({
 const Wrapper = (props) => {
   const { asteroid, lot, isLoading } = useAsteroidAndLot(props);
   const exchange = props.exchange || lot?.building;
-  const manager = useMarketplaceManager(exchange.id);
-  const pendingOrder = manager.getPendingOrder(props.mode, props.type, { exchange, product: props.resourceId });
+  const manager = useMarketplaceManager(exchange?.id);
+  const pendingOrder = exchange && manager.getPendingOrder(props.mode, props.type, { exchange, product: props.resourceId });
   const actionStage = pendingOrder ? actionStages.STARTING : actionStages.NOT_STARTED;
 
   useEffect(() => {
-    if (!asteroid || !lot) {
+    if (!asteroid || !lot || !exchange) {
       if (!isLoading) {
         if (props.onClose) props.onClose();
       }
     }
-  }, [asteroid, lot, isLoading]);
-
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && actionStage !== lastStatus.current) {
-      if (props.onClose) props.onClose();
-    }
-    lastStatus.current = actionStage;
-  }, [actionStage]);
+  }, [asteroid, lot, exchange, isLoading, props.onClose]);
 
   // TODO: actionImage
   return (
     <ActionDialogInner
       actionImage="Marketplace"
-      isLoading={reactBool(isLoading)}
+      isLoading={reactBool(isLoading || !asteroid || !lot || !exchange)}
       stage={actionStage}>
       <MarketplaceOrder
         asteroid={asteroid}

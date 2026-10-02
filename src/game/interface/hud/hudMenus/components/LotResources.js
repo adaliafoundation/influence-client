@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
+import ResourceScanWarning from './ResourceScanWarning';
 import { Asteroid, Building, Deposit, Lot, Product } from '@influenceth/sdk';
 
 import { CheckedIcon, CoreSampleIcon, MyAssetIcon, PlusIcon, ResourceIcon, SwayIcon, UncheckedIcon } from '~/components/Icons';
@@ -364,6 +365,7 @@ const LotResources = () => {
   const asteroidId = useMemo(() => Lot.toPosition(lotId)?.asteroidId, [lotId]);
 
   const { data: asteroid } = useAsteroid(asteroidId);
+  const scanned = asteroid?.Celestial?.scanStatus === Asteroid.SCAN_STATUSES.RESOURCE_SCANNED;
   const { data: lot } = useLot(lotId);
   const { currentSamplingActions } = useCoreSampleManager(lotId);
   const { currentExtraction } = useExtractionManager(lotId);
@@ -376,14 +378,14 @@ const LotResources = () => {
 
   // if there is an active resource map, select that resource
   useEffect(() => {
-    if (resourceMap.active && resourceMap.selected) {
+    if (scanned && resourceMap.active && resourceMap.selected) {
       setSelected({ type: 'resource', id: resourceMap.selected });
     }
   }, []);
 
   // get lot abundance
   const lotAbundances = useMemo(() => {
-    if (!(asteroid && lotId)) return [];
+    if (!scanned || !lotId) return [];
 
     // TODO: do this in worker? takes about 200ms on decent cpu
     const lotIndex = Lot.toIndex(lotId);
@@ -399,7 +401,7 @@ const LotResources = () => {
         return acc;
       }, [])
       .sort((a, b) => b.abundance - a.abundance);
-  }, [asteroid, lotId]);
+  }, [asteroid, lotId, scanned]);
 
   const onClickResource = useCallback((id) => () => {
     setSelected({ type: 'resource', id });
@@ -461,7 +463,8 @@ const LotResources = () => {
   return (
     <>
       <Scrollable hasTray={currentSamplingActions || selectedResource || selectedSample || currentExtraction}>
-        <HudMenuCollapsibleSection titleText="Lot Resources" titleLabel="Abundance">
+        <HudMenuCollapsibleSection titleText="Lot Resources" titleLabel={scanned ? "Abundance" : undefined}>
+          {!scanned && <ResourceScanWarning />}
           
           {showAbundances.map(({ i, abundance }) => {
             const { name, category } = Product.TYPES[i];

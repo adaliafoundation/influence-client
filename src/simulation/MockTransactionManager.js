@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Asteroid, Building, Entity, Lot, Process, Product, Ship, Time } from '@influenceth/sdk';
+import { Asteroid, Building, Entity, Lot, Process, Product, Ship } from '@influenceth/sdk';
 import { camelCase } from 'lodash';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -109,9 +109,8 @@ const MockTransactionManager = () => {
           ]
         });
 
-        crewBusyTime = Time.toRealDuration(
-          2 * Asteroid.getLotTravelTime(asteroidId, crew._location.lotIndex, destLotIndex),
-          crew?._timeAcceleration
+        crewBusyTime = 2 * Asteroid.getLotTravelTimeReal(
+          asteroidId, crew._location.lotIndex, destLotIndex, 1, 1, crew?._timeAcceleration
         );
         break;
       }

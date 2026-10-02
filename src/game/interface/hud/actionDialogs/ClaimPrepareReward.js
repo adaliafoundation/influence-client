@@ -48,11 +48,10 @@ const ClaimPrepareReward = ({ asteroid, onClose }) => {
       await execute('InitializeAndClaimPrepareForLaunchReward', { asteroid });
     }
 
-    onClose();
   }, [asteroid, execute]);
 
   return (
-    <ActionDialogInner>
+    <ActionDialogInner showClose>
       <Wrapper>
         <ConfirmationDialog
           title="Claim Crewmate Credit"

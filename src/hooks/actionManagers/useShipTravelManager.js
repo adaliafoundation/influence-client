@@ -229,7 +229,7 @@ const useShipTravelManager = (shipId) => {
         usedPropellantMass: usedPropellantMass / 1e3
       }
     );
-    execute(
+    return execute(
       destination?.AsteroidProof?.used ? 'TransitBetweenStart' : 'InitializeAndStartTransit',
       {
         asteroid: destination, // in case needs initialization
@@ -255,7 +255,7 @@ const useShipTravelManager = (shipId) => {
   }, [caller_crew, destination, execute, proposedTravelSolution, shipId]);
 
   const arrive = useCallback(() => {
-    execute(
+    return execute(
       'TransitBetweenFinish',
       {
         caller_crew

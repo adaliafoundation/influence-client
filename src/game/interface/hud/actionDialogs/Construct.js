@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Building, Crewmate, Lot, Time } from '@influenceth/sdk';
 
@@ -28,7 +28,6 @@ import {
   getBuildingRequirements,
   LotInputBlock,
   getTripDetails,
-  LotControlWarning,
   MultiSourceWrapper,
   formatTimeRequirements
 } from './components';
@@ -36,7 +35,7 @@ import actionStage from '~/lib/actionStages';
 import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
 import useActionCrew from '~/hooks/useActionCrew';
 import Button from '~/components/ButtonAlt';
-import AssetBlock from '~/components/AssetBlock';
+
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
@@ -84,7 +83,7 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
   }, [asteroid?.id, lot?.id, crew?._location?.lotId, crew?._timeAcceleration, crewTravelBonus, crewDistBonus]);
 
   const constructionTime = useMemo(() =>
-    Time.toRealDuration(
+    Time.toRealDurationCeil(
       lot?.building?.Building?.buildingType
         ? Building.getConstructionTime(lot?.building?.Building?.buildingType, constructionBonus.totalBonus)
         : 0,
@@ -98,7 +97,7 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
     return [
       [
         [oneWayCrewTravelTime, 'Travel to Site'],
-        [constructionTime / 8, 'On-site Crew Labor'],
+        [Time.getCrewLaborDuration(constructionTime), 'On-site Crew Labor'],
         [oneWayCrewTravelTime, 'Return to Station'],
       ],
       [
@@ -144,22 +143,6 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
       return 'DURING';
     }
     return 'AFTER';
-  }, [constructionStatus]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (always close on)
-    if (['OPERATIONAL'].includes(constructionStatus)) {
-      props.onClose();
-    }
-    // (close on status change from)
-    else if (['PLANNED', 'READY_TO_FINISH'].includes(lastStatus.current)) {
-      if (constructionStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = constructionStatus;
   }, [constructionStatus]);
 
   const transferToSite = useCallback(() => {
@@ -294,8 +277,6 @@ const Construct = ({ asteroid, lot, constructionManager, stage, ...props }) => {
             totalTime={crewTravelTime + constructionTime}
           />
         )}
-
-        <LotControlWarning lot={lot} />
 
         <ActionDialogStats
           stage={stage}

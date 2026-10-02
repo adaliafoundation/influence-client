@@ -11,7 +11,7 @@ export const getPlanningEligibility = (params) => isOccupied(params.lot)
   : resolveLotUsage(params);
 
 // Always bypass the UI cache immediately before submitting.
-export const loadPlanningEligibility = async ({ api, provider, lotId, crewId, blockTime, accountAddress, snapshot }) => {
+export const loadPlanningEligibility = async ({ api, provider, lotId, crewId, blockTime, blockNumber, accountAddress, snapshot }) => {
   const asteroidId = Number(Lot.toPosition(lotId)?.asteroidId);
   const lotEntity = Entity.formatEntity({ label: Entity.IDS.LOT, id: lotId });
   const crews = new Map();
@@ -51,6 +51,6 @@ export const loadPlanningEligibility = async ({ api, provider, lotId, crewId, bl
   return getPlanningEligibility({
     lot: planningLot,
     asteroid, crew, blockTime, loadCrew,
-    checkPolicy: (agreement, target, permitted, permission) => checkContractPolicy(provider, agreement, target, permitted, permission)
+    checkPolicy: (agreement, target, permitted, permission) => checkContractPolicy(provider, agreement, target, permitted, permission, blockNumber)
   });
 };

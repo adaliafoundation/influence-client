@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { AxesHelper, CameraHelper, Color, DirectionalLight, DirectionalLightHelper, Vector3 } from 'three';
 import gsap from 'gsap';
@@ -16,6 +16,7 @@ import QuadtreeTerrainCube from './asteroid/helpers/QuadtreeTerrainCube';
 import TerrainCameraMotion from './asteroid/helpers/TerrainCameraMotion';
 import { createLotCameraPath } from './asteroid/helpers/LotCameraPath';
 import { asteroidZoomVisual, createAsteroidZoomPath, pointOpacityForDistance } from './asteroid/helpers/AsteroidZoom';
+import useHighAltitudeCamera from './asteroid/useHighAltitudeCamera';
 import Lots from './asteroid/Lots';
 import Rings from './asteroid/Rings';
 import Telemetry from './asteroid/Telemetry';
@@ -135,7 +136,6 @@ const AsteroidComponent = () => {
   const { shadowSize, shadowMode } = useStore(s => s.getShadowQuality());
   const zoomStatus = useStore(s => s.asteroids.zoomStatus);
   const zoomedFrom = useStore(s => s.asteroids.zoomedFrom);
-  const cameraNeedsHighAltitude = useStore(s => s.cameraNeedsHighAltitude);
   const cameraNeedsRecenter = useStore(s => s.cameraNeedsRecenter);
   const cameraNeedsReorientation = useStore(s => s.cameraNeedsReorientation);
   const resourceMap = useStore(s => s.asteroids.resourceMap);
@@ -143,7 +143,6 @@ const AsteroidComponent = () => {
   const dispatchLotsLoading = useStore(s => s.dispatchLotsLoading);
   const dispatchRecenterCamera = useStore(s => s.dispatchRecenterCamera);
   const dispatchReorientCamera = useStore(s => s.dispatchReorientCamera);
-  const dispatchGoToHighAltitude = useStore(s => s.dispatchGoToHighAltitude);
   const updateZoomStatus = useStore(s => s.dispatchZoomStatusChanged);
   const setZoomedFrom = useStore(s => s.dispatchAsteroidZoomedFrom);
   const dispatchLotSelected = useStore(s => s.dispatchLotSelected);
@@ -184,6 +183,7 @@ const AsteroidComponent = () => {
   const [prevAsteroidPosition, setPrevAsteroidPosition] = useState();
   const [zoomedIntoAsteroidId, setZoomedIntoAsteroidId] = useState();
 
+  const automatingCamera = useRef();
   const asteroidOrbit = useRef();
   const asteroidId = useRef();
   const darkLight = useRef();
@@ -524,6 +524,7 @@ const AsteroidComponent = () => {
         asteroidZoomVisual.pointOpacity = trackAsteroid ? 0 : 1;
         // Install destination settings before a controls update can clamp the camera.
         onComplete();
+        setCameraAutomationVersion((v) => v + 1);
         controls.enabled = wasEnabled;
       }
     });
@@ -600,10 +601,10 @@ const AsteroidComponent = () => {
     setZoomedIntoAsteroidId(asteroidId.current);
     setPrevAsteroidPosition();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ shouldFinishZoomIn, INITIAL_ZOOM ]);
+  }, [ shouldFinishZoomIn, INITIAL_ZOOM, !initialOrientation ]);
 
   // Handle zooming back out
-  const shouldZoomOut = zoomStatus === 'zooming-out' && zoomedFrom && controls;
+  const shouldZoomOut = zoomStatus === 'zooming-out' && zoomedFrom && controls && config?.radius;
   useEffect(() => {
     if (!shouldZoomOut || !config || !group.current) return;
 
@@ -803,29 +804,12 @@ const AsteroidComponent = () => {
     }
   }, [cameraNeedsRecenter]);
 
-  useEffect(() => {
-    if (cameraNeedsHighAltitude && config?.radius && zoomStatus === 'in' && !automatingCamera.current) {
-      const newPosition = new Vector3(...controls.object.position);
-      newPosition.setLength(config.radius * 1.5);
+  useHighAltitudeCamera({
+    controls, radius: config?.radius, zoomStatus, automatingCamera,
+    cameraAutomationVersion, setCameraAutomationVersion, setCameraAltitude
+  });
 
-      automatingCamera.current = true;
-      gsap.timeline({
-        defaults: {
-          duration: 0.75,
-          ease: 'power1.out' // power>1.out seems to have bounce artifact for short trips
-        },
-        onComplete: () => {
-          setCameraAltitude(newPosition.length() - config.radius);
-          automatingCamera.current = false;
-          setCameraAutomationVersion((v) => v + 1);
-          dispatchGoToHighAltitude(false);
-        }
-      })
-      .to(controls.object.position, { ...newPosition });
-    }
-  }, [cameraNeedsHighAltitude]);
-
-  const automatingCamera = useRef();
+  const dispatchLotCameraSettled = useStore(s => s.dispatchLotCameraSettled);
   const selectedLotTween = useRef();
   useEffect(() => {
     if (selectedLot?.lotIndex > 0 && zoomedIntoAsteroidId === selectedLot?.asteroidId && config?.radiusNominal && zoomStatus === 'in') {
@@ -892,7 +876,9 @@ const AsteroidComponent = () => {
       // console.log('arcLength', arcLength, animationTime);
 
       const onZoomComplete = () => {
+        dispatchLotCameraSettled(lotId);
         if (closestChunk) {
+          controls.minDistance = getMinDistance(closestChunk);
           setCameraAltitude(controls.object.position.length() - closestChunk.sphereCenterHeight);
         }
         selectedLotTween.current = null;
@@ -927,6 +913,9 @@ const AsteroidComponent = () => {
         }
       }
 
+      // The overview or departure terrain limit must not clamp the final descent.
+      controls.minDistance = Math.min(controls.minDistance, currentCameraHeight, lotPosition.length());
+
       const samplePath = createLotCameraPath({
         start: controls.object.position,
         end: lotPosition,
@@ -944,14 +933,19 @@ const AsteroidComponent = () => {
         onUpdate: () => samplePath(travel.progress, controls.object.position),
         onComplete: onZoomComplete
       });
+      return () => {
+        selectedLotTween.current?.kill();
+        selectedLotTween.current = null;
+        automatingCamera.current = false;
+      };
     }
   }, [cameraRecenterTimestamp, zoomedIntoAsteroidId, origin, selectedLot, config?.radiusNominal, zoomStatus]);
 
   useEffect(() => {
-    if (!cameraNeedsReorientation || zoomStatus !== 'in') return;
+    if (!cameraNeedsReorientation || zoomStatus !== 'in' || !controls || !rotationAxis.current || automatingCamera.current) return;
     dispatchReorientCamera();
     gsap.timeline().to(controls.object.up, { ...rotationAxis.current.clone(), ease: 'slow.out' });
-  }, [cameraNeedsReorientation]);
+  }, [cameraNeedsReorientation, zoomStatus, controls, config?.radius, cameraAutomationVersion]);
 
   // Positions the asteroid in space based on time changes
   useFrame((state) => {
@@ -1207,17 +1201,20 @@ const AsteroidComponent = () => {
       <group ref={quadtreeRef} />
 
       {config && terrainInitialized && zoomStatus === 'in' && (
-        <Lots
-          attachTo={quadtreeRef.current}
-          asteroidId={asteroidId.current}
-          axis={rotationAxis.current}
-          cameraAltitude={cameraAltitude}
-          cameraAutomationVersion={cameraAutomationVersion}
-          cameraNormalized={cameraNormalized}
-          config={config}
-          getCameraIsAnimating={() => automatingCamera.current}
-          getRotation={() => rotation.current}
-          getLockToSurface={() => lockToSurface.current} />
+        // Lot textures load on arrival; keep their suspension from hiding the terrain.
+        <Suspense fallback={null}>
+          <Lots
+            attachTo={quadtreeRef.current}
+            asteroidId={asteroidId.current}
+            axis={rotationAxis.current}
+            cameraAltitude={cameraAltitude}
+            cameraAutomationVersion={cameraAutomationVersion}
+            cameraNormalized={cameraNormalized}
+            config={config}
+            getCameraIsAnimating={() => automatingCamera.current}
+            getRotation={() => rotation.current}
+            getLockToSurface={() => lockToSurface.current} />
+        </Suspense>
       )}
 
       {/* TODO: fade telemetry out at higher zooms */}

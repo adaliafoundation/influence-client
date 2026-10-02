@@ -1,6 +1,8 @@
+import { errorMessages } from '../../lib/errorMessages';
 import { useCallback, useMemo, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { formatUnits } from 'viem';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from 'wagmi';
 
 import AsteroidsHeroImage from '~/assets/images/sales/asteroids_hero.png';
@@ -20,7 +22,12 @@ import {
   SwayIcon,
   WalletIcon,
 } from '~/components/Icons';
-import { bridgeAssetTypes, getBridgeAssetConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { bridgeNetwork, bridgeAssetTypes, getBridgeAssetConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { getPendingSwayAmounts, getSwayCrossingKey } from '~/bridge/sway';
+import { sameBridgeAddress } from '~/bridge/transfers';
+import { MAX_BRIDGE_ASSETS, getBridgeBatchError } from '~/bridge/limits';
+import BridgeAssetAction from '~/game/launcher/components/BridgeAssetAction';
+import BridgeCrewDelegationDialog from '~/game/launcher/components/BridgeCrewDelegationDialog';
 import LauncherDialog from '~/game/launcher/components/LauncherDialog';
 import useBridgeActions from '~/hooks/useBridgeActions';
 import useBridgeAssets, { useBridgeSway } from '~/hooks/useBridgeAssets';
@@ -456,15 +463,29 @@ const Balance = styled.div`
   margin: 0 14px 24px;
 `;
 
+const BalancePending = styled.div`
+  color: ${p => p.$incoming ? p.theme.colors.main : '#aaa'};
+  font-size: 14px;
+  margin: -12px 14px 20px;
+`;
+
+const PendingSway = ({ incoming, outgoing }) => (
+  <div aria-live="polite">
+    {outgoing > 0n && <BalancePending>−{formatSwayBalance(formatUnits(outgoing, 6))} SWAY bridging out</BalancePending>}
+    {incoming > 0n && <BalancePending $incoming>+{formatSwayBalance(formatUnits(incoming, 6))} SWAY incoming</BalancePending>}
+  </div>
+);
+
+const SubmissionStatus = styled.div`
+  color: ${p => p.theme.colors.main};
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 12px 14px 0;
+`;
+
 const BalanceLabel = styled.div`
   color: #888;
   margin: 28px 14px 6px;
-`;
-
-const BalancePending = styled.div`
-  color: ${p => p.amount > 0 ? p.theme.colors.success : p.theme.colors.error};
-  font-size: 13px;
-  margin: -18px 14px 24px;
 `;
 
 const Input = styled.input`
@@ -497,21 +518,6 @@ const getSwayAmountValue = (amount) => {
   return Number(amount || 0);
 };
 
-const getSwayCrossingBaseKey = (item) => (
-  item.id || item.txHash || `${item.amount}:${item.fromAddress}:${item.toAddress || item.recipient}`
-);
-
-const getSwayCrossingKey = (item) => {
-  const baseKey = getSwayCrossingBaseKey(item);
-  if (item.readyIndex != null) return `${baseKey}:ready:${item.readyIndex}`;
-  if (item.pendingIndex != null) return `${baseKey}:pending:${item.pendingIndex}`;
-  return baseKey;
-};
-
-const isSameAddress = (left, right) => (
-  !!left && !!right && `${left}`.toLowerCase() === `${right}`.toLowerCase()
-);
-
 const expandReadySwayItems = (items) => (
   items.flatMap((item) => (
     Array.from({ length: Math.max(1, Number(item.readyCount || 1)) }, (_, readyIndex) => ({
@@ -529,23 +535,6 @@ const expandPendingSwayItems = (items) => (
       pendingIndex
     }))
   ))
-);
-
-const getPendingSwayAmounts = (crossings) => (
-  (crossings || []).reduce((acc, crossing) => {
-    if (!crossing.txHash || ['complete', 'failed'].includes(crossing.status)) return acc;
-    const amount = getSwayAmountValue(crossing.amount);
-    if (!Number.isFinite(amount) || amount <= 0) return acc;
-
-    if (crossing.direction === 'l1_to_l2') {
-      acc.ethereum -= amount;
-      acc.starknet += amount;
-    } else if (crossing.direction === 'l2_to_l1') {
-      acc.ethereum += amount;
-      acc.starknet -= amount;
-    }
-    return acc;
-  }, { ethereum: 0, starknet: 0 })
 );
 
 const getAssetName = (asset, fallbackLabel) => {
@@ -638,7 +627,7 @@ const ChainAssetColumn = ({
   assetType,
   canAct,
   chain,
-  extraAction,
+  renderAssetAction,
   icon,
   isLoading,
   onAction,
@@ -697,8 +686,9 @@ const ChainAssetColumn = ({
   ), [rows, selected]);
 
   const mode = selectedRows[0]?.kind;
-  const actionDisabled = !canAct || selectedRows.length === 0;
-  const renderedExtraAction = typeof extraAction === 'function' ? extraAction(selectedRows) : extraAction;
+  const batchError = mode === 'asset' ? getBridgeBatchError(selectedRows.length) : null;
+  const actionDisabled = !canAct || selectedRows.length === 0 || !!batchError;
+  const selectionLabel = `${selectedRows.length} selected${mode === 'progress' ? '' : ` (max ${MAX_BRIDGE_ASSETS})`}`;
 
   const toggleRow = useCallback((row) => {
     if (row.kind === 'progress' && !row.canConfirm) return;
@@ -706,10 +696,13 @@ const ChainAssetColumn = ({
     setSelected((current) => {
       const next = mode && mode !== row.kind ? {} : { ...current };
       if (next[key]) delete next[key];
-      else next[key] = true;
+      else {
+        if (row.kind === 'asset' && rows.filter((item) => next[getItemKey(item)]).length >= MAX_BRIDGE_ASSETS) return current;
+        next[key] = true;
+      }
       return next;
     });
-  }, [mode]);
+  }, [mode, rows]);
 
   const handleAction = useCallback(async () => {
     if (actionDisabled) return;
@@ -740,15 +733,13 @@ const ChainAssetColumn = ({
           <>
             <ControlButtons>
               {actionButton}
-              {renderedExtraAction}
             </ControlButtons>
-            <span>{selectedRows.length} selected</span>
+            <span>{selectionLabel}</span>
           </>
         ) : (
           <>
-            <span>{selectedRows.length} selected</span>
+            <span>{selectionLabel}</span>
             <ControlButtons>
-              {renderedExtraAction}
               {actionButton}
             </ControlButtons>
           </>
@@ -761,8 +752,10 @@ const ChainAssetColumn = ({
           const key = getItemKey(row);
           const progressKey = row.kind === 'progress' ? getProgressItemKey(row) : null;
           const pending = !!progressKey && pendingProgressKeys.includes(progressKey);
-          const selectable = row.kind === 'asset' || (row.canConfirm && !pending);
           const checked = !!selected[key];
+          const selectable = row.kind === 'asset'
+            ? checked || mode !== 'asset' || selectedRows.length < MAX_BRIDGE_ASSETS
+            : row.canConfirm && !pending;
           return (
             <AssetRow
               key={key}
@@ -778,6 +771,7 @@ const ChainAssetColumn = ({
                 <AssetName>{row.label}</AssetName>
                 <AssetMeta>{row.meta}</AssetMeta>
               </div>
+              {row.kind === 'asset' && renderAssetAction?.(row.asset)}
               {row.kind === 'progress' && (
                 <Status ready={row.canConfirm && !pending}>
                   {row.canConfirm && !pending ? 'Ready' : 'In progress'}
@@ -792,12 +786,14 @@ const ChainAssetColumn = ({
 };
 
 const AssetPane = ({ assetType }) => {
+  const queryClient = useQueryClient();
   const { address: ethereumAddress } = useAccount();
   const { accountAddress: starknetAddress, login } = useSession();
-  const { bridgeAssetsToEthereum, bridgeAssetsToStarknet, busyKey, mintCrewFromAsteroid, receiveAssetsOnEthereum } = useBridgeActions();
+  const { bridgeAssetsToEthereum, bridgeAssetsToStarknet, busyKey, claimedAsteroidIds, mintCrewFromAsteroid, receiveAssetsOnEthereum } = useBridgeActions();
   const { config, ethereumAssets, progressItems, starknetAssets } = useBridgeAssets(assetType);
   const [finalizedProgressKeys, setFinalizedProgressKeys] = useState([]);
   const [processingProgressKeys, setProcessingProgressKeys] = useState([]);
+  const [delegation, setDelegation] = useState(null);
 
   const configured = isBridgeAssetConfigured(assetType);
   const ethereumAssetIds = useMemo(() => (
@@ -815,7 +811,8 @@ const AssetPane = ({ assetType }) => {
   ]), [finalizedProgressKeys, processingProgressKeys]);
 
   const finalizeProgressRows = useCallback(async (rows) => {
-    const progressRows = rows.filter((row) => row.kind === 'progress');
+    const progressRows = [...new Map(rows.filter((row) => row.kind === 'progress')
+      .map((row) => [getProgressItemKey(row), row])).values()];
     if (progressRows.length > 0) {
       const finalizedKeys = [];
       const results = [];
@@ -854,16 +851,29 @@ const AssetPane = ({ assetType }) => {
     return bridgeAssetsToEthereum({ assetType, assets: rows.map((row) => row.asset) });
   }, [assetType, bridgeAssetsToEthereum, finalizeProgressRows]);
 
-  const renderMintCrewAction = useCallback((selectedRows) => {
-    const mintableRows = selectedRows.filter((row) => row.asset?.AsteroidReward?.hasMintableCrewmate);
+  const onDelegated = useCallback((crewId, address) => {
+    const queryKey = ['bridgeAssets', 'crews', 'starknet', starknetAddress, bridgeNetwork];
+    queryClient.setQueryData(queryKey, (assets) => assets?.map((asset) => (
+      Number(asset.id) === Number(crewId)
+        ? { ...asset, Crew: { ...asset.Crew, delegatedTo: address } }
+        : asset
+    )));
+    queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, starknetAddress]);
+
+  const renderAssetAction = (chain) => (asset) => {
+    if (assetType === 'asteroids' && claimedAsteroidIds.includes(Number(asset.id))) return null;
     return (
-      <Button
-        disabled={mintableRows.length === 0 || !!busyKey}
-        onClick={() => Promise.all(mintableRows.map((row) => mintCrewFromAsteroid(row.asset.id)))}>
-        Mint Crew{mintableRows.length > 0 ? ` (${mintableRows.length})` : ''}
-      </Button>
+      <BridgeAssetAction
+        asset={asset}
+        assetType={assetType}
+        chain={chain}
+        accountAddress={starknetAddress}
+        disabled={!!busyKey || !!delegation}
+        onMint={mintCrewFromAsteroid}
+        onDelegate={(crew, revoke) => setDelegation({ crew, revoke })} />
     );
-  }, [busyKey, mintCrewFromAsteroid]);
+  };
 
   return (
     <Pane>
@@ -875,8 +885,8 @@ const AssetPane = ({ assetType }) => {
             <Title>{config.label}</Title>
             <Subtitle>
               {configured
-                ? 'Select assets from one chain and bridge them to the other.'
-                : 'This bridge is not configured for the current deployment.'}
+                ? `Select up to ${MAX_BRIDGE_ASSETS} assets per transaction to stay within bridge gas limits.`
+                : errorMessages.serviceUnavailable}
             </Subtitle>
           </div>
         </Header>
@@ -888,7 +898,7 @@ const AssetPane = ({ assetType }) => {
             assetType={assetType}
             canAct={!busyKey}
             chain="ethereum"
-            extraAction={assetType === 'asteroids' ? renderMintCrewAction : null}
+            renderAssetAction={renderAssetAction('ethereum')}
             icon={<EthIcon />}
             isLoading={ethereumAssets.isLoading}
             onAction={bridgeFromEthereum}
@@ -903,6 +913,7 @@ const AssetPane = ({ assetType }) => {
             assetType={assetType}
             canAct={!!starknetAddress && !busyKey}
             chain="starknet"
+            renderAssetAction={renderAssetAction('starknet')}
             icon={<ChainImageIcon alt="" src={StarknetIconImage} />}
             isLoading={starknetAssets.isLoading}
             onAction={bridgeFromStarknet}
@@ -916,6 +927,14 @@ const AssetPane = ({ assetType }) => {
           </ColumnFooter>
         )}
       </PaneContent>
+      {delegation && (
+        <BridgeCrewDelegationDialog
+          crew={delegation.crew}
+          revoke={delegation.revoke}
+          ownerAddress={starknetAddress}
+          onDelegated={onDelegated}
+          onClose={() => setDelegation(null)} />
+      )}
     </Pane>
   );
 };
@@ -923,7 +942,7 @@ const AssetPane = ({ assetType }) => {
 const SwayPane = () => {
   const { address: ethereumAddress } = useAccount();
   const { accountAddress: starknetAddress, login } = useSession();
-  const { bridgeSwayToEthereum, bridgeSwayToStarknet, busyKey, receiveSwayOnEthereum } = useBridgeActions();
+  const { bridgeSwayToEthereum, bridgeSwayToStarknet, busyKey, swayDepositStatus, receiveSwayOnEthereum } = useBridgeActions();
   const { ethereumSway, starknetSway, swayCrossings } = useBridgeSway();
   const [ethereumAmount, setEthereumAmount] = useState('');
   const [finalizedSwayIds, setFinalizedSwayIds] = useState([]);
@@ -935,21 +954,21 @@ const SwayPane = () => {
     ? formatUnits(ethereumSway.data.value, ethereumSway.data.decimals)
     : '0';
   const l2Balance = starknetSway.data ? formatUnits(BigInt(starknetSway.data), 6) : '0';
-  const pendingSway = useMemo(() => getPendingSwayAmounts(swayCrossings), [swayCrossings]);
-  const displayedL1Balance = Math.max(0, Number(l1Balance || 0) + pendingSway.ethereum);
-  const displayedL2Balance = Math.max(0, Number(l2Balance || 0) + pendingSway.starknet);
   const readySwayItems = useMemo(() => (
     expandReadySwayItems(swayCrossings.filter((item) => (
       item.canConfirm
-      && isSameAddress(item.recipient || item.toAddress, ethereumAddress)
+      && sameBridgeAddress(item.recipient || item.toAddress, ethereumAddress)
     ))).filter((item) => !finalizedSwayIds.includes(getSwayCrossingKey(item)))
   ), [ethereumAddress, finalizedSwayIds, swayCrossings]);
   const pendingSwayItems = useMemo(() => (
     expandPendingSwayItems(swayCrossings.filter((item) => (
       Number(item.pendingCount || 0) > 0
-      && isSameAddress(item.recipient || item.toAddress, ethereumAddress)
+      && sameBridgeAddress(item.recipient || item.toAddress, ethereumAddress)
     )))
   ), [ethereumAddress, swayCrossings]);
+  const pendingSway = useMemo(() => getPendingSwayAmounts(
+    swayCrossings, ethereumAddress, starknetAddress, finalizedSwayIds
+  ), [swayCrossings, ethereumAddress, starknetAddress, finalizedSwayIds]);
   const selectedReadySwayItems = useMemo(() => (
     readySwayItems.filter((item) => selectedSway[getSwayCrossingKey(item)])
   ), [readySwayItems, selectedSway]);
@@ -1009,16 +1028,13 @@ const SwayPane = () => {
                 disabled={!ethereumAmount || !!busyKey}
                 onClick={() => bridgeSwayToStarknet(ethereumAmount)}
                 primary>
-                Bridge to Starknet
+                {busyKey === 'sway-l1' ? 'Processing…' : 'Bridge to Starknet'}
               </Button>
             </ColumnControls>
             <BalanceLabel>SWAY Balance</BalanceLabel>
-            <Balance>{formatSwayBalance(displayedL1Balance)}</Balance>
-            {pendingSway.ethereum !== 0 && (
-              <BalancePending amount={pendingSway.ethereum}>
-                {pendingSway.ethereum > 0 ? '+' : '-'}{formatSwayBalance(Math.abs(pendingSway.ethereum))} pending
-              </BalancePending>
-            )}
+            <Balance>{formatSwayBalance(l1Balance)}</Balance>
+            <PendingSway {...pendingSway.ethereum} />
+            {swayDepositStatus && <SubmissionStatus role="status" aria-live="polite">{swayDepositStatus}</SubmissionStatus>}
             <RowList>
               {[...readySwayItems, ...pendingSwayItems].map((item) => {
                 const key = getSwayCrossingKey(item);
@@ -1074,12 +1090,8 @@ const SwayPane = () => {
               </Button>
             </ColumnControls>
             <BalanceLabel>SWAY Balance</BalanceLabel>
-            <Balance>{formatSwayBalance(displayedL2Balance)}</Balance>
-            {pendingSway.starknet !== 0 && (
-              <BalancePending amount={pendingSway.starknet}>
-                {pendingSway.starknet > 0 ? '+' : '-'}{formatSwayBalance(Math.abs(pendingSway.starknet))} pending
-              </BalancePending>
-            )}
+            <Balance>{formatSwayBalance(l2Balance)}</Balance>
+            <PendingSway {...pendingSway.starknet} />
             {!starknetAddress && (
               <ColumnFooter>
                 <Button onClick={login}>Connect Starknet Wallet</Button>
@@ -1093,10 +1105,12 @@ const SwayPane = () => {
 };
 
 const BridgePane = ({ assetType }) => {
-  const { isConnected } = useAccount();
+  const { address: ethereumAddress, isConnected } = useAccount();
+  const { accountAddress: starknetAddress } = useSession();
+  const walletKey = `${ethereumAddress}:${starknetAddress}`;
   if (!isConnected) return <ConnectEthereum />;
-  if (assetType === 'sway') return <SwayPane />;
-  return <AssetPane assetType={assetType} />;
+  if (assetType === 'sway') return <SwayPane key={walletKey} />;
+  return <AssetPane key={`${assetType}:${walletKey}`} assetType={assetType} />;
 };
 
 const panes = [

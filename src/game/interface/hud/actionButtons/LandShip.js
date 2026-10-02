@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Asteroid, Dock, Permission, Ship } from '@influenceth/sdk';
+import { Asteroid, Dock, Ship } from '@influenceth/sdk';
 
 import { LandShipIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -11,7 +11,6 @@ import ActionButton, { getCrewDisabledReason } from './ActionButton';
 
 const isVisible = ({ asteroid, crew, crewedShip, lot }) => {
   if (!crew || !crewedShip || !asteroid) return false;
-  if (crewedShip.Control?.controller?.id !== crew.id) return false;  // not the designated flight crew
   if (crewedShip._location?.asteroidId !== asteroid.id) return false; // not at asteroid
   if (crewedShip._location?.lotId) return false; // on surface already
   if (lot?.building && !lot?.building?.Dock) return false;
@@ -19,7 +18,7 @@ const isVisible = ({ asteroid, crew, crewedShip, lot }) => {
 };
 
 const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
   const { currentDockingAction } = useShipDockingManager(crew?._location?.shipId);
   const { data: crewedShip } = useShip(crew?._location?.shipId)
   const ready = useReadyAtWatcher(crewedShip?.Ship?.readyAt);
@@ -39,7 +38,8 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
     if (!crewedShip) return 'ship is not crewed';
     if (!ready) return 'ship is not ready'; // in flight or stuck in port traffic
     if (asteroid?.Celestial?.scanStatus < Asteroid.SCAN_STATUSES.RESOURCE_SCANNED) return 'asteroid un-scanned';
-    let permChecks = {};
+    const control = authorize('controls', [crew, crewedShip], [crew, crewedShip]);
+    if (control.status !== 'allowed') return control.status === 'denied' ? 'access restricted' : 'checking permissions';
 
     // if no lot selected, can select from dialog
     if (lot) {
@@ -49,7 +49,8 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
         if (!Ship.TYPES[crewedShip.Ship.shipType]?.docking) return 'ship type cannot dock';
         if (!lot?.building?.Dock) return 'building has no dock';
         if (lot.building.Dock.dockedShips >= Dock.TYPES[lot.building.Dock.dockType].cap) return 'dock is full';
-        permChecks = { permission: Permission.IDS.DOCK_SHIP, permissionTarget: lot.building };
+        const access = authorize('spaceportProtection', [crew, crewedShip, lot.building], [crew, crewedShip, lot.building]);
+        if (access.status !== 'allowed') return access.status === 'denied' ? 'docking access restricted' : 'checking docking permission';
 
       // trying to land
       } else {
@@ -58,8 +59,8 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
       }
     }
     if (crewedShip.Ship.emergencyAt > 0) return 'in emergency mode';
-    return getCrewDisabledReason({ asteroid, crew, requireSurface: false, ...permChecks });
-  }, [_disabled, asteroid, crewedShip, lot, ready]);
+    return getCrewDisabledReason({ asteroid, crew, requireSurface: false });
+  }, [_disabled, asteroid, crewedShip, lot, ready, authorize, crew]);
 
   return (
     <ActionButton

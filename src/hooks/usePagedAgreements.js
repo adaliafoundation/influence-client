@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import get from 'lodash/get';
 import { Entity, Lot } from '@influenceth/sdk';
@@ -73,7 +74,7 @@ const usePagedAgreements = (params) => {
         if (filters.role) {
           if (!(
             (filters.role.includes('lessor') && a.Control?.controller?.id === crew?.id)
-            || (filters.role.includes('lessee') && ((a._agreement.permitted?.id === crew?.id) || (crew?.Crew?.delegatedTo && a._agreement.permitted === crew.Crew.delegatedTo)))
+            || (filters.role.includes('lessee') && matchesCrewPermissionSubject(a._agreement.permitted, crew))
           )) return false;
         }
         if (filters.timing) {

@@ -790,6 +790,14 @@
       "family": "stories",
       "storageKey": "assets/client-media/stories/always-leave-a-note/1.jpg"
     },
+    "stories/begin-extraction/1.png": {
+      "key": "stories/begin-extraction/1.png",
+      "path": "stories/begin-extraction/1.png",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/begin-extraction/1.png"
+    },
     "stories/close-the-production-loop/1.jpg": {
       "key": "stories/close-the-production-loop/1.jpg",
       "path": "stories/close-the-production-loop/1.jpg",
@@ -870,6 +878,14 @@
       "family": "stories",
       "storageKey": "assets/client-media/stories/landfall/1.jpg"
     },
+    "stories/manufacture-goods/1.png": {
+      "key": "stories/manufacture-goods/1.png",
+      "path": "stories/manufacture-goods/1.png",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/manufacture-goods/1.png"
+    },
     "stories/no-sound-in-space/1.jpg": {
       "key": "stories/no-sound-in-space/1.jpg",
       "path": "stories/no-sound-in-space/1.jpg",
@@ -877,6 +893,14 @@
       "kind": "story-image",
       "family": "stories",
       "storageKey": "assets/client-media/stories/no-sound-in-space/1.jpg"
+    },
+    "stories/prospect-the-surface/1.png": {
+      "key": "stories/prospect-the-surface/1.png",
+      "path": "stories/prospect-the-surface/1.png",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/prospect-the-surface/1.png"
     },
     "stories/stardust/1.jpg": {
       "key": "stories/stardust/1.jpg",

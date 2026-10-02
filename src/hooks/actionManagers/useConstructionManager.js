@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { Asteroid, Building, Entity, Lot } from '@influenceth/sdk';
 
@@ -12,10 +13,11 @@ import useAsteroid from '~/hooks/useAsteroid';
 import actionStage from '~/lib/actionStages';
 
 const useConstructionManager = (lotId, missionId) => {
+  const reportBlocked = useFailureReporter();
   const execute = useStarterMissionExecution(missionId);
   const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
   const blockTime = useBlockTime();
-  const { accountCrewIds, crew } = useCrewContext();
+  const { crewControls, crew } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { eligibility: planningEligibility, recheck } = usePlanningEligibility(lot);
 
@@ -101,7 +103,7 @@ const useConstructionManager = (lotId, missionId) => {
             stages.plan = actionStage.COMPLETING;
 
           // if at risk, but i was the occupier, still treat as "planned" (will go back to "ready to plan" for other crews)
-          } else if (accountCrewIds?.includes(lot.building?.Control?.controller?.id)) {
+          } else if (crewControls(lot.building)) {
             status = 'PLANNED';
             stages.plan = actionStage.COMPLETED;
           }
@@ -144,13 +146,13 @@ const useConstructionManager = (lotId, missionId) => {
       isAtRisk,
       stages
     ];
-  }, [accountCrewIds, actionItems, asteroid, blockTime, getPendingTx, getStatus, payload, planPayload, lot?.building]);
+  }, [crewControls, actionItems, asteroid, blockTime, getPendingTx, getStatus, payload, planPayload, lot?.building]);
 
   const txMeta = useMemo(() => ({ asteroidId, lotId }), [asteroidId, lotId]);
 
   const planConstruction = useCallback(async (buildingType) => {
     const eligibility = await recheck({ lotId, crewId: planPayload.caller_crew.id });
-    if (eligibility.status !== 'allowed') return eligibility;
+    if (eligibility.status !== 'allowed') return reportBlocked(eligibility);
     return execute(
       'ConstructionPlan',
       {
@@ -158,10 +160,10 @@ const useConstructionManager = (lotId, missionId) => {
         ...planPayload
       }
     )
-  }, [execute, lotId, planPayload, recheck]);
+  }, [reportBlocked, execute, lotId, planPayload, recheck]);
 
   const unplanConstruction = useCallback(() => {
-    execute(
+    return execute(
       'ConstructionAbandon',
       payload,
       { ...txMeta, buildingType: lot?.building?.Building?.buildingType }
@@ -169,15 +171,15 @@ const useConstructionManager = (lotId, missionId) => {
   }, [execute, payload]);
 
   const startConstruction = useCallback(() => {
-    execute('ConstructionStart', payload, txMeta)
+    return execute('ConstructionStart', payload, txMeta)
   }, [execute, payload]);
 
   const finishConstruction = useCallback(() => {
-    execute('ConstructionFinish', payload, txMeta)
+    return execute('ConstructionFinish', payload, txMeta)
   }, [execute, payload]);
 
   const deconstruct = useCallback(() => {
-    execute(
+    return execute(
       'ConstructionDeconstruct',
       payload,
       { ...txMeta, buildingType: lot?.building?.Building?.buildingType }

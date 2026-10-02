@@ -1,3 +1,4 @@
+import { isExpired } from 'react-jwt';
 import { act, render } from '@testing-library/react';
 import { useContext } from 'react';
 import SessionContext, { SessionProvider } from './SessionContext';
@@ -8,8 +9,8 @@ import { createWalletSession } from '~/lib/walletSessions';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 
-jest.mock('starknet', () => ({ RpcProvider: jest.fn(), PaymasterRpc: jest.fn(), WalletAccount: { connect: jest.fn() } }));
-jest.mock('react-jwt', () => ({ isExpired: () => true }));
+jest.mock('starknet', () => ({ RpcProvider: jest.fn(), PaymasterRpc: jest.fn(), WalletAccount: jest.fn() }));
+jest.mock('react-jwt', () => ({ isExpired: jest.fn(() => true) }));
 jest.mock('~/lib/authFlow', () => jest.requireActual('../lib/authFlow'), { virtual: true });
 jest.mock('@influenceth/sdk', () => ({ Address: { toStandard: (value) => value } }));
 jest.mock('@tanstack/react-query', () => {
@@ -61,6 +62,7 @@ function Probe() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  isExpired.mockReturnValue(true);
   jest.useFakeTimers();
   state = {
     currentSession: {}, gameplay: {}, sessions: {},
@@ -74,7 +76,7 @@ beforeEach(() => {
   RpcProvider.mockImplementation(() => provider);
   connector = { id: 'controller', wallet: { id: 'controller' }, connect: jest.fn() };
   createWalletConnectors.mockReturnValue({ controller: connector });
-  WalletAccount.connect.mockResolvedValue({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) });
+  WalletAccount.mockImplementation(() => ({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) }));
   walletSession = { supported: jest.fn().mockResolvedValue(false), prepare: jest.fn(), ready: false };
   createWalletSession.mockReturnValue(walletSession);
 });
@@ -98,7 +100,7 @@ test.each(['resolve', 'reject'])('cancels connecting and ignores a late %s after
   expect(session.authPhase).toBe(AUTH_PHASES.CONNECTING_WALLET);
   expect(session.loginPrompt.busy).toBe(true);
   expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
-  expect(WalletAccount.connect).not.toHaveBeenCalled();
+  expect(WalletAccount).not.toHaveBeenCalled();
 });
 
 test('cancels verification without continuing authentication when the RPC returns', async () => {
@@ -224,4 +226,131 @@ test('closing a store login does not redirect a later login back to the store', 
 
   expect(state.dispatchSessionStarted).toHaveBeenCalled();
   expect(state.dispatchLauncherPage).toHaveBeenCalledTimes(1);
+});
+
+
+test('uses the account approved by the connector without a second connection request', async () => {
+  connector.wallet.request = jest.fn();
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  provider.getClassAt.mockReturnValue(new Promise(() => {}));
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(WalletAccount).toHaveBeenCalledWith({
+    provider, walletProvider: connector.wallet, address: '0x123', paymaster: undefined
+  });
+  expect(connector.wallet.request).not.toHaveBeenCalled();
+  expect(session.walletAccount.address).toBe('0x123');
+});
+
+test('retains the approved account when the extension repeats it during authentication', async () => {
+  let onAccountChange;
+  const account = {
+    address: '0x123',
+    onAccountChange: (callback) => { onAccountChange = callback; },
+    off: jest.fn()
+  };
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA', walletAccount: account });
+  provider.getClassAt.mockReturnValue(new Promise(() => {}));
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  act(() => onAccountChange(['0x123']));
+  expect(session.walletAccount).toBe(account);
+  expect(state.dispatchSessionEnded).not.toHaveBeenCalled();
+  act(() => onAccountChange([]));
+  expect(session.walletAccount).toBeUndefined();
+});
+
+
+test('returns the connection failure so a pending action does not wait for another timeout', async () => {
+  const error = new Error('Connection rejected');
+  connector.connect.mockRejectedValue(error);
+  render(<SessionProvider><Probe /></SessionProvider>);
+  let result;
+  await act(async () => { result = await session.login({ controller: true }); });
+  expect(result).toEqual({ error });
+  expect(session.loginPrompt.busy).toBe(false);
+});
+
+const renderAuthenticatedSession = () => {
+  isExpired.mockReturnValue(false);
+  state.currentSession = { token: 'valid', walletId: 'controller', accountAddress: '0x123', isDeployed: true };
+  state.sessions = { '0x123': state.currentSession };
+  return render(<SessionProvider><Probe /></SessionProvider>);
+};
+
+test('restores a logged-in wallet silently after an unavailable attempt without logging in again', async () => {
+  connector.connect.mockResolvedValue({});
+  renderAuthenticatedSession();
+  let unavailable;
+  await act(async () => {
+    unavailable = session.refreshWalletConnection();
+  });
+  await act(async () => { jest.advanceTimersByTime(250); });
+  await act(async () => { jest.advanceTimersByTime(250); });
+  await expect(unavailable).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  expect(session.walletReadyForTransactions).toBe(true);
+  expect(session.walletAccount.address).toBe('0x123');
+  expect(connector.connect.mock.calls.every(([options]) => options.auto === true)).toBe(true);
+  expect(api.requestLogin).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
+});
+
+test.each([
+  { account: '0x456', chainId: 'SN_SEPOLIA' },
+  { account: '0x123', chainId: 'SN_MAIN' }
+])('does not silently restore the wrong account or network: %j', async (connection) => {
+  connector.connect.mockResolvedValue(connection);
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(WalletAccount).not.toHaveBeenCalled();
+  expect(api.requestLogin).not.toHaveBeenCalled();
+});
+
+test('recovers after an extension logout clears the signer and removes its listeners', async () => {
+  const on = jest.fn();
+  const off = jest.fn();
+  WalletAccount.mockImplementation(() => ({ address: '0x123', on, off }));
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  const onAccountsChanged = on.mock.calls.find(([event]) => event === 'accountsChanged')[1];
+
+  act(() => onAccountsChanged([]));
+  expect(session.authenticated).toBe(true);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(off).toHaveBeenCalledWith('accountsChanged', onAccountsChanged);
+
+  // The extension is unlocked externally; it need not emit another event to the app.
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { jest.advanceTimersByTime(200); });
+  await expect(restored).resolves.toBe(true);
+  expect(session.walletReadyForTransactions).toBe(true);
+  expect(api.requestLogin).not.toHaveBeenCalled();
+});
+
+test('ignores a silent restore that completes after logout', async () => {
+  const connection = deferred();
+  connector.connect.mockReturnValue(connection.promise);
+  renderAuthenticatedSession();
+  let restored;
+  await act(async () => { restored = session.refreshWalletConnection(); });
+  await act(async () => { await session.logout(); });
+  await act(async () => { connection.resolve({ account: '0x123', chainId: 'SN_SEPOLIA' }); });
+  await expect(restored).resolves.toBe(false);
+  expect(session.walletReadyForTransactions).toBe(false);
+  expect(WalletAccount).not.toHaveBeenCalled();
 });

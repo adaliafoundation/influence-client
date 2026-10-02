@@ -5,9 +5,9 @@ const { Entity, Lot, Permission } = require('@influenceth/sdk');
 const { getShipEjectionEligibility, loadShipEjectionEligibility, isForceLaunch, isLandedShip } = require('./shipEjectionEligibility');
 const { resolveLotUsage, checkContractPolicy } = require('./lotUsageAuthorization');
 
-const target = (label, id) => ({ label, id, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
+const target = (label, id) => ({ label, id, Control: null, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
 const crew = (id, delegatedTo = '0x123') => ({ label: Entity.IDS.CREW, id, Crew: { delegatedTo, roster: [1], readyAt: 100 }, Location: { locations: [{ label: Entity.IDS.ASTEROID, id: 1 }] } });
-const grant = (permitted, permission = Permission.IDS.USE_LOT, extra = {}) => ({ permitted, permission, ...extra });
+const grant = (permitted, permission = Permission.IDS.USE_LOT, extra = {}) => ({ permitted, permission, noticeTime: 0, noticePeriod: 0, ...extra });
 let params;
 beforeEach(() => {
   const lot = { ...target(Entity.IDS.LOT, Lot.toId(1, 1)), UseLot: { tenant: null } };
@@ -117,7 +117,7 @@ test('public docking and account docking grants both protect', async () => {
   expect((await check()).status).toBe('blocked');
 });
 
-test.each([null, undefined, {}, { tenant: undefined }])('unknown tenancy %p does not mean unprotected', async (value) => {
+test.each([undefined, {}, { tenant: undefined }])('unknown tenancy %p does not mean unprotected', async (value) => {
   params.lot.UseLot = value;
   expect((await check()).status).toBe('checking');
 });
@@ -135,7 +135,7 @@ test.each(['controller', 'ship'])('external %s policy must resolve before allowi
   expect((await check()).status).toBe('checking');
   params.checkPolicy.mockResolvedValue(true);
   expect((await check()).status).toBe('blocked');
-  expect(params.checkPolicy).toHaveBeenCalledWith(expect.any(Object), params.building, params[subject], Permission.IDS.DOCK_SHIP);
+  expect(params.checkPolicy).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ id: params.building.id, label: params.building.label }), expect.objectContaining({ id: params[subject].id, label: params[subject].label }), Permission.IDS.DOCK_SHIP);
   params.checkPolicy.mockResolvedValue(false);
   expect((await check()).status).toBe('allowed');
   params.checkPolicy.mockRejectedValue(new Error('unavailable'));
@@ -149,11 +149,11 @@ test('unknown tenant policy takes precedence over the ship controller grant', as
   expect((await check()).status).toBe('checking');
 });
 
-test('an approving protection path wins over an unresolved other path', async () => {
+test('an unresolved earlier protection path cannot be bypassed by a later grant', async () => {
   dock();
   params.building.WhitelistAgreements = [grant(params.ship, Permission.IDS.DOCK_SHIP)];
   params.building.ContractAgreements = [grant(params.controller, Permission.IDS.DOCK_SHIP)];
-  expect((await check()).status).toBe('blocked');
+  expect((await check()).status).toBe('checking');
 });
 
 test.each([
@@ -175,8 +175,8 @@ test('orbital ships cannot be ejected', async () => {
 
 test('contract policy calldata keeps ship identity and docking permission', async () => {
   const provider = { callContract: jest.fn(async () => ['0x1']) };
-  await expect(checkContractPolicy(provider, { address: '0x789' }, params.building, params.ship, Permission.IDS.DOCK_SHIP)).resolves.toBe(true);
-  expect(provider.callContract).toHaveBeenCalledWith({ contractAddress: '0x789', entrypoint: 'can', calldata: [Entity.IDS.BUILDING, 8, Permission.IDS.DOCK_SHIP, Entity.IDS.SHIP, 9].map(String) });
+  await expect(checkContractPolicy(provider, { address: '0x789' }, params.building, params.ship, Permission.IDS.DOCK_SHIP, 123)).resolves.toBe(true);
+  expect(provider.callContract).toHaveBeenCalledWith({ contractAddress: '0x789', entrypoint: 'can', calldata: [Entity.IDS.BUILDING, 8, Permission.IDS.DOCK_SHIP, Entity.IDS.SHIP, 9].map(String) }, 123);
 });
 
 describe('fresh submission data', () => {

@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../lib/errorMessages';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
 import styled, { css } from 'styled-components';
@@ -385,7 +386,7 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
     const copied = await copyTextToClipboard(crew?.Crew?.delegatedTo);
     createAlert({
       type: 'ClipboardAlert',
-      data: { content: copied ? 'Delegated address copied to clipboard.' : 'Unable to copy delegated address.' },
+      data: { content: copied ? 'Delegated address copied to clipboard.' : errorMessages.copyFailed },
       duration: 3000
     });
   }, [createAlert, crew?.Crew?.delegatedTo]);
@@ -400,7 +401,7 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
     } else {
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'Crew must be stationed in a Habitat to recruit.' },
+        data: { content: errorMessages.recruitHabitat },
         level: 'warning',
         duration: 6000
       })
@@ -418,7 +419,7 @@ const CrewDetails = ({ crewId, crew, isMyCrew, isDelegatedCrew, isOwnedCrew, sel
     } else {
       createAlert({
         type: 'GenericAlert',
-        data: { content: 'You must first enable Direct Messaging on your own inbox.' },
+        data: { content: errorMessages.enableInbox },
         level: 'warning',
         duration: 6000
       });

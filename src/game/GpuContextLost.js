@@ -88,3 +88,11 @@ export const GpuContextLostMessage = () => {
     </GpuContextLostContainer>
   )
 }
+export const SceneLoadingErrorMessage = () => (
+  <GpuContextLostContainer>
+    <h3>Unable to load the scene</h3>
+    <div>Scene generation stopped responding or failed. Reload to return to the belt and try again.</div>
+    <br />
+    <Button onClick={() => window.location.reload()}>Reload</Button>
+  </GpuContextLostContainer>
+);

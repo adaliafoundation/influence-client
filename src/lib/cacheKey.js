@@ -58,6 +58,11 @@ For newly created entities, all values should be in updatedValues since
 they all are changes that could result in the new entity belonging to an
 entities group in the cache.
 
+Asset searches keep their existing Elasticsearch query keys. useAssetSearch also
+attaches normalized searchFilters metadata. Search invalidation compares those
+filters with unchanged newGroupEval facts; changed fields cannot exclude old
+pages that the entity may have left. Unknown criteria remain eligible to refresh.
+
 For this to work properly, we must:
 1) Accurately write the filter on each `entities` cache key to cover all
    possible discriminating keys for whether or not an entity would be included

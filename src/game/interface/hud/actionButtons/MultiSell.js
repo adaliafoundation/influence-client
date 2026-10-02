@@ -9,6 +9,7 @@ import useCrewContext from '~/hooks/useCrewContext';
 const isVisible = ({ crew, lot, ship }) => false;
 
 const MultiSell = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogProps = {}, _disabled, _disabledReason }) => {
+  const { crewAuthorization } = useCrewContext();
   const { pendingTransactions } = useCrewContext();
   const origin = useMemo(() => ship || lot?.surfaceShip || lot?.building, [ship, lot]);
   const pendingAction = useMemo(() => {
@@ -17,7 +18,7 @@ const MultiSell = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogPr
 
   const handleClick = useCallback(() => {
     onSetAction('SELLING_LIST', { origin, ...dialogProps }); // originSlot (if not set, use primary)
-  }, [dialogProps, origin]);
+  }, [crewAuthorization, dialogProps, origin]);
 
   const disabledReason = useMemo(() => {
     if (_disabledReason) return _disabledReason;
@@ -27,10 +28,10 @@ const MultiSell = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogPr
     const hasMass = (origin.Inventories || []).find((i) => i.status === Inventory.STATUSES.AVAILABLE && i.mass > 0);
     if (!hasMass) return 'inventory empty';
 
-    return getCrewDisabledReason({
+    return getCrewDisabledReason({ crewAuthorization,
       asteroid, blockTime, crew, permission: Permission.IDS.REMOVE_PRODUCTS, permissionTarget: origin, requireReady: false
     });
-  }, [asteroid, blockTime, crew, _disabled, _disabledReason, pendingAction]);
+  }, [crewAuthorization, asteroid, blockTime, crew, _disabled, _disabledReason, pendingAction]);
 
   return (
     <ActionButton

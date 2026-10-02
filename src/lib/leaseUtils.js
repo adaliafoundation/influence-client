@@ -1,8 +1,20 @@
-import { Building, Entity, Permission } from '@influenceth/sdk';
+import { Authorization, Building, Entity, Permission } from '@influenceth/sdk';
 
 import { prepaidPermissionEnd } from './lotUsageAuthorization';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
+
+// A lot occupied by the asteroid controller's building cannot be leased.
+// SDK control checks include different crews delegated to the same account.
+export const getLotLeaseEligibility = ({ asteroid, lot, authorize }) => {
+  if (!lot) return { status: 'unresolved' };
+  if (!lot.building) return { status: 'allowed' };
+  const controller = asteroid?.Control?.controller;
+  if (!controller?.id) return { status: 'unresolved' };
+  const control = authorize('controls', [controller, lot.building], [controller, lot.building]);
+  if (control.status === 'unresolved') return control;
+  return { status: control.status === 'allowed' ? 'denied' : 'allowed' };
+};
 
 export const isUseLotLease = (agreement) => Number(agreement?.permission) === Permission.IDS.USE_LOT;
 
@@ -64,13 +76,15 @@ export const isLeaseHolderOrBuildingController = ({ accountCrewIds = [], lot, pr
 
 export const canRestoreExpiredLotLease = ({ crewId, lot, expiredAgreement }) => (
   !!expiredAgreement &&
+  expiredAgreement.noticeTime === 0 &&
+  Authorization.sameEntity(lot?.UseLot?.tenant, expiredAgreement.permitted) &&
   !lot?._activeUseLotAgreement &&
   lot?.building?.Building?.status > Building.CONSTRUCTION_STATUSES.UNPLANNED &&
   isLeaseHolderOrBuildingController({ accountCrewIds: [crewId], lot, previousAgreement: expiredAgreement })
 );
 
 export const canExtendAgreement = ({ agreement, blockTime, isExpiredLeaseRenewal }) => (
-  !!isExpiredLeaseRenewal || !!(agreement?.endTime > blockTime)
+  agreement?.noticeTime === 0 && (!!isExpiredLeaseRenewal || !!(agreement?.endTime > blockTime))
 );
 
 export const getLotLeasePayment = ({ agreement, isExtension, rate, term, now }) => {

@@ -1,14 +1,20 @@
+import { marketQueryTypes, marketSubscriptionsByClient } from '../lib/marketSubscriptions';
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { isEqual, uniq } from 'lodash';
+import { isEqual, uniqBy } from 'lodash';
 import { Address, Entity } from '@influenceth/sdk';
 
 import useSession from '~/hooks/useSession';
+import useBlockSync from '~/hooks/useBlockSync';
+import useMissedBlockRecovery from '../hooks/useMissedBlockRecovery';
+import { recoverGameplayQueries } from '../lib/queryRecovery';
+import { searchAffectedByEntity } from '../lib/searchInvalidation';
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useStore from '~/hooks/useStore';
 import useWebsocket from '~/hooks/useWebsocket';
 import { hydrateActivities } from '~/lib/activities';
+import { safeBigInt } from '~/lib/utils';
 import api from '~/lib/api';
 import useSimulationState from '~/hooks/useSimulationState';
 import { appConfig } from '~/appConfig';
@@ -51,13 +57,16 @@ export function ActivitiesProvider({ children }) {
     gasTokens,
     setBlockNumber,
     setBlockTime,
+    isBlockMissing,
     setIsBlockMissing,
     token,
   } = useSession();
   const { crew, refreshReadyAt } = useCrewContext();
   const simulation = useSimulationState();
+  useBlockSync(token && !simulation, blockNumber, setBlockNumber, setBlockTime);
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
+  useMissedBlockRecovery(!!token && !simulation, isBlockMissing, setIsBlockMissing);
   const {
     registerConnectionHandler,
     registerMessageHandler,
@@ -73,6 +82,8 @@ export function ActivitiesProvider({ children }) {
 
   const pendingBatchActivities = useRef([]);
   const pendingTimeout = useRef();
+  const receivedActivityIds = useRef(new Set());
+  const activityGeneration = useRef(0);
 
   useEffect(() => {
     if (simulation) {
@@ -121,14 +132,17 @@ export function ActivitiesProvider({ children }) {
   // }, []);
 
   const debugInvalidation = false;
-  const handleActivities = useCallback((newActivities, skipInvalidations) => {
+  const handleActivities = useCallback((newActivities) => {
     // return;
 
     // prep activities, then handle
-    const transformedActivities = newActivities.map((e) => {
-      e.id = e.id || e._id;
-      e.key = e.id;
-      return e;
+    const generation = activityGeneration.current;
+    const transformedActivities = newActivities.flatMap((activity) => {
+      // Websocket and API activity records can have different document IDs.
+      const key = activity.event?.id || activity.id || activity._id;
+      if (key && receivedActivityIds.current.has(key)) return [];
+      if (key) receivedActivityIds.current.add(key);
+      return [{ ...activity, id: activity.id || activity._id, key }];
     });
 
     // if nothing to do, can return
@@ -136,196 +150,196 @@ export function ActivitiesProvider({ children }) {
 
     // this timeout is to hopefully give enough time for all relevant assets to be updated
     // in mongo and/or elasticsearch before invaliding/re-requesting them
-    setTimeout(async () => {
+    const processActivities = async () => {
+      if (generation !== activityGeneration.current) return;
       let shouldRefreshReadyAt = false;
 
-      if (!skipInvalidations) {
-        const allInvalidations = [];
+      const allInvalidations = [];
 
-        for (let activity of transformedActivities) {
-          const activityConfig = getActivityConfig(activity);
-          if (!activityConfig) continue;
+      for (let activity of transformedActivities) {
+        const activityConfig = getActivityConfig(activity);
+        if (!activityConfig) continue;
 
-          const pendingTransaction = (pendingTransactions || []).find((p) => p.txHash === activity.event?.transactionHash);
-          const extraInvalidations = (await activityConfig.onBeforeReceived(pendingTransaction)) || [];
+        const pendingTransaction = (pendingTransactions || []).find((p) => p.txHash === activity.event?.transactionHash);
+        const extraInvalidations = (await activityConfig.onBeforeReceived(pendingTransaction)) || [];
+        if (generation !== activityGeneration.current) return;
 
-          if (debugInvalidation) console.log('extraInvalidations', extraInvalidations);
-          shouldRefreshReadyAt = shouldRefreshReadyAt || !!activityConfig.requiresCrewTime;
+        if (debugInvalidation) console.log('extraInvalidations', extraInvalidations);
+        shouldRefreshReadyAt = shouldRefreshReadyAt || !!activityConfig.requiresCrewTime;
 
-          // console.log('invalidations', activityConfig?.invalidations);
+        // console.log('invalidations', activityConfig?.invalidations);
 
-          const activityInvalidations = [];
+        const activityInvalidations = [];
 
-          // any activityConfig that requiresCrewTime should invalidate the current crew's busyItems
-          if (activityConfig.requiresCrewTime) {
-            activityInvalidations.push([ 'activities', crew?.label, crew?.id, 'busy' ]);
-          }
-          if (activityConfig.visitedLot) {
-            activityInvalidations.push([ 'activities', 'ongoing' ]);
-          }
-
-          // gas token invalidation
-          // (if no caller or if caller matches my account)
-          if (gasTokens?.length && accountAddress) {
-            if (!activity.event?.returnValues?.caller || Address.areEqual(accountAddress, activity.event.returnValues.caller)) {
-              gasTokens.forEach((t) => {
-                const tokenName = Object.keys(TOKEN).find((k) => Address.areEqual(TOKEN[k], t))?.toLowerCase();
-                console.log('INVALIDATE GAS TOKEN', tokenName);
-                extraInvalidations.push(['walletBalance', tokenName, accountAddress]);
-              });
-            }
-          }
-
-          // walk through all invalidation configs to build out specific queries to invalidate
-          [
-            ...(activityConfig?.invalidations || []),
-            ...(extraInvalidations || [])
-          ].forEach((invalidationConfig) => {
-
-            // this is a raw queryKey
-            // (i.e. `[ 'ethBalance', walletAddress ]`)
-            if (Array.isArray(invalidationConfig)) {
-              activityInvalidations.push(invalidationConfig)
-
-            // else, this is an entity object
-            // NOTE: read more about newGroupEval and invalidation configs in lib/cacheKey.js
-            } else if (invalidationConfig) {
-              // NOTE: if key is not present in updated values, value was not updated
-              const { id, label, newGroupEval } = invalidationConfig;
-              if (debugInvalidation && newGroupEval?.updatedValues) console.log(`${label}.${id} updates include`, newGroupEval);
-
-              // invalidate `entity` entry
-              activityInvalidations.push(['entity', label, Number(id)]);
-              if ([Entity.IDS.LOT, Entity.IDS.ASTEROID, Entity.IDS.CREW, Entity.IDS.BUILDING, Entity.IDS.SHIP].includes(label)) {
-                activityInvalidations.push(['planningEligibility'], ['shipEjectionEligibility']);
-              }
-              activityInvalidations.push(['activities', label, Number(id)]);
-
-              // walk through `entities` entries of label type
-              // refetch group keys no longer part of, and refetch group keys it just became part of
-              // TODO: just fetch active?
-              queryClient.getQueriesData({ queryKey: ['entities', label] }).forEach(([ queryKey, data ]) => {
-                if (data === undefined) {
-                  if (debugInvalidation) console.log('bad query cache value', queryKey, data);
-                  return;
-                }
-
-                // if updated entity is already in entity group, invalidate (to update/delete)
-                // TODO (enhancement): update-in-place
-                if (!!(data || []).find((d) => ((d.id === Number(id)) && (d.label === label)))) {
-                  if (debugInvalidation) console.log(`${label}.${id} is already in collection`, queryKey);
-                  activityInvalidations.push(queryKey);
-
-                // else, check if it is technically possible (to the best of our knowledge)
-                // that the updated entity now *could be* part of a new entity group based
-                // on what changed about it... we will rely on newGroupEval to guide us
-                } else if (newGroupEval?.updatedValues) {
-                  const { updatedValues, filters } = newGroupEval;
-                  const collectionFilter = typeof queryKey[2] === 'object' ? queryKey[2] : {};
-                  let skip = false;
-
-                  // if none of the updatedValue keys appear in the group filter, it's impossible that
-                  // the updatedValue would cause this entity to now belong to this group... skip
-                  // (this assumes we have written our useQuery keys to be comprehensive!)
-                  // i.e. if ship controller changed, may not need to invalidate a group specifying all ships on a lot
-                  if (!Object.keys(updatedValues).find((k) => collectionFilter.hasOwnProperty(k))) {
-                    if (debugInvalidation) console.log('not in filter', updatedValues, collectionFilter);
-                    skip = true;
-                  }
-
-                  // if at least one of the updatedValues would exclude the updated entity from the
-                  // group, then impossible it would be added to this group... skip
-                  else if (Object.keys(updatedValues).find((k) => collectionFilter.hasOwnProperty(k) && isMismatch(updatedValues[k], collectionFilter[k]))) {
-                    if (debugInvalidation) console.log('change excluded');
-                    skip = true;
-                  }
-
-                  // if at least one of the filters exclude this queryKey from including updated entity... skip
-                  // i.e. if ship status changed, may only need to invalidate groups scoped to one asteroid
-                  else if (filters && Object.keys(filters).find((k) => collectionFilter.hasOwnProperty(k) && filters[k] !== undefined && isMismatch(filters[k], collectionFilter[k]))) {
-                    if (debugInvalidation) console.log('filter excluded');
-                    skip = true;
-                  }
-
-                  // if didn't skip... invalidate as a precaution
-                  if (!skip) {
-                    if (debugInvalidation) console.log(`${label}.${id} might be joining collection`, JSON.stringify(queryKey));
-                    activityInvalidations.push(queryKey);
-                  }
-                  // else if (debugInvalidation) console.log(`${label}.${id} will NOT be joining collection`, JSON.stringify(queryKey));
-                }
-              });
-
-              // invalidate searches potentially a part of
-              // TODO: would be nice to check against criteria similar to 'entities' above
-              let searchAssets = [];
-              if (label === Entity.IDS.ASTEROID)
-                searchAssets = ['asteroids'/*, 'asteroidsMapped'*/]; // asteroidsMapped uses asteroids
-              if (label === Entity.IDS.BUILDING)
-                searchAssets = ['buildings'];
-              if (label === Entity.IDS.CREW)
-                searchAssets = ['crews'];
-              if (label === Entity.IDS.CREWMATE)
-                searchAssets = ['crewmates'];
-              if (label === Entity.IDS.DEPOSIT)
-                searchAssets = ['coresamples'];
-              if (label === Entity.IDS.LOT)
-                searchAssets = ['lots'/*, 'lotsMapped'*/]; // lotsMapped uses packed data
-              if (label === Entity.IDS.SHIP)
-                searchAssets = ['ships'];
-
-              searchAssets.forEach((assetType) => {
-                activityInvalidations.push(['search', assetType])
-              });
-            }
-
-            if (debugInvalidation) console.log('activity invalidate', invalidationConfig, activityInvalidations);
-            allInvalidations.push(...activityInvalidations);
-          });
-
-          if (activityConfig?.triggerAlert) {
-            createAlert({
-              type: 'ActivityLog',
-              data: {
-                ...activityConfig?.logContent,
-                stackId: activity.event?.name,
-              },
-              duration: 10000,
-            })
-          };
+        // any activityConfig that requiresCrewTime should invalidate the current crew's busyItems
+        if (activityConfig.requiresCrewTime) {
+          activityInvalidations.push([ 'activities', crew?.label, crew?.id, 'busy' ]);
+        }
+        if (activityConfig.visitedLot) {
+          activityInvalidations.push([ 'activities', 'ongoing' ]);
         }
 
-        const finalInvalidations = [];
-        allInvalidations
-          .sort((a, b) => a.length < b.length ? -1 : 1)
-          .forEach((specific) => {
-            // skip if finalInvalidations already contains a broader item where all the
-            // keys of the broad item match the initial keys of this specific item (i.e.
-            // if can find an item in broad where none of the elements do not match specific)
-            const isRedundant = finalInvalidations.find((broad) => {
-              return !broad.find((broadEl, i) => !isEqual(broadEl, specific[i]));
+        // gas token invalidation
+        // (if no caller or if caller matches my account)
+        if (gasTokens?.length && accountAddress) {
+          if (!activity.event?.returnValues?.caller || Address.areEqual(accountAddress, activity.event.returnValues.caller)) {
+            gasTokens.forEach((t) => {
+              const tokenName = Object.keys(TOKEN).find((k) => Address.areEqual(TOKEN[k], t))?.toLowerCase();
+              console.log('INVALIDATE GAS TOKEN', tokenName);
+              extraInvalidations.push(['walletBalance', tokenName, accountAddress]);
             });
-            if (!isRedundant) finalInvalidations.push(specific);
-          });
-        if (debugInvalidation) console.log('deduped final invalidate', finalInvalidations);
+          }
+        }
 
-        finalInvalidations.forEach((queryKey) => {
-          if (appConfig.get('App.verboseLogs')) console.log('invalidate', queryKey);
-          queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        // walk through all invalidation configs to build out specific queries to invalidate
+        [
+          ...(activityConfig?.invalidations || []),
+          ...(extraInvalidations || [])
+        ].forEach((invalidationConfig) => {
+
+          // this is a raw queryKey
+          // (i.e. `[ 'ethBalance', walletAddress ]`)
+          if (Array.isArray(invalidationConfig)) {
+            // Mounted market queries are refreshed by their asteroid subscription.
+            // Mark inactive entries stale for their next mount without a duplicate fetch.
+            if (marketQueryTypes.has(invalidationConfig[0])) {
+              queryClient.invalidateQueries({ queryKey: invalidationConfig, refetchType: 'none' });
+            } else activityInvalidations.push(invalidationConfig)
+
+          // else, this is an entity object
+          // NOTE: read more about newGroupEval and invalidation configs in lib/cacheKey.js
+          } else if (invalidationConfig) {
+            // NOTE: if key is not present in updated values, value was not updated
+            const { id, label, newGroupEval } = invalidationConfig;
+            if (debugInvalidation && newGroupEval?.updatedValues) console.log(`${label}.${id} updates include`, newGroupEval);
+
+            // invalidate `entity` entry
+            activityInvalidations.push(['entity', label, Number(id)]);
+            if ([Entity.IDS.LOT, Entity.IDS.ASTEROID, Entity.IDS.CREW, Entity.IDS.BUILDING, Entity.IDS.SHIP].includes(label)) {
+              queryClient.getQueryCache().findAll({ predicate: query => query.meta?.affectsEntity?.(invalidationConfig) })
+                .forEach(query => activityInvalidations.push(query.queryKey));
+            }
+            activityInvalidations.push(['activities', label, Number(id)]);
+
+            // walk through `entities` entries of label type
+            // refetch group keys no longer part of, and refetch group keys it just became part of
+            // TODO: just fetch active?
+            queryClient.getQueriesData({ queryKey: ['entities', label] }).forEach(([ queryKey, data ]) => {
+              if (data === undefined) {
+                if (debugInvalidation) console.log('bad query cache value', queryKey, data);
+                return;
+              }
+
+              // if updated entity is already in entity group, invalidate (to update/delete)
+              // TODO (enhancement): update-in-place
+              if (!!(data || []).find((d) => ((d.id === Number(id)) && (d.label === label)))) {
+                if (debugInvalidation) console.log(`${label}.${id} is already in collection`, queryKey);
+                activityInvalidations.push(queryKey);
+
+              // else, check if it is technically possible (to the best of our knowledge)
+              // that the updated entity now *could be* part of a new entity group based
+              // on what changed about it... we will rely on newGroupEval to guide us
+              } else if (newGroupEval?.updatedValues) {
+                const { updatedValues, filters } = newGroupEval;
+                const collectionFilter = typeof queryKey[2] === 'object' ? queryKey[2] : {};
+                let skip = false;
+
+                // if none of the updatedValue keys appear in the group filter, it's impossible that
+                // the updatedValue would cause this entity to now belong to this group... skip
+                // (this assumes we have written our useQuery keys to be comprehensive!)
+                // i.e. if ship controller changed, may not need to invalidate a group specifying all ships on a lot
+                if (!Object.keys(updatedValues).find((k) => collectionFilter.hasOwnProperty(k))) {
+                  if (debugInvalidation) console.log('not in filter', updatedValues, collectionFilter);
+                  skip = true;
+                }
+
+                // if at least one of the updatedValues would exclude the updated entity from the
+                // group, then impossible it would be added to this group... skip
+                else if (Object.keys(updatedValues).find((k) => collectionFilter.hasOwnProperty(k) && isMismatch(updatedValues[k], collectionFilter[k]))) {
+                  if (debugInvalidation) console.log('change excluded');
+                  skip = true;
+                }
+
+                // if at least one of the filters exclude this queryKey from including updated entity... skip
+                // i.e. if ship status changed, may only need to invalidate groups scoped to one asteroid
+                else if (filters && Object.keys(filters).find((k) => collectionFilter.hasOwnProperty(k) && filters[k] !== undefined && isMismatch(filters[k], collectionFilter[k]))) {
+                  if (debugInvalidation) console.log('filter excluded');
+                  skip = true;
+                }
+
+                // if didn't skip... invalidate as a precaution
+                if (!skip) {
+                  if (debugInvalidation) console.log(`${label}.${id} might be joining collection`, JSON.stringify(queryKey));
+                  activityInvalidations.push(queryKey);
+                }
+                // else if (debugInvalidation) console.log(`${label}.${id} will NOT be joining collection`, JSON.stringify(queryKey));
+              }
+            });
+
+            queryClient.getQueryCache().findAll({
+              predicate: query => searchAffectedByEntity(query, invalidationConfig)
+            }).forEach(query => activityInvalidations.push(query.queryKey));
+          }
+
+          if (debugInvalidation) console.log('activity invalidate', invalidationConfig, activityInvalidations);
+          allInvalidations.push(...activityInvalidations);
         });
+
+        if (activityConfig?.triggerAlert) {
+          createAlert({
+            type: 'ActivityLog',
+            data: {
+              ...activityConfig?.logContent,
+              stackId: activity.event?.name,
+            },
+            duration: 10000,
+          })
+        };
       }
 
-      setActivities((prevActivities) => uniq([
+      const finalInvalidations = [];
+      allInvalidations
+        .sort((a, b) => a.length < b.length ? -1 : 1)
+        .forEach((specific) => {
+          // skip if finalInvalidations already contains a broader item where all the
+          // keys of the broad item match the initial keys of this specific item (i.e.
+          // if can find an item in broad where none of the elements do not match specific)
+          const isRedundant = finalInvalidations.find((broad) => {
+            return !broad.find((broadEl, i) => !isEqual(broadEl, specific[i]));
+          });
+          if (!isRedundant) finalInvalidations.push(specific);
+        });
+      if (debugInvalidation) console.log('deduped final invalidate', finalInvalidations);
+
+      // The indexed activity confirms completion. Start refreshing its views,
+      // but do not let slow or failed requests hold the transaction pending.
+      Promise.all([
+        ...finalInvalidations.map((queryKey) => {
+          if (appConfig.get('App.verboseLogs')) console.log('invalidate', queryKey);
+          return queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        }),
+        marketSubscriptionsByClient.get(queryClient)?.flush(),
+        ...(shouldRefreshReadyAt ? [refreshReadyAt()] : []),
+      ]).catch((error) => {
+        if (generation !== activityGeneration.current) return;
+        console.warn('Unable to refresh activity data', error);
+      });
+
+      if (generation !== activityGeneration.current) return;
+      setActivities((prevActivities) => uniqBy([
         ...transformedActivities,
         ...prevActivities
       ], 'key'));
-
-      if (shouldRefreshReadyAt) {
-        refreshReadyAt();
-      }
-
+    };
+    setTimeout(() => {
+      processActivities().catch((error) => {
+        if (generation !== activityGeneration.current) return;
+        // Failed activity preparation must remain eligible for recovery on the next poll.
+        transformedActivities.forEach(({ key }) => receivedActivityIds.current.delete(key));
+        console.warn('Unable to process transaction activities', error);
+      });
     }, 2500);
-  }, [accountAddress, crew, getActivityConfig, gasTokens, pendingTransactions, refreshReadyAt]);
+  }, [accountAddress, crew, getActivityConfig, gasTokens, pendingTransactions, refreshReadyAt, queryClient, createAlert, debugInvalidation]);
 
   // try to process WS activities grouped by block
   const processPendingWSBatch = useCallback(async () => {
@@ -334,35 +348,29 @@ export function ActivitiesProvider({ children }) {
       pendingTimeout.current = null;
     }
 
+    const generation = activityGeneration.current;
     const activitiesToProcess = (pendingBatchActivities.current || []).slice(0);
     pendingBatchActivities.current = [];
 
     if (activitiesToProcess.length > 0) {
       await hydrateActivities(activitiesToProcess, queryClient);
-      handleActivities(activitiesToProcess);
+      if (generation === activityGeneration.current) handleActivities(activitiesToProcess);
     }
-  }, [handleActivities]);
+  }, [handleActivities, queryClient]);
 
-  const [disconnected, setDisconnected] = useState();
-  const [stale, setStale] = useState();
+  const disconnectedAt = useRef(null);
   const onWSConnection = useCallback((isOpen) => {
-    if (isOpen && stale) {
-      queryClient.resetQueries();
-      setStale(false);
+    if (!isOpen) {
+      if (disconnectedAt.current === null) disconnectedAt.current = Date.now();
+      return;
     }
-    setDisconnected(!isOpen);
-  }, [stale]);
+    if (disconnectedAt.current !== null && Date.now() - disconnectedAt.current >= 5000) {
+      recoverGameplayQueries(queryClient);
+    }
+    disconnectedAt.current = null;
+  }, [queryClient]);
 
-  useEffect(() => {
-    // if disconnected for more than X seconds, set state to `stale`. this will refetch
-    // everything once the connection is restored. any value of X is technically imperfect
-    // here, but it also seems excessive to reset state on any microsecond disconnection
-    if (disconnected) {
-      const to = setTimeout(() => setStale(true), 5e3);
-      // (if reconnects before timeout, do not set to stale)
-      return () => clearTimeout(to);
-    }
-  }, [disconnected]);
+  useEffect(() => { disconnectedAt.current = null; }, [token]);
 
   const onWSMessage = useCallback((message) => {
     if (areWebsocketLogsEnabled()) console.log('onWSMessage (activities)', message);
@@ -390,53 +398,77 @@ export function ActivitiesProvider({ children }) {
       if (pendingTimeout.current) clearTimeout(pendingTimeout.current);
       pendingTimeout.current = setTimeout(processPendingWSBatch, 1000);
     }
-  }, [blockNumber, processPendingWSBatch, setBlockTime]);
+  }, [blockNumber, processPendingWSBatch, setBlockTime, setBlockNumber, setIsBlockMissing]);
 
-  const isFirstLoad = useRef(true); // (i.e. this is not a crew switch)
+  // Listener callbacks must see current state without tearing down subscriptions
+  // whenever an activity refresh changes the crew or pending transactions.
+  const latest = useRef();
+  latest.current = { onWSConnection, onWSMessage, handleActivities, pendingTransactions, activities, blockNumber };
+
   useEffect(() => {
-    if (!wsReady) return;
-    if (!token) return;
-
-    // if authed, populate existing activities and start listening to user websocket
-    // if have pending transactions, load back to the oldest one in case it missed the activity;
-    // else, will just pull most recent X (limit set on server)
-
-    const pendingTxHashes = pendingTransactions
-      .map((tx) => tx.txHash)
-      .filter((txHash) => !!txHash);
-    if (pendingTxHashes?.length > 0) {
-      // NOTE: since is to make sure no pagination occurs... we should fix this endpoint on the server
-      api.getTransactionActivities(pendingTxHashes).then(async (data) => {
-        await hydrateActivities(data.activities, queryClient);
-        handleActivities(data.activities, isFirstLoad.current);
-        if (data.blockNumber > 0) setBlockNumber(data.blockNumber); // TODO: is this still necessary?
-        if (data.blockTimestamp > 0) setBlockTime(data.blockTimestamp);
-      });
-    } else {
-      handleActivities([], isFirstLoad.current);
-    }
-
-    // after loaded once, if switch crews, this block will run again... but in the event of catching up
-    // on missing pending activities here, we DO need to invalidate the cache values
-    isFirstLoad.current = false;
-
+    if (!wsReady || !token) return undefined;
+    const receivedIds = receivedActivityIds.current;
     const crewRoom = crew?.id ? `Crew::${crew.id}` : null;
 
     // setup ws listeners
-    const connListenerRegId = registerConnectionHandler(onWSConnection);
+    const connListenerRegId = registerConnectionHandler((...args) => latest.current.onWSConnection(...args));
+    const onMessage = (...args) => latest.current.onWSMessage(...args);
     const messageListenerRegIds = [];
-    messageListenerRegIds.push(registerMessageHandler(onWSMessage));
+    messageListenerRegIds.push(registerMessageHandler(onMessage));
     if (crewRoom) {
-      messageListenerRegIds.push(registerMessageHandler(onWSMessage, crewRoom));
+      messageListenerRegIds.push(registerMessageHandler(onMessage, crewRoom));
     }
 
     // reset on logout / disconnect
     return () => {
+      activityGeneration.current += 1;
+      receivedIds.clear();
+      clearTimeout(pendingTimeout.current);
+      pendingBatchActivities.current = [];
       setActivities([]);
       unregisterConnectionHandler(connListenerRegId);
       messageListenerRegIds.forEach((regId) => unregisterMessageHandler(regId));
     }
-  }, [crew?.id, onWSConnection, onWSMessage, token, wsReady]);
+  }, [crew?.id, token, wsReady, queryClient, registerConnectionHandler, registerMessageHandler,
+    unregisterConnectionHandler, unregisterMessageHandler, setBlockNumber, setBlockTime]);
+
+  const hasPendingTransactions = pendingTransactions.some((tx) => tx.txHash);
+  useEffect(() => {
+    if (!token || simulation || !hasPendingTransactions) return undefined;
+    let cancelled = false;
+    let timeout;
+    const recover = async () => {
+      const confirmedHashes = new Set(latest.current.activities
+        .filter((activity) => activity.event?.transactionHash)
+        .map((activity) => safeBigInt(activity.event.transactionHash)));
+      const hashes = [...new Set(latest.current.pendingTransactions
+        .filter((tx) => tx.txHash && !confirmedHashes.has(safeBigInt(tx.txHash))
+          && (!tx.timestamp || Date.now() - tx.timestamp >= 30000))
+        .map((tx) => tx.txHash))];
+      try {
+        if (hashes.length > 0) {
+          const data = await api.getTransactionActivities(hashes);
+          if (cancelled) return;
+          await hydrateActivities(data.activities, queryClient);
+          if (cancelled) return;
+          latest.current.handleActivities(data.activities);
+          if (data.blockNumber > (latest.current.blockNumber || 0)) {
+            setBlockNumber(data.blockNumber);
+            if (data.blockTimestamp > 0) setBlockTime(data.blockTimestamp);
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to recover pending transaction activities', error);
+      } finally {
+        if (!cancelled) timeout = setTimeout(recover, 30000);
+      }
+    };
+    recover();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [crew?.id, token, simulation, hasPendingTransactions, queryClient, setBlockNumber, setBlockTime]);
 
   return (
     <ActivitiesContext.Provider value={activities}>

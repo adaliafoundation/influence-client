@@ -168,8 +168,13 @@ The old tutorial checklist, progression hook, and settings toggle have been remo
 
 ## Shared action-dialog campaign integration
 
-Supported action dialogs expose one campaign participation control after the crew has
-accepted a mission. The choice is persisted per chain, API, campaign, and crew. The
+Supported action dialogs expose a campaign participation control only when the
+selected action can contribute, after the crew has accepted a mission. Qualification
+uses selected building types, campaign construction and crew control, active action
+bindings, extraction quantities, whole recipes, Warehouse destinations, and recorded
+final products for delivery or inventory food consumption. Construction starts can
+create their own Built binding. The label refers to the starter campaign, since
+evidence can contribute to later objectives. The choice is persisted per chain, API, campaign, and crew. The
 shared execution hook uses that context; existing managers keep their native action
 keys, inputs, transaction metadata, and wallet options. No individual mission ID is
 stored against a building or action: campaign evidence is shared across objectives.
@@ -179,7 +184,8 @@ otherwise another accepted mission remains a valid assignment.
 `MissionActionContext` checks bindings when a supported dialog opens, including after
 reload. A matching binding restores campaign participation. The shared footer shows
 verification problems and disables campaign submission while checks are unavailable.
-Ordinary unbound actions remain native when the player has not opted into the campaign.
+Ordinary unbound actions remain native, including when the player has retained a
+campaign preference or a previously matched preview becomes unbound on recheck.
 Unknown or mismatched finish bindings do not silently fall back to native execution.
 
 `missionBindings.js` defines native action binding requirements, while
@@ -192,7 +198,10 @@ both bindings and starter state. Pending and unbound states are not transaction 
 Immediately before a wrapped transaction, the transaction pipeline reloads starter
 state and verifies the necessary bindings. Extraction and processing also require
 matched `Built` evidence. Incoming receipts into the campaign Warehouse's storage slot
-may have an unbound Delivery: the contract can bind them at receipt. That exception
+may have an unbound Delivery: the contract can bind them at receipt. Otherwise an
+explicit unbound response removes the assignment before submission, preserving the
+native action and wallet options. This is decided before any wallet transaction; no
+failed on-chain transaction is retried. That exception
 still requires matched Warehouse construction and does not apply to unknown or
 mismatched delivery evidence. Downstream route masks and EconomicDelivery flags are
 not matching fingerprints and remain untouched in API responses.
@@ -200,7 +209,8 @@ not matching fingerprints and remain untouched in API responses.
 The sidebar and campaign progress remain read-only summaries, not permission gates.
 Existing ownership, readiness, delegation, payment, and contract checks still apply.
 Market orders, exchange food resupply, and paid delivery acceptance are not campaign
-work; an opted-in unsupported submission is rejected rather than silently downgraded.
+work; the shared dialog leaves them native and hides campaign participation.
+Explicit mission-only requests for unsupported actions are still rejected.
 
 ### Deployment and live verification
 
@@ -219,7 +229,7 @@ Verify with a prerelease crew: accept Make Landfall, enable campaign participati
 Plan Building, and plan a Warehouse. Confirm the warehouse and completion appear in
 Missions. Then test a sample start, close/reload/reopen, and finish; repeat for a
 constructed Extractor/processor and for a campaign Warehouse receipt from a sender
-outside the campaign. Confirm normal unbound actions still work with participation off.
+outside the campaign. Confirm ordinary unbound actions work even with a retained campaign preference.
 These wallet transactions and remote deployment changes have not been performed by this change.
 
 Starter state must finish loading before a supported authenticated action can be

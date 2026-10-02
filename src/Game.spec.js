@@ -53,7 +53,7 @@ const Game = require('./Game').default;
 test('provider-owned fee authorization dialogs receive the app theme', () => {
   render(<Game />);
   fireEvent.click(screen.getByRole('button', { name: 'Request transaction' }));
-  expect(screen.getByRole('heading', { name: 'Authorize Operational Fees' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Not Now' }));
-  expect(screen.queryByRole('heading', { name: 'Authorize Operational Fees' })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Choose How to Pay' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+  expect(screen.queryByRole('heading', { name: 'Choose How to Pay' })).not.toBeInTheDocument();
 });

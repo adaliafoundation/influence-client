@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import { useCallback, useContext, useMemo } from 'react';
 import { Entity, Permission } from '@influenceth/sdk';
 import { cloneDeep } from 'lodash';
@@ -17,11 +18,11 @@ const useAgreementManager = (target, permission, agreementPath) => {
     return (currentPolicy?.agreements || []).find((a) => {
       if (agreementPath) return getAgreementPath(target, permission, a.permitted) === agreementPath;
       return (
-        ((a.permitted?.id === crew?.id) || (crew?.Crew?.delegatedTo && a.permitted === crew?.Crew?.delegatedTo))
+        matchesCrewPermissionSubject(a.permitted, crew)
         && a.permission === Number(permission)
       );
     });
-  }, [agreementPath, crew?.Crew?.delegatedTo, crew?.id, currentPolicy, target, permission]);
+  }, [agreementPath, crew, currentPolicy, target, permission]);
 
   const currentAgreement = useMemo(() => {
     if (currentAgreementRaw) {
@@ -43,7 +44,9 @@ const useAgreementManager = (target, permission, agreementPath) => {
     permission,
     // NOTE: this does not currently support account-level `permitted` values because that is
     // (currently) only relevant to whitelist and this is only used for contract + prepaid agreements
-    permitted: { id: currentAgreement?.permitted?.id || crew?.id, label: Entity.IDS.CREW },
+    permitted: currentAgreement?.permitted?.label != null
+      ? { id: currentAgreement.permitted.id, label: currentAgreement.permitted.label }
+      : { id: crew?.id, label: Entity.IDS.CREW },
     caller_crew: { id: crew?.id, label: Entity.IDS.CREW },
   }), [crew?.id, currentAgreement, target, permission]);
 
@@ -57,7 +60,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
       ? 'AcceptPrepaidAgreement'
       : 'AcceptContractAgreement';
     // TODO: AcceptPrepaidMerkleAgreement (needs `term` and `merkle_proof`)
-    execute(
+    return execute(
       agreementSystem,
       { ...payload, ...details },
       meta
@@ -66,7 +69,7 @@ const useAgreementManager = (target, permission, agreementPath) => {
 
   const extendAgreement = useCallback((details = {}) => {
     const { term, ...params } = details;
-    execute(
+    return execute(
       'ExtendPrepaidAgreement',
       { ...payload, added_term: term, ...params },
       meta
@@ -74,20 +77,20 @@ const useAgreementManager = (target, permission, agreementPath) => {
   }, [execute, meta, payload]);
 
   const cancelAgreement = useCallback((params = {}) => {
-    execute(
+    return execute(
       'CancelPrepaidAgreement',
       { agreementPath, ...params, ...payload },
       meta
     );
-  }, [agreementPath, execute]);
+  }, [agreementPath, execute, meta, payload]);
 
   const transferAgreement = useCallback((newPermitted) => {
-    execute(
+    return execute(
       'TransferPrepaidAgreement',
       { new_permitted: newPermitted, ...payload },
       meta
     );
-  }, []);
+  }, [execute, meta, payload]);
 
   const pendingChange = useMemo(
     () => {

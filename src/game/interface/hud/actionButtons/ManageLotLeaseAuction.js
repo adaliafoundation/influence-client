@@ -7,9 +7,9 @@ import { getLotLeaseAuctionStatus } from '~/lib/leaseUtils';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
 import theme from '~/theme';
 
-const isVisible = ({ asteroid, crew, lot, blockTime }) => {
+const isVisible = ({ asteroid, crew, crewControls, lot, blockTime }) => {
   if (!asteroid || !crew || !lot?.building) return false;
-  if (asteroid.Control?.controller?.id !== crew.id) return false;
+  if (!crewControls(asteroid)) return false;
 
   const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
   return !!(
@@ -22,7 +22,7 @@ const isVisible = ({ asteroid, crew, lot, blockTime }) => {
 };
 
 const ManageLotLeaseAuction = ({ asteroid, crew, lot, blockTime, onSetAction, _disabled }) => {
-  const { cancelAuction, currentAuctionChange } = useLotLeaseAuctionManager(lot?.id);
+  const { cancelAuction, currentAuctionChange, tenantAccess } = useLotLeaseAuctionManager(lot?.id);
   const auctionStatus = useMemo(
     () => getLotLeaseAuctionStatus({ asteroid, lot, blockTime }),
     [asteroid, blockTime, lot]
@@ -38,8 +38,11 @@ const ManageLotLeaseAuction = ({ asteroid, crew, lot, blockTime, onSetAction, _d
 
   const disabledReason = useMemo(() => {
     if (_disabled || !!currentAuctionChange) return 'loading...';
+    if (!auctionStatus.isAuctionActive && tenantAccess.status !== 'denied') {
+      return tenantAccess.status === 'allowed' ? 'tenant still has lot access' : 'checking tenant access';
+    }
     return getCrewDisabledReason({ asteroid, crew });
-  }, [_disabled, asteroid, crew, currentAuctionChange]);
+  }, [_disabled, asteroid, crew, currentAuctionChange, auctionStatus.isAuctionActive, tenantAccess]);
 
   return (
     <ActionButton

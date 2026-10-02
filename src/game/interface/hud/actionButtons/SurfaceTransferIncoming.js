@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Inventory, Order, Permission, Process } from '@influenceth/sdk';
 
@@ -15,6 +16,7 @@ const isVisible = ({ crew, lot, ship }) => {
 };
 
 const SurfaceTransferIncoming = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogProps = {}, _disabled, _disabledReason }) => {
+  const { crewAuthorization } = useCrewContext();
   const destination = useMemo(() => ship || lot?.surfaceShip || lot?.building, [ship, lot]);
   const { data: inventoryOrders } = useOrdersByInventory(destination);
   const { currentDeliveryActions: destDeliveryActions, isLoading } = useDeliveryManager({ destination });
@@ -26,7 +28,7 @@ const SurfaceTransferIncoming = ({ asteroid, blockTime, crew, lot, ship, onSetAc
 
   const currentDeliveryStack = useMemo(() => {
     const actionStack = [];
-    if (crew && destination && Permission.isPermitted(crew, Permission.IDS.ADD_PRODUCTS, destination, blockTime)) {
+    if (crew && destination && (crewAuthorization(Permission.IDS.ADD_PRODUCTS, destination).status === 'allowed')) {
       (destDeliveryActions || []).forEach((delivery) => {
         if (['PACKAGED','IN_TRANSIT','READY_TO_FINISH'].includes(delivery.status)) {
           actionStack.push({
@@ -101,7 +103,7 @@ const SurfaceTransferIncoming = ({ asteroid, blockTime, crew, lot, ship, onSetAc
       if (b.finishTime) return 1;
       return 0;
     });
-  }, [blockTime, crew, destination, destDeliveryActions, destActionItems, inventoryOrders, onSetAction]);
+  }, [crewAuthorization, blockTime, crew, destination, destDeliveryActions, destActionItems, inventoryOrders, onSetAction]);
 
   const handleClick = useCallback(() => {
     onSetAction('SURFACE_TRANSFER', { deliveryId: 0, destination, ...dialogProps });
@@ -125,11 +127,11 @@ const SurfaceTransferIncoming = ({ asteroid, blockTime, crew, lot, ship, onSetAc
     if (!hasCapacity) return 'over capacity';
 
     return getCrewDisabledReason({ asteroid, crew, requireReady: false });
-  }, [destination, crew]);
+  }, [crewAuthorization, destination, crew]);
   
   const isP2P = useMemo(
-    () => crew && destination && !Permission.isPermitted(crew, Permission.IDS.ADD_PRODUCTS, destination, blockTime),
-    [blockTime, crew, destination]
+    () => crew && destination && !(crewAuthorization(Permission.IDS.ADD_PRODUCTS, destination).status === 'allowed'),
+    [crewAuthorization, blockTime, crew, destination]
   );
 
   return (

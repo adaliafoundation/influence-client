@@ -19,7 +19,8 @@ import Asteroids from './scene/Asteroids';
 import Asteroid from './scene/Asteroid';
 import SettingsManager from './scene/SettingsManager';
 import Postprocessor from './Postprocessor';
-import { GpuContextLostMessage, GpuContextLostReporter } from './GpuContextLost';
+import { useBackgroundWorkError } from '../lib/backgroundWork';
+import { GpuContextLostMessage, GpuContextLostReporter, SceneLoadingErrorMessage } from './GpuContextLost';
 
 // TODO: 3js upgrade -- was antialias=false
 const glConfig = {
@@ -156,6 +157,7 @@ const Scene = () => {
   const statsOn = useStore(s => s.graphics.stats);
 
   const [contextLost, setContextLost] = useState(false);
+  const loadingError = useBackgroundWorkError(s => s.error);
   const canvasStyle = useMemo(() => (contextLost ? { opacity: 0, pointerEvents: 'none' } : { zIndex: 0 }), [contextLost]);
 
   useEffect(() => {
@@ -188,7 +190,7 @@ const Scene = () => {
     ];
   }, [bloomResolutionScale, enablePostprocessing, overrides]);
 
-  const sceneActive = canvasStack?.length === 0;
+  const sceneActive = !loadingError && canvasStack?.length === 0;
   const cappedFrameRate = frameRateCap > 0 ? frameRateCap : null;
   const frameloop = useMemo(() => (
     sceneActive && !cappedFrameRate ? 'always' : 'never'
@@ -197,26 +199,29 @@ const Scene = () => {
   return (
     <StyledContainer>
       {statsOn && <Stats />}
-      {contextLost && <GpuContextLostMessage />}
-      <Canvas key={pixelRatio}
-        {...glConfig}
-        linear={postprocessingEnabled/* postprocessing will handle gamma autocorrection */}
-        frameloop={frameloop}
-        style={canvasStyle}>
-        <FrameRateLimiter enabled={sceneActive && !!cappedFrameRate} frameRateCap={cappedFrameRate} />
-        <GpuContextLostReporter setContextLost={setContextLost} />
-        <ContextBridge>
-          <Suspense fallback={null}>
-            <SettingsManager />
-          </Suspense>
-          <Postprocessor enabled={postprocessingEnabled} bloomParams={bloomParams} />
-          <QueryClientProvider client={queryClient}>
-            <TrackballModControls>
-              <WrappedScene />
-            </TrackballModControls>
-          </QueryClientProvider>
-        </ContextBridge>
-      </Canvas>
+      {loadingError && <SceneLoadingErrorMessage />}
+      {!loadingError && contextLost && <GpuContextLostMessage />}
+      {!loadingError && (
+        <Canvas key={pixelRatio}
+          {...glConfig}
+          linear={postprocessingEnabled/* postprocessing will handle gamma autocorrection */}
+          frameloop={frameloop}
+          style={canvasStyle}>
+          <FrameRateLimiter enabled={sceneActive && !!cappedFrameRate} frameRateCap={cappedFrameRate} />
+          <GpuContextLostReporter setContextLost={setContextLost} />
+          <ContextBridge>
+            <Suspense fallback={null}>
+              <SettingsManager />
+            </Suspense>
+            <Postprocessor enabled={postprocessingEnabled} bloomParams={bloomParams} />
+            <QueryClientProvider client={queryClient}>
+              <TrackballModControls>
+                <WrappedScene />
+              </TrackballModControls>
+            </QueryClientProvider>
+          </ContextBridge>
+        </Canvas>
+      )}
       {false && /* TODO: remove debug */(
         <div style={{ position: 'fixed', bottom: 72, left: 0, zIndex: 10000 }}>
           <div style={{ border: '1px solid white', padding: 4, background: '#222' }}>

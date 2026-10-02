@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Dock, Inventory, Lot, Product, Ship, Time } from '@influenceth/sdk';
 
 import { LaunchShipIcon, RouteIcon, ShipIcon, WarningOutlineIcon } from '~/components/Icons';
@@ -23,11 +24,9 @@ import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useHydratedCrew from '~/hooks/useHydratedCrew';
 import { isForceLaunch } from '~/lib/shipEjectionEligibility';
 
-
 const propellantProduct = Product.TYPES[Product.IDS.HYDROGEN_PROPELLANT];
 
 const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], stage, ...props }) => {
-  useStore(s => s.dispatchAlertLogged);
 
   const { undockShip } = manager;
   const blockTime = useBlockTime();
@@ -66,8 +65,12 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
       escapeVelocity,
       propellantRequired,
       0, // TODO: poweredTime may be a thing in the future
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(asteroid?.id, originLotIndex, 0, hopperBonus.totalBonus, distBonus.totalBonus),
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        originLotIndex,
+        0,
+        hopperBonus.totalBonus,
+        distBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -139,19 +142,7 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
     },
   ]), [escapeVelocity, hopperBonus, launchTime?.total, exhaustBonus, propellantRequirement, ship]);
 
-  const onLaunch = useCallback(() => {
-    undockShip(!powered);
-  }, [powered, undockShip]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
+  const onLaunch = useCallback(() => undockShip(!powered), [powered, undockShip]);
 
   const simulationEnabled = useSimulationEnabled();
   const simulationActions = useStore((s) => s.simulationActions);
@@ -280,25 +271,8 @@ const SelfLaunchShip = ({ asteroid, originLot, manager, ship, shipCrews = [], st
 const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, ...props }) => {
   const { crew } = useCrewContext();
   const { ejectionEligibility, undockShip } = manager;
-  const [submitting, setSubmitting] = useState(false);
-  const [submissionReason, setSubmissionReason] = useState(null);
-  const onLaunch = async () => {
-    setSubmitting(true);
-    setSubmissionReason(null);
-    try {
-      const result = await undockShip(true);
-      if (result?.reason) setSubmissionReason(result.reason);
-    } catch (error) {
-      setSubmissionReason('Unable to verify ship protection. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  const lastStage = useRef(stage);
-  useEffect(() => {
-    if (lastStage.current !== stage) onClose();
-    lastStage.current = stage;
-  }, [stage, onClose]);
+  const onLaunch = () => undockShip(true);
+
   return (
     <>
       <ActionDialogHeader
@@ -315,13 +289,12 @@ const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, .
           <FlexSectionInputBlock title="Destination" image={<AsteroidImage asteroid={asteroid} />} label={formatters.asteroidName(asteroid)} sublabel="Orbit" />
         </FlexSection>
         <p>The ship will be towed to orbit without using its propellant.</p>
-        {(submissionReason || ejectionEligibility.reason) && <p role="status">{submissionReason || ejectionEligibility.reason}</p>}
+        {ejectionEligibility.reason && <p role="status">{ejectionEligibility.reason}</p>}
       </ActionDialogBody>
       <ActionDialogFooter
         {...props}
         onClose={onClose}
-        disabled={submitting || ejectionEligibility.status !== 'allowed'}
-        buttonsLoading={submitting}
+        disabled={ejectionEligibility.status !== 'allowed'}
         goLabel="Force Launch"
         onGo={onLaunch}
         stage={stage}

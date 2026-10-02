@@ -11,12 +11,12 @@ const labelDict = {
   PLANNING: 'Creating Site...'
 };
 
-const isVisible = ({ constructionStatus, accountCrewIds, crew, lot, ship }) => {
+const isVisible = ({ constructionStatus, crewControls, crew, lot, ship }) => {
   if (lot?.building?.Building?.status > 0) return false;
   return crew && lot && !ship && (
     constructionStatus === 'READY_TO_PLAN'
     || (
-      accountCrewIds?.includes(lot?.building?.Control?.controller?.id)
+      crewControls(lot?.building)
       && constructionStatus === 'PLANNING'
     )
   );

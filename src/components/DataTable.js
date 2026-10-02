@@ -6,6 +6,7 @@ import { itemColors } from '~/lib/actionItem';
 import { useCallback, useMemo, useState } from 'react';
 import { reactBool } from '~/lib/utils';
 
+const emptyRows = [];
 const minColumnWidth = 190;
 const rowHeight = 40;
 const virtualizeThresholdDefault = 80;
@@ -409,13 +410,8 @@ const VirtualDataTableHeader = ({ onClickColumn, sortDirection, sortField, visib
   </VirtualDataTableHead>
 );
 
-const VirtualDataTableRowRenderer = ({
-  data,
-  getRowProps,
-  sortDirection,
-  sortField,
-  visibleColumns
-}) => ({ index, style }) => {
+const VirtualDataTableRowRenderer = ({ index, style, data: itemData }) => {
+  const { data, getRowProps, sortDirection, sortField, visibleColumns } = itemData;
   const row = data[index];
   const rowProps = (getRowProps ? getRowProps(row) : null) || {};
 
@@ -456,8 +452,10 @@ const DataTableComponent = ({
   virtualizeThreshold = virtualizeThresholdDefault,
   virtualizedHeight = virtualizedHeightDefault
 }) => {
-  const tableData = data || [];
+  const tableData = data || emptyRows;
   const visibleColumns = useMemo(() => getVisibleColumns(columns), [columns]);
+  const itemData = useMemo(() => ({ data: tableData, getRowProps, sortDirection, sortField, visibleColumns }),
+    [tableData, getRowProps, sortDirection, sortField, visibleColumns]);
   const canVirtualize = !hasExpandableColumn(columns);
   const shouldVirtualize = canVirtualize
     && virtualized !== false
@@ -478,17 +476,12 @@ const DataTableComponent = ({
             className="data-table-virtual-list"
             height={listHeight}
             itemCount={tableData.length}
+            itemData={itemData}
             itemKey={(index) => keyField ? tableData[index]?.[keyField] : index}
             itemSize={rowHeight}
             overscanCount={8}
             width="100%">
-            {VirtualDataTableRowRenderer({
-              data: tableData,
-              getRowProps,
-              sortDirection,
-              sortField,
-              visibleColumns
-            })}
+            {VirtualDataTableRowRenderer}
           </FixedSizeList>
         </VirtualListWrapper>
       </VirtualDataTable>

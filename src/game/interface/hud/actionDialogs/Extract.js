@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import useProductionAuthorization from '~/hooks/useProductionAuthorization';
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Asteroid, Crewmate, Deposit, Extractor, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import cloneDeep from 'lodash/cloneDeep';
 
-import { CrewCaptainCardFramed } from '~/components/CrewmateCardFramed';
+
 import { AgreementIcon, CoreSampleIcon, ExtractionIcon, InventoryIcon, LocationIcon, ResourceIcon, SwayIcon, WarningIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useActionCrew from '~/hooks/useActionCrew';
@@ -45,21 +47,24 @@ const Warning = styled.div`
 
 const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const { currentExtraction, extractionStatus, startExtraction, finishExtraction } = extractionManager;
+  const { currentExtraction, startExtraction, finishExtraction } = extractionManager;
   const crew = useActionCrew(currentExtraction);
   const blockTime = useBlockTime();
-  const { accountCrewIds, crewCan } = useCrewContext();
+  const { accountCrewIds, crewCan, crewAuthorization } = useCrewContext();
 
   const [amount, setAmount] = useState(0);
   const [selectedCoreSample, setSelectedCoreSample] = useState();
+  useMissionActionDetails(useMemo(() => ({
+    amount: Math.ceil(amount), resource: selectedCoreSample?.Deposit?.resource, running: !!currentExtraction
+  }), [amount, selectedCoreSample?.Deposit?.resource, currentExtraction]));
   const [sampleSelectorOpen, setSampleSelectorOpen] = useState(false);
   const [destinationSelectorOpen, setDestinationSelectorOpen] = useState(false);
 
   const { data: buildingOwner } = useCrew(lot?.building?.Control?.controller?.id);
 
   const isPurchase = useMemo(
-    () => selectedCoreSample && !accountCrewIds?.includes(selectedCoreSample?.Control?.controller?.id),
-    [accountCrewIds, selectedCoreSample?.Control?.controller?.id]
+    () => selectedCoreSample && crewAuthorization(Permission.IDS.USE_DEPOSIT, selectedCoreSample).status === 'denied' && selectedCoreSample?.PrivateSale?.amount > 0,
+    [crewAuthorization, selectedCoreSample]
   );
   const { data: depositOwner } = useCrew(isPurchase ? selectedCoreSample?.Control?.controller?.id : null);
 
@@ -110,11 +115,11 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
   const usableSamples = useMemo(() => {
     return (lot?.deposits || []).filter((d) => (
-      (accountCrewIds?.includes(d.Control.controller.id) || d.PrivateSale?.amount > 0)
+      (crewCan(Permission.IDS.USE_DEPOSIT, d) || d.PrivateSale?.amount > 0)
       && d.Deposit.remainingYield > 0
       && d.Deposit.status >= Deposit.STATUSES.SAMPLED
     ));
-  }, [accountCrewIds, lot?.deposits, crew?.id]);
+  }, [crewCan, accountCrewIds, lot?.deposits, crew?.id]);
 
   const selectCoreSample = useCallback((sample) => {
     setSelectedCoreSample(sample);
@@ -159,13 +164,11 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
   const extractionTime = useMemo(() => {
     if (!selectedCoreSample) return 0;
-    return Time.toRealDuration(
-      Extractor.getExtractionTime(
-        amount * (resource?.massPerUnit || 0),
-        // TODO: remainingYield before started!
-        selectedCoreSample.Deposit.remainingYield * (resource?.massPerUnit || 0),
-        extractionBonus.totalBonus || 1
-      ),
+    return Extractor.getExtractionTimeReal(
+      amount * (resource?.massPerUnit || 0),
+      // TODO: remainingYield before started!
+      selectedCoreSample.Deposit.remainingYield * (resource?.massPerUnit || 0),
+      extractionBonus.totalBonus || 1,
       crew?._timeAcceleration
     );
   }, [amount, crew?._timeAcceleration, extractionBonus, resource, selectedCoreSample]);
@@ -183,14 +186,12 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     if (!destinationLot?.id) return [];
     return [
       Asteroid.getLotDistance(asteroid?.id, Lot.toIndex(lot?.id), Lot.toIndex(destinationLot?.id)) || 0,
-      Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid?.id,
-          Lot.toIndex(lot?.id),
-          Lot.toIndex(destinationLot?.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ) || 0,
+      Asteroid.getLotTravelTimeReal(
+        asteroid?.id,
+        Lot.toIndex(lot?.id),
+        Lot.toIndex(destinationLot?.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       )
     ];
@@ -201,7 +202,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     return [
       [
         [oneWayCrewTravelTime, 'Travel to Extractor'],
-        [extractionTime / 8, 'On-site Crew Labor'],
+        [Time.getCrewLaborDuration(extractionTime), 'On-site Crew Labor'],
         [oneWayCrewTravelTime, 'Return to Station'],
       ],
       destinationLot && [
@@ -270,8 +271,8 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
   ]), [amount, crewTravelBonus, crewTravelTime, extractionBonus, extractionTime, resource, transportDistance, transportTime]);
 
   const prepaidLeaseConfig = useMemo(() => {
-    return getProcessorLeaseConfig(lot?.building, Permission.IDS.EXTRACT_RESOURCES, crew, blockTime);
-  }, [blockTime, crew, lot?.building]);
+    return getProcessorLeaseConfig(lot?.building, Permission.IDS.EXTRACT_RESOURCES, crew, blockTime, crewAuthorization(Permission.IDS.EXTRACT_RESOURCES, lot?.building));
+  }, [crewAuthorization, blockTime, crew, lot?.building]);
 
   const { leasePayment, desiredLeaseTerm, actualLeaseTerm } = useMemo(() => {
     return getProcessorLeaseSelections(
@@ -282,7 +283,13 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     );
   }, [blockTime, crew?.Crew?.readyAt, prepaidLeaseConfig, taskTimeRequirement?.total]);
 
-  const onStartExtraction = useCallback(() => {
+  const productionAuthorization = useProductionAuthorization({
+    kind: 'extract', crew, facility: lot?.building, deposit: selectedCoreSample, destination, purchase: isPurchase && { price: selectedCoreSample?.PrivateSale?.amount, recipient: depositOwner?.Crew?.delegatedTo },
+    duration: taskTimeRequirement?.total, lease: leasePayment > 0 && { recipient: buildingOwner?.Crew?.delegatedTo, term: actualLeaseTerm, termPrice: leasePayment }
+  });
+
+  const onStartExtraction = useCallback(async () => {
+    if ((await productionAuthorization.recheck()).status !== 'allowed') return;
     if (!(amount && selectedCoreSample && destination && destinationInventory)) return;
     if (isPurchase && !depositOwner) return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
@@ -308,7 +315,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       return;
     }
 
-    startExtraction(
+    return startExtraction(
       safeAmount,
       selectedCoreSample,
       destination,
@@ -320,7 +327,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
         termPrice: leasePayment,
       }
     );
-  }, [
+  }, [productionAuthorization,
     actualLeaseTerm,
     amount,
     buildingOwner,
@@ -333,18 +340,6 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     isPurchase,
     resource
   ]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (['READY', 'READY_TO_FINISH', 'FINISHING'].includes(lastStatus.current)) {
-      if (extractionStatus !== lastStatus.current) {
-        props.onClose();
-      }
-    }
-    lastStatus.current = extractionStatus;
-  }, [extractionStatus]);
 
   const [extraDepositProps, extraDepositThumbnailProps] = useMemo(() => {
     if (isPurchase && stage === actionStage.NOT_STARTED) {
@@ -445,7 +440,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
           <InventoryInputBlock
             title="Destination"
-            titleDetails={<TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />}
+            titleDetails={<TransferDistanceDetails distance={transportDistance} timeBonus={crewTravelBonus.totalBonus} distanceBonus={crewDistBonus.totalBonus} />}
             entity={destination}
             inventorySlot={destinationInventory?.slot}
             inventoryBonuses={crew?._inventoryBonuses}
@@ -535,6 +530,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
       </ActionDialogBody>
 
+      {stage === actionStage.NOT_STARTED && productionAuthorization.message && <p role="status">{productionAuthorization.message}</p>}
       <ActionDialogFooter
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
@@ -544,7 +540,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
             !destinationLot ||
             !selectedCoreSample ||
             amount === 0 ||
-            !(crewCan(Permission.IDS.EXTRACT_RESOURCES, lot.building) || leasePayment > 0)
+            !productionAuthorization.allowed
           )
         }
         goLabel={goLabel}

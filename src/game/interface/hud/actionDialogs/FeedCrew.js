@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMissionActionDetails } from '~/contexts/MissionActionContext';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crew, Crewmate, Lot, Permission, Product, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 
@@ -15,7 +16,7 @@ import useEntity from '~/hooks/useEntity';
 import useFeedCrewManager from '~/hooks/actionManagers/useFeedCrewManager';
 import useAsteroid from '~/hooks/useAsteroid';
 import useBlockTime from '~/hooks/useBlockTime';
-import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
+
 import { hasStarterFoodSupplyEntitlement } from '~/lib/starterPacks';
 import useCrew from '~/hooks/useCrew';
 
@@ -135,6 +136,9 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
     return undefined;
   }, [exchangeSelection, inventorySelection]);
   const { data: origin } = useEntity(originId);
+  useMissionActionDetails(useMemo(() => ({
+    inventorySource: !usingFoodSupplyEntitlement && !exchangeSelection && !!inventorySelection?.id
+  }), [usingFoodSupplyEntitlement, exchangeSelection, inventorySelection?.id]));
   const originLotId = useMemo(() => origin && locationsArrToObj(origin?.Location?.locations || []).lotId, [origin]);
   const { data: originLot } = useLot(originLotId);
   const originInventory = useMemo(() => (origin?.Inventories || []).find((i) => i.slot === inventorySelection?.slot), [origin, inventorySelection]);
@@ -159,8 +163,12 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
     const transportDistance = Asteroid.getLotDistance(asteroid?.id, originLotIndex, destinationLotIndex);
     const effBonus = Math.max(crewTravelBonus.totalBonus, 1); // no penalty for food resupply
     const distBonus = Math.max(crewDistBonus.totalBonus, 1); // no penalty for food resupply
-    const transportTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(asteroid?.id, originLotIndex, destinationLotIndex, effBonus, distBonus),
+    const transportTime = Asteroid.getLotTravelTimeReal(
+      asteroid?.id,
+      originLotIndex,
+      destinationLotIndex,
+      effBonus,
+      distBonus,
       crew?._timeAcceleration
     );
     return [transportDistance, transportTime];
@@ -217,24 +225,24 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
   const { data: sellerCrew } = useCrew(exchangeSelection?.crew?.id);
 
   const onStartFeedingFromExchange = useCallback(() => {
-    feedCrew({
+    return feedCrew({
       ...exchangeSelection,
       sellerAccount: sellerCrew?.Crew?.delegatedTo,
       exchangeOwnerAccount: exchangeOwnerCrew?.Crew?.delegatedTo,
     });
-  }, [exchangeSelection, exchangeOwnerCrew, sellerCrew]);
+  }, [exchangeSelection, exchangeOwnerCrew, sellerCrew, feedCrew]);
   
   const onStartFeedingFromInventory = useCallback(() => {
-    feedCrew({
+    return feedCrew({
       origin,
       originSlot: originInventory?.slot,
       amount: Math.floor(selectedItems[Product.IDS.FOOD])
     });
-  }, [origin, originInventory, selectedItems]);
+  }, [origin, originInventory, selectedItems, feedCrew]);
 
   const onStartFeeding = useCallback(() => {
-    if (exchangeSelection) onStartFeedingFromExchange();
-    else onStartFeedingFromInventory();
+    if (exchangeSelection) return onStartFeedingFromExchange();
+    return onStartFeedingFromInventory();
   }, [exchangeSelection, onStartFeedingFromExchange, onStartFeedingFromInventory]);
 
   const foodStats = useMemo(() => {
@@ -355,7 +363,7 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
                 stage={stage}
                 title="Origin"
                 titleDetails={transportDistance !== undefined && (
-                  <TransferDistanceDetails distance={transportDistance} crewDistBonus={crewDistBonus} />
+                  <TransferDistanceDetails distance={transportDistance} timeBonus={Math.max(crewTravelBonus.totalBonus, 1)} distanceBonus={Math.max(crewDistBonus.totalBonus, 1)} />
                 )}
                 transferMass={-totalMass}
                 transferVolume={-totalVolume} />
@@ -568,17 +576,6 @@ const Wrapper = (props) => {
   const { data: asteroid, isLoading: asteroidIsLoading } = useAsteroid(crew?._location?.asteroidId);
 
   const stage = feedCrewManager.actionStage || actionStages.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    if (!feedCrewManager.isLoading) {
-      lastStatus.current = stage;
-    }
-  }, [feedCrewManager.isLoading, stage]);
 
   return (
     <ActionDialogInner

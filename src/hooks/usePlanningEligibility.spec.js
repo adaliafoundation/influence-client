@@ -1,14 +1,16 @@
+jest.mock('@influenceth/sdk', () => ({ Entity: { IDS: { CREW: 1 } } }));
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import usePlanningEligibility from './usePlanningEligibility';
 import useCrewContext from '~/hooks/useCrewContext';
 import useSession from '~/hooks/useSession';
+import api from '~/lib/api';
 import { loadPlanningEligibility } from '~/lib/planningEligibility';
 
 jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useConstants', () => () => ({ data: 0 }), { virtual: true });
-jest.mock('~/lib/api', () => ({}), { virtual: true });
+jest.mock('~/lib/api', () => ({ getEntityById: jest.fn() } ), { virtual: true });
 jest.mock('~/lib/planningEligibility', () => ({
   checkingPlanning: { status: 'checking', reason: 'Checking USE_LOT permission' },
   loadPlanningEligibility: jest.fn()
@@ -33,7 +35,12 @@ test('pending policy checks disable planning and refresh on invalidation while o
   await act(async () => resolve({ status: 'allowed', reason: null }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
-  await act(async () => client.invalidateQueries({ queryKey: ['planningEligibility'] }));
+  let finishRefresh;
+  loadPlanningEligibility.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+  act(() => { client.invalidateQueries({ queryKey: ['planningEligibility'] }); });
+  await waitFor(() => expect(finishRefresh).toBeDefined());
+  expect(result.current.eligibility.status).toBe('allowed');
+  await act(async () => finishRefresh({ status: 'blocked' }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
 });
 
@@ -59,13 +66,16 @@ test('crew changes during submission cannot authorize the old payload', async ()
   expect((await result.current.recheck({ lotId: 1, crewId: 1 })).status).toBe('checking');
 });
 
-test('block time changes re-evaluate expiring permissions', async () => {
+test('block updates preserve display and defer expiry checks until submission', async () => {
   const { result, rerender } = renderHook(() => usePlanningEligibility(lot), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
   useSession.mockReturnValue({ blockTime: 101, accountAddress: '0x123' });
   rerender();
-  await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
+  expect(result.current.eligibility.status).toBe('allowed');
+  expect(loadPlanningEligibility).toHaveBeenCalledTimes(1);
+  expect((await result.current.recheck({ lotId: 1, crewId: 1 })).status).toBe('blocked');
+  expect(loadPlanningEligibility.mock.calls.at(-1)[0].blockTime).toBe(101);
 });
 
 
@@ -84,4 +94,24 @@ test('tutorial rechecks use mock state rather than live crew and lot reads', asy
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   await result.current.recheck({ lotId: 1, crewId: 1 });
   expect(loadPlanningEligibility.mock.calls.at(-1)[0].snapshot.lot).toEqual(lot._permissionTargets.lot);
+});
+
+
+test('display dependencies reuse entity cache but action rechecks read fresh data', async () => {
+  client.setDefaultOptions({ queries: { retry: false, staleTime: 300000 } });
+  const station = { id: 31, label: 5, Building: { status: 3 } };
+  const controller = { id: 1, label: 1, Crew: { delegatedTo: '0x123' } };
+  client.setQueryData(['entity', 5, 31], station);
+  client.setQueryData(['entity', 1, 1], controller);
+  api.getEntityById.mockReset().mockImplementation(async ({ label }) => label === 5 ? station : controller);
+  loadPlanningEligibility.mockImplementation(async ({ api: source }) => {
+    await source.getEntityById({ id: 31, label: 5 });
+    await source.getEntityById({ id: 1, label: 1 });
+    return { status: 'allowed' };
+  });
+  const { result } = renderHook(() => usePlanningEligibility(lot), { wrapper });
+  await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
+  expect(api.getEntityById).not.toHaveBeenCalled();
+  await result.current.recheck({ lotId: 1, crewId: 1 });
+  expect(api.getEntityById).toHaveBeenCalledTimes(2);
 });

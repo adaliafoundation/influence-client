@@ -51,3 +51,13 @@ test('invalidating gameplay authorization preserves API authentication', () => {
   expect(useStore.getState().currentSession.token).toBe('api-token');
   expect(useStore.getState().sessions[address].gameplaySession).toBeNull();
 });
+
+test.each(['indexed', 'failed'])('pending transaction removal signals its explicit %s outcome', async status => {
+  const { observeTransactionSettlement } = require('../lib/transactionSettlement');
+  const observer = observeTransactionSettlement();
+  const settled = observer.waitFor('0x123');
+  useStore.setState({ pendingTransactions: [{ txHash: '0x123' }, { txHash: '0x456' }] });
+  useStore.getState().dispatchPendingTransactionComplete('0x123', status);
+  await expect(settled).resolves.toEqual({ status, txHash: '0x123' });
+  expect(useStore.getState().pendingTransactions).toEqual([{ txHash: '0x456' }]);
+});

@@ -1,3 +1,4 @@
+import useCrewContext from '~/hooks/useCrewContext';
 import { useCallback, useMemo } from 'react';
 import { Inventory, Order, Permission } from '@influenceth/sdk';
 
@@ -16,6 +17,7 @@ const isVisible = ({ crew, lot, ship }) => {
 };
 
 const SurfaceTransferOutgoing = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dialogProps = {}, _disabled, _disabledReason }) => {
+  const { crewAuthorization } = useCrewContext();
   const origin = useMemo(() => ship || lot?.surfaceShip || lot?.building, [ship, lot]);
   const { data: inventoryOrders } = useOrdersByInventory(origin);
   const { currentDeliveryActions: originDeliveryActions, isLoading } = useDeliveryManager({ origin });
@@ -30,7 +32,7 @@ const SurfaceTransferOutgoing = ({ asteroid, blockTime, crew, lot, ship, onSetAc
   const currentDeliveryStack = useMemo(
     () => {
       const actionStack = [];
-      if (crew && origin && Permission.isPermitted(crew, Permission.IDS.REMOVE_PRODUCTS, origin, blockTime)) {
+      if (crew && origin && crewAuthorization(Permission.IDS.REMOVE_PRODUCTS, origin).status === 'allowed') {
         (originDeliveryActions || []).forEach((delivery) => {
           if (['PACKAGING', 'PACKAGED'].includes(delivery.status)) {
             actionStack.push({
@@ -74,7 +76,7 @@ const SurfaceTransferOutgoing = ({ asteroid, blockTime, crew, lot, ship, onSetAc
       }
       return actionStack;
     },
-    [blockTime, crew, origin, originDeliveryActions, originActionItems, inventoryOrders, onSetAction]
+    [crew, origin, crewAuthorization, originDeliveryActions, inventoryOrders, onSetAction]
   );
 
   const handleClick = useCallback(() => {
@@ -90,10 +92,10 @@ const SurfaceTransferOutgoing = ({ asteroid, blockTime, crew, lot, ship, onSetAc
     const hasMass = (origin.Inventories || []).find((i) => i.status === Inventory.STATUSES.AVAILABLE && i.mass > 0);
     if (!hasMass) return 'inventory empty';
 
-    return getCrewDisabledReason({
+    return getCrewDisabledReason({ crewAuthorization,
       asteroid, blockTime, crew, permission: Permission.IDS.REMOVE_PRODUCTS, permissionTarget: origin, requireReady: false
     });
-  }, [_disabled, _disabledReason, origin, blockTime, crew]);
+  }, [crewAuthorization, _disabled, _disabledReason, origin, blockTime, crew]);
 
   return (
     <>

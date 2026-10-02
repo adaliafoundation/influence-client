@@ -1,3 +1,4 @@
+import { errorMessages } from '../../../lib/errorMessages';
 import { features } from '~/appConfig/features';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
@@ -364,9 +365,9 @@ export const TokenList = ({ items }) => (
 const getBanxaCheckoutErrorMessage = (error) => {
   const serverMessage = error?.response?.data?.message || error?.response?.data?.error || error?.message;
   if (/wallet must be deployed/i.test(serverMessage || '')) {
-    return 'Your wallet is still being prepared. Please try again in a moment.';
+    return errorMessages.setupRequired;
   }
-  return 'Banxa funding is temporarily unavailable. Please try another funding option.';
+  return errorMessages.fundingUnavailable;
 };
 
 const BanxaEmbeddedCheckout = ({ checkoutUrl, onClose, onLoad }) => {
@@ -542,7 +543,7 @@ export const FundingFlow = ({ mode, primaryAction, swapRequirements = [], totalP
   const onFaucetError = useCallback(() => {
     createAlert({
       type: 'GenericAlert',
-      data: { content: 'Faucet request failed, please try again later.' },
+      data: { content: errorMessages.fundingUnavailable },
       level: 'warning',
       duration: 5000
     });

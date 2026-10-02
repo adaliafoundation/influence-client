@@ -4,9 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import WebsocketContext from '~/contexts/WebsocketContext';
 import { appConfig } from '~/appConfig';
 import useSession from '~/hooks/useSession';
+import useStore from '~/hooks/useStore';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import api from '~/lib/api';
-import { canonicalCrewId, starterMissionsQueryKey } from '~/lib/starterMissions';
+import { recoverQueries } from '../lib/queryRecovery';
+import { canonicalCrewId, isMissionTransactionIndexed, starterMissionsQueryKey } from '~/lib/starterMissions';
 
 const useStarterMissions = (crewId, { subscribe = false } = {}) => {
   const queryClient = useQueryClient();
@@ -21,6 +23,14 @@ const useStarterMissions = (crewId, { subscribe = false } = {}) => {
     enabled,
     staleTime: 0
   });
+  const pendingTransactions = useStore(s => s.pendingTransactions);
+  const completeTransaction = useStore(s => s.dispatchPendingTransactionComplete);
+  useEffect(() => {
+    pendingTransactions.forEach(tx => {
+      if (isMissionTransactionIndexed(tx, query.data)) completeTransaction(tx.txHash);
+    });
+  }, [pendingTransactions, query.data, completeTransaction]);
+
   const { refetch } = query;
   useEffect(() => {
     if (!subscribe || !enabled || !wsReady) return;
@@ -44,13 +54,19 @@ const useStarterMissions = (crewId, { subscribe = false } = {}) => {
       }
     };
     const registrations = [registerMessageHandler(onMessage), registerMessageHandler(onMessage, `Crew::${id}`)];
-    const connection = registerConnectionHandler((connected) => { if (connected) refresh(); });
+    const connection = registerConnectionHandler((connected) => {
+      if (connected) {
+        dirty = false;
+        clearTimeout(timer);
+        recoverQueries(queryClient, { queryKey: starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), id), exact: true });
+      }
+    });
     return () => {
       clearTimeout(timer);
       registrations.forEach(unregisterMessageHandler);
       unregisterConnectionHandler(connection);
     };
-  }, [subscribe, enabled, id, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
+  }, [subscribe, enabled, id, chainId, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
   return query;
 };
 

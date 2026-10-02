@@ -1,3 +1,5 @@
+import { reportFailure } from '../lib/errorReporting';
+import { errorMessages } from '../lib/errorMessages';
 import { useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { num } from 'starknet';
@@ -7,7 +9,8 @@ import { useAccount, useChainId, useConfig, usePublicClient, useSwitchChain } fr
 import { ethereumContracts } from '@influenceth/sdk';
 
 import { configuredChain } from '~/contexts/WagmiContext';
-import { getBridgeAssetConfig, getConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { bridgeNetwork, getBridgeAssetConfig, getConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { getBridgeBatchError } from '~/bridge/limits';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 
@@ -71,10 +74,12 @@ const useBridgeActions = () => {
   const updateBridgeTransfer = useStore(s => s.dispatchBridgeTransferUpdated);
 
   const [busyKey, setBusyKey] = useState();
+  const [swayDepositStatus, setSwayDepositStatus] = useState();
+  const [claimedAsteroidIds, setClaimedAsteroidIds] = useState([]);
 
   const ensureEthereumReady = useCallback(async () => {
     if (!isConnected || !ethereumAddress) {
-      notifyBridge(createAlert, 'Connect an Ethereum wallet before bridging.');
+      notifyBridge(createAlert, errorMessages.connection);
       return false;
     }
     if (chainId !== configuredChain.id) {
@@ -89,7 +94,7 @@ const useBridgeActions = () => {
       return false;
     }
     if (!walletAccount) {
-      notifyBridge(createAlert, 'Connect your Starknet wallet before bridging.');
+      notifyBridge(createAlert, errorMessages.connection);
       return false;
     }
     return true;
@@ -97,7 +102,7 @@ const useBridgeActions = () => {
 
   const trackEthereumTx = useCallback(async ({ hash, transfer }) => {
     const waitingStatus = transfer.waitingStatus;
-    logBridgeTransfer({ id: hash, txHash: hash, layer: 'l1', ...transfer });
+    logBridgeTransfer({ id: hash, txHash: hash, layer: 'l1', network: bridgeNetwork, ...transfer });
     try {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status === 'reverted') throw new Error('Ethereum transaction reverted.');
@@ -110,7 +115,7 @@ const useBridgeActions = () => {
   }, [logBridgeTransfer, publicClient, updateBridgeTransfer]);
 
   const trackStarknetTx = useCallback(async ({ txHash, transfer, waitForL1 = false }) => {
-    logBridgeTransfer({ id: txHash, txHash, layer: 'l2', ...transfer });
+    logBridgeTransfer({ id: txHash, txHash, layer: 'l2', network: bridgeNetwork, ...transfer });
     try {
       await starknetProvider.waitForTransaction(txHash, { retryInterval: 5e3 });
       updateBridgeTransfer(txHash, { status: waitForL1 ? 'waiting_l1' : 'confirmed' });
@@ -122,12 +127,17 @@ const useBridgeActions = () => {
   }, [logBridgeTransfer, starknetProvider, updateBridgeTransfer]);
 
   const bridgeAssetsToStarknet = useCallback(async ({ assetType, assets }) => {
+    const batchError = getBridgeBatchError(assets.length);
+    if (batchError) {
+      notifyBridge(createAlert, batchError);
+      return null;
+    }
     if (!accountAddress) {
       login();
       return null;
     }
     if (!isBridgeAssetConfigured(assetType)) {
-      notifyBridge(createAlert, 'This bridge is not configured for the current deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
     if (!(await ensureEthereumReady())) return null;
@@ -192,8 +202,8 @@ const useBridgeActions = () => {
       }));
       return hash;
     } catch (e) {
-      console.warn('Bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -210,9 +220,14 @@ const useBridgeActions = () => {
   ]);
 
   const bridgeAssetsToEthereum = useCallback(async ({ assetType, assets }) => {
+    const batchError = getBridgeBatchError(assets.length);
+    if (batchError) {
+      notifyBridge(createAlert, batchError);
+      return null;
+    }
     if (!ensureStarknetReady()) return null;
     if (!isBridgeAssetConfigured(assetType)) {
-      notifyBridge(createAlert, 'This bridge is not configured for the current deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
     if (!(await ensureEthereumReady())) return null;
@@ -245,8 +260,8 @@ const useBridgeActions = () => {
       }));
       return txHash;
     } catch (e) {
-      console.warn('Bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -295,8 +310,8 @@ const useBridgeActions = () => {
       queryClient.invalidateQueries({ queryKey: ['bridgeCrossings'] });
       return hash;
     } catch (e) {
-      console.warn('Receive transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Receive transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -306,41 +321,45 @@ const useBridgeActions = () => {
   const mintCrewFromAsteroid = useCallback(async (asteroidId) => {
     if (!(await ensureEthereumReady())) return null;
     if (!getConfig('Ethereum.Address.arvadCrewmateSale')) {
-      notifyBridge(createAlert, 'Crew minting is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
     setBusyKey(`mint-${asteroidId}`);
     try {
-      const hash = await writeContract(wagmiConfig, {
+      const request = {
+        account: ethereumAddress,
         address: getConfig('Ethereum.Address.arvadCrewmateSale'),
         abi: ethereumContracts.ArvadCrewSale,
         functionName: 'mintCrewWithAsteroid',
         args: [BigInt(asteroidId)]
-      });
-      notifyBridge(createAlert, 'Crew mint transaction submitted.');
-      startTransferTracking(trackEthereumTx({
-        hash,
-        transfer: {
-          assetType: 'crewmates',
-          assetIds: [Number(asteroidId)],
-          direction: 'mint_crew',
-          fromAddress: ethereumAddress,
-          originChain: 'ethereum',
-          toAddress: ethereumAddress,
-          status: 'submitted',
-          waitingStatus: 'complete'
-        }
-      }));
+      };
+      // A failed estimate must stop here, before MetaMask substitutes a block-sized fallback.
+      const estimatedGas = await publicClient.estimateContractGas(request);
+      const gas = (estimatedGas * 120n + 99n) / 100n;
+      const hash = await writeContract(wagmiConfig, { ...request, gas });
+      notifyBridge(createAlert, 'Crewmate mint transaction submitted.');
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === 'reverted') throw new Error('Ethereum transaction reverted.');
+      setClaimedAsteroidIds((ids) => [...new Set([...ids, Number(asteroidId)])]);
+      queryClient.invalidateQueries({ queryKey: ['bridgeAssets'] });
+      notifyBridge(createAlert, 'Crewmate minted.');
       return hash;
     } catch (e) {
-      console.warn('Crew mint transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'Crew mint transaction failed.'));
+      const revert = e.walk?.((cause) => cause?.name === 'ContractFunctionRevertedError');
+      const reason = revert?.name === 'ContractFunctionRevertedError' ? revert.reason : undefined;
+      if (reason === 'ArvadCrewSale: asteroid has already been used to mint crew') {
+        setClaimedAsteroidIds((ids) => [...new Set([...ids, Number(asteroidId)])]);
+      }
+      reportFailure((alert) => createAlert({
+        ...alert,
+        data: { ...alert.data, content: reason || alert.data.content }
+      }), e, { message: 'actionFailed', context: { action: 'MintCrewmate', asteroidId } });
       return null;
     } finally {
       setBusyKey();
     }
-  }, [createAlert, ensureEthereumReady, ethereumAddress, trackEthereumTx, wagmiConfig]);
+  }, [createAlert, ensureEthereumReady, ethereumAddress, publicClient, queryClient, wagmiConfig]);
 
   const bridgeSwayToStarknet = useCallback(async (amount) => {
     if (!accountAddress) {
@@ -352,11 +371,12 @@ const useBridgeActions = () => {
     const tokenAddress = getConfig('Ethereum.Address.swayToken');
     const bridgeAddress = getConfig('Ethereum.Address.swayBridge');
     if (!(tokenAddress && bridgeAddress && getConfig('Starknet.Address.swayToken'))) {
-      notifyBridge(createAlert, 'SWAY bridge is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
     setBusyKey('sway-l1');
+    setSwayDepositStatus('Checking SWAY approval…');
     try {
       const bridgeAmount = toBridgeAmount(amount);
       const allowance = await readContract(wagmiConfig, {
@@ -366,15 +386,21 @@ const useBridgeActions = () => {
         args: [ethereumAddress, bridgeAddress]
       });
       if (allowance < bridgeAmount) {
+        setSwayDepositStatus('Approve SWAY spending in your Ethereum wallet.');
         const approveHash = await writeContract(wagmiConfig, {
           address: tokenAddress,
           abi: ethereumContracts.SwayToken,
           functionName: 'approve',
           args: [bridgeAddress, bridgeAmount]
         });
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        setSwayDepositStatus('Waiting for approval confirmation…');
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        if (receipt.status === 'reverted') throw new Error('SWAY approval transaction reverted.');
       }
 
+      setSwayDepositStatus(allowance < bridgeAmount
+        ? 'Approval confirmed. Preparing the bridge transaction…'
+        : 'SWAY is approved. Preparing the bridge transaction…');
       const [amountLow, amountHigh] = toU256Parts(bridgeAmount);
       const messageFee = await starknetProvider.estimateMessageFee({
         from_address: bridgeAddress,
@@ -383,6 +409,7 @@ const useBridgeActions = () => {
         payload: [accountAddress, amountLow.toString(), amountHigh.toString(), ethereumAddress]
       }, 'latest');
 
+      setSwayDepositStatus('Confirm the bridge transaction in your Ethereum wallet.');
       const hash = await writeContract(wagmiConfig, {
         address: bridgeAddress,
         abi: ethereumContracts.SwayBridge,
@@ -406,10 +433,11 @@ const useBridgeActions = () => {
       }));
       return hash;
     } catch (e) {
-      console.warn('SWAY bridge transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY bridge transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
+      setSwayDepositStatus();
       setBusyKey();
     }
   }, [
@@ -428,7 +456,7 @@ const useBridgeActions = () => {
     if (!ensureStarknetReady()) return null;
     if (!(await ensureEthereumReady())) return null;
     if (!getConfig('Starknet.Address.swayToken')) {
-      notifyBridge(createAlert, 'SWAY bridge is not configured for this deployment.');
+      notifyBridge(createAlert, errorMessages.serviceUnavailable);
       return null;
     }
 
@@ -459,8 +487,8 @@ const useBridgeActions = () => {
       }));
       return txHash;
     } catch (e) {
-      console.warn('SWAY withdrawal failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY withdrawal failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -505,8 +533,8 @@ const useBridgeActions = () => {
       queryClient.invalidateQueries({ queryKey: ['bridgeSwayCrossings'] });
       return hash;
     } catch (e) {
-      console.warn('SWAY receive transaction failed.', e);
-      notifyBridge(createAlert, formatError(e, 'SWAY receive transaction failed.'));
+      console.warn(errorMessages.bridgeFailed, e);
+      reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
       setBusyKey();
@@ -519,6 +547,8 @@ const useBridgeActions = () => {
     bridgeSwayToEthereum,
     bridgeSwayToStarknet,
     busyKey,
+    claimedAsteroidIds,
+    swayDepositStatus,
     mintCrewFromAsteroid,
     receiveAssetsOnEthereum,
     receiveSwayOnEthereum,
@@ -528,6 +558,8 @@ const useBridgeActions = () => {
     bridgeSwayToEthereum,
     bridgeSwayToStarknet,
     busyKey,
+    claimedAsteroidIds,
+    swayDepositStatus,
     mintCrewFromAsteroid,
     receiveAssetsOnEthereum,
     receiveSwayOnEthereum,

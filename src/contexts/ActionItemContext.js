@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building, Permission } from '@influenceth/sdk';
@@ -214,7 +215,7 @@ export function ActionItemProvider({ children }) {
     setAgreementItems(
       (crewAgreements || [])
         .filter((a) => (
-          ((a._agreement?.permitted?.id === crew?.id) || (crew?.Crew?.delegatedTo && a._agreement?.permitted === crew?.Crew?.delegatedTo))
+          matchesCrewPermissionSubject(a._agreement?.permitted, crew)
           && !!a._agreement?.endTime
           && (a._agreement.endTime > blockTime - 7 * 86400) && (a._agreement.endTime < blockTime + 7 * 86400)
           && !a._agreement.status // (status would indicate that transferred or cancelled instead of expired)

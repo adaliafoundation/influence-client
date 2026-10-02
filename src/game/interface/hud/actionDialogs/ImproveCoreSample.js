@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Asteroid, Crewmate, Deposit, Lot, Product, Time } from '@influenceth/sdk';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Permission, Asteroid, Crewmate, Deposit, Lot, Product, Time } from '@influenceth/sdk';
 
 import { CoreSampleIcon, ImproveCoreSampleIcon, ResourceIcon, SwayIcon, WarningIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
@@ -78,7 +78,7 @@ const Warning = styled.div`
 const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction, stage, ...props }) => {
   const { startImproving, finishSampling } = coreSampleManager;
   const crew = useActionCrew(currentSamplingAction);
-  const { accountCrewIds } = useCrewContext();
+  const { accountCrewIds, crewCan, crewAuthorization } = useCrewContext();
 
   const dispatchResourceMapSelect = useStore(s => s.dispatchResourceMapSelect);
   const resourceMap = useStore(s => s.asteroids.resourceMap);
@@ -102,13 +102,13 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
       .filter((c) => (
         (c.id === currentSamplingAction?.sampleId)
         || (
-          (accountCrewIds?.includes(c.Control.controller.id) || c.PrivateSale?.amount > 0)
+          (crewCan(Permission.IDS.USE_DEPOSIT, c) || c.PrivateSale?.amount > 0)
           && c.Deposit.initialYield > 0
           && c.Deposit.status !== Deposit.STATUSES.USED
         )
       ))
       .map((c) => ({ ...c, tonnage: c.Deposit.initialYield * Product.TYPES[c.Deposit.resource].massPerUnit }));
-  }, [accountCrewIds, lot?.deposits]);
+  }, [crewCan, accountCrewIds, lot?.deposits]);
 
   const [selectedSample, resourceId, initialYieldTonnage] = useMemo(() => {
     const selected = (improvableSamples || []).find((s) => s.id === sampleId);
@@ -153,7 +153,6 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const originalYield = useMemo(() => selectedSample?.Deposit?.initialYield, [selectedSample?.id]); // only update on id change
   const originalTonnage = useMemo(() => originalYield ? originalYield * Product.TYPES[selectedSample?.Deposit.resource]?.massPerUnit : 0, [selectedSample, originalYield]);
 
-
   useEffect(() => {
     // if open to a different resource map, switch... if a resource map is not open, don't open one
     if (resourceId && resourceMap?.active && resourceMap.selected !== resourceId) {
@@ -185,21 +184,19 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const [sampleBounds, sampleTime] = useMemo(() => {
     return [
       lotAbundance ? Deposit.getSampleBounds(lotAbundance, originalYield * 1e3, sampleQualityBonus.totalBonus) : null,
-      Time.toRealDuration(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
+      Time.toRealDurationCeil(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
     ];
   }, [lotAbundance, originalYield, sampleQualityBonus, sampleTimeBonus, crew?._timeAcceleration]);
 
   const [crewTimeRequirement, taskTimeRequirement] = useMemo(() => {
     if (!asteroid?.id || !crew?._location?.lotId || !lot?.id || !drillSource?.lotIndex) return [];
     const oneWayCrewTravelTime = crewTravelTime / 2;
-    const drillTravelTime = Time.toRealDuration(
-      Asteroid.getLotTravelTime(
-        asteroid.id,
-        drillSource?.lotIndex,
-        Lot.toIndex(lot.id),
-        crewTravelBonus.totalBonus,
-        crewDistBonus.totalBonus
-      ),
+    const drillTravelTime = Asteroid.getLotTravelTimeReal(
+      asteroid.id,
+      drillSource?.lotIndex,
+      Lot.toIndex(lot.id),
+      crewTravelBonus.totalBonus,
+      crewDistBonus.totalBonus,
       crew?._timeAcceleration
     );
 
@@ -271,24 +268,9 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
     },
   ]), [crew?._timeAcceleration, crewTravelBonus, crewTravelTime, sampleBounds, sampleQualityBonus, sampleTime, tripDetails]);
 
-  // handle auto-closing
-  const miniStatus = useRef();
-  useEffect(() => {
-    let newMiniStatus = 1;
-    if (currentSamplingAction) newMiniStatus = 2;
-    if (currentSamplingAction?.sampleId) newMiniStatus = 3;
-
-    // (close on status change from no sampleId to sampleId)
-    if (miniStatus.current && miniStatus.current !== newMiniStatus) {
-      props.onClose();
-    }
-
-    miniStatus.current = newMiniStatus;
-  }, [currentSamplingAction]);
-
   const isPurchase = useMemo(
-    () => selectedSample && !accountCrewIds?.includes(selectedSample?.Control?.controller?.id),
-    [accountCrewIds, selectedSample?.Control?.controller?.id]
+    () => selectedSample && crewAuthorization(Permission.IDS.USE_DEPOSIT, selectedSample).status === 'denied' && selectedSample?.PrivateSale?.amount > 0,
+    [crewAuthorization, selectedSample]
   );
 
   const { data: depositOwner } = useCrew(isPurchase ? selectedSample?.Control?.controller?.id : null);
@@ -296,11 +278,11 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const onImprove = useCallback(() => {
     if (isPurchase && !depositOwner) return;
 
-    startImproving(selectedSample?.id, drillSource, depositOwner);
+    return startImproving(selectedSample?.id, drillSource, depositOwner);
   }, [startImproving, selectedSample, drillSource, isPurchase, depositOwner]);
 
   const onFinish = useCallback(() => {
-    finishSampling(currentSamplingAction?.sampleId)
+    return finishSampling(currentSamplingAction?.sampleId)
   }, [finishSampling, currentSamplingAction]);
 
   return (
@@ -433,7 +415,7 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
       <ActionDialogFooter
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
-        disabled={stage === actionStage.NOT_STARTED && (!selectedSample || !drillSource)}
+        disabled={stage === actionStage.NOT_STARTED && (!selectedSample || !drillSource || (!crewCan(Permission.IDS.USE_DEPOSIT, selectedSample) && !isPurchase))}
         goLabel={isPurchase ? 'Purchase & Optimize' : 'Optimize'}
         onGo={onImprove}
         finalizeLabel="Analyze"

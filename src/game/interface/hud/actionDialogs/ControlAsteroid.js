@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Asteroid } from '@influenceth/sdk';
 
@@ -45,15 +45,6 @@ const Note = styled.div`
 const ControlAsteroid = ({ asteroid, controlManager, stage, ...props }) => {
   const { controlAsteroid } = controlManager;
   const { captain, crew } = useCrewContext();
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = stage;
-  }, [stage]);
 
   return (
     <>

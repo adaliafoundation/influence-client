@@ -1,26 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Inventory, Permission, Product } from '@influenceth/sdk';
-import styled from 'styled-components';
+
 
 import { ForwardIcon, HeliocentricIcon, InventoryIcon, JettisonCargoIcon, LocationIcon, RouteIcon, WarningIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
-import useDeliveryManager from '~/hooks/actionManagers/useDeliveryManager';
+
 import useLot from '~/hooks/useLot';
-import useStore from '~/hooks/useStore';
+
 import { reactBool, locationsArrToObj } from '~/lib/utils';
 import { ItemSelectionSection, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, formatMass, formatVolume, FlexSectionSpacer, ActionDialogBody, FlexSection, TransferSelectionDialog, ActionDialogTabs, InventoryChangeCharts, InventorySelectionDialog, InventoryInputBlock } from './components';
 import { ActionDialogInner, useAsteroidAndLot } from '../ActionDialog';
-import useCrew from '~/hooks/useCrew';
-import CrewIndicator from '~/components/CrewIndicator';
+
+
 import useEntity from '~/hooks/useEntity';
-import useActionCrew from '~/hooks/useActionCrew';
-import { TransferP2PIcon } from '~/components/Icons';
-import useHydratedCrew from '~/hooks/useHydratedCrew';
+
+
+
 import actionStage from '~/lib/actionStages';
 import formatters from '~/lib/formatters';
-import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
+
 import theme from '~/theme';
-import useBlockTime from '~/hooks/useBlockTime';
+
 import useJettisonCargoManager from '~/hooks/actionManagers/useJettisonCargoManager';
 
 const JettisonCargo = ({ asteroid, actionManager, origin: fixedOrigin, stage, ...props }) => {
@@ -92,7 +92,7 @@ const JettisonCargo = ({ asteroid, actionManager, origin: fixedOrigin, stage, ..
   ]), [totalMass, totalVolume]);
 
   const onJettison = useCallback(() => {
-    jettisonCargo(
+    return jettisonCargo(
       originInventory?.slot,
       selectedItems,
       { asteroidId: asteroid?.id, lotId: originLot?.id }
@@ -248,17 +248,6 @@ const Wrapper = (props) => {
     if (!asteroid && !isLoading) props.onClose();
     if (origin && !originEntity && !originLoading) props.onClose();
   }, [asteroid, origin, originEntity, isLoading, originLoading]);
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && jettisonManager.actionStage !== lastStatus.current) {
-      if (props.onClose) props.onClose();
-    }
-    if (!jettisonManager.isLoading) {
-      lastStatus.current = jettisonManager.actionStage;
-    }
-  }, [jettisonManager.isLoading, jettisonManager.actionStage]);
 
   return (
     <ActionDialogInner

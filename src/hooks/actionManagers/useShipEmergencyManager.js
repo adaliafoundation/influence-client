@@ -12,7 +12,7 @@ const useShipEmergencyManager = () => {
   const caller_crew = useMemo(() => ({ id: crew?.id, label: Entity.IDS.CREW }), [crew?.id]);
 
   const activateEmergencyMode = useCallback(() => {
-    execute(
+    return execute(
       'ActivateEmergency',
       { caller_crew },
       {/* TODO: meta? */}
@@ -20,7 +20,7 @@ const useShipEmergencyManager = () => {
   }, [caller_crew, execute]);
 
   const deactivateEmergencyMode = useCallback(() => {
-    execute(
+    return execute(
       'DeactivateEmergency',
       { caller_crew },
       {/* TODO: meta? */}
@@ -28,7 +28,7 @@ const useShipEmergencyManager = () => {
   }, [execute]);
 
   const collectEmergencyPropellant = useCallback(() => {
-    execute(
+    return execute(
       'CollectEmergencyPropellant',
       { caller_crew },
       {/* TODO: meta? */}

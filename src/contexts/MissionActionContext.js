@@ -1,3 +1,6 @@
+import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
+import { reportFailure } from '../lib/errorReporting';
+import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { appConfig } from '~/appConfig';
@@ -10,10 +13,16 @@ import useStarterMissions from '~/hooks/useStarterMissions';
 import useMissionBindings from '~/hooks/useMissionBindings';
 import api from '~/lib/api';
 import { getStarterMissionAssignment } from '~/lib/starterMissions';
-import { bindingUnavailableMessage, getMissionDialogBindings, MISSION_ACTIONS, MISSION_DIALOGS } from '~/lib/missionBindings';
+import { bindingUnavailableMessage, canParticipateInCampaign, getMissionDialogBindings, isCampaignWarehouseReceipt, MISSION_ACTIONS, MISSION_DIALOGS, verifyMissionAction } from '~/lib/missionBindings';
 
 const MissionActionContext = createContext(null);
 export const useMissionAction = () => useContext(MissionActionContext);
+
+// Callers memoize the selected action details so editing a dialog updates its qualification.
+export const useMissionActionDetails = (details) => {
+  const setDetails = useMissionAction()?.setDetails;
+  useEffect(() => { setDetails?.(details); }, [details, setDetails]);
+};
 
 // The delivery manager can resolve a transaction link to an entity after indexing.
 export const useMissionDeliveryTarget = (deliveryId) => {
@@ -32,84 +41,83 @@ const MissionActionState = ({ type, params, children }) => {
   const participation = useStore(s => s.missionParticipation[scope]);
   const setParticipation = useStore(s => s.dispatchMissionParticipation);
   const [deliveryId, setDeliveryId] = useState(null);
+  const [details, setDetails] = useState({});
   const active = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const [error, setError] = useState(null);
+  const createAlert = useStore(s => s.dispatchAlertLogged);
   const [checking, setChecking] = useState(false);
   const accepted = view?.missions?.filter(m => m.accepted) || [];
   const mission = accepted.find(m => !m.completed) || accepted[accepted.length - 1];
   const requests = useMemo(() => {
-    if (!view?.active || !view?.campaign || !mission) return [];
+    if (!view?.active || !view?.campaign || !mission || details.unsupported) return [];
     const base = { campaign: view.campaign, subject: view.subject };
-    return getMissionDialogBindings({ type, params, buildingId: lot?.building?.id, deliveryId })
+    const targets = getMissionDialogBindings({ type, params, buildingId: lot?.building?.id, deliveryId });
+    if (type === 'SURFACE_TRANSFER' && (params?.deliveryId || deliveryId)
+      && isCampaignWarehouseReceipt(view, details.destination, details.destinationSlot)) {
+      targets.push({ kind: 'Built', entity: { label: details.destination.label, id: details.destination.id } });
+    }
+    return targets
       .map(check => ({ ...base, ...check }));
-  }, [view?.active, view?.campaign, view?.subject, mission, lot?.building?.id, type, params, deliveryId]);
+  }, [view, mission, lot?.building?.id, type, params, deliveryId, details.destination, details.destinationSlot, details.unsupported]);
   const checks = useMissionBindings(requests);
   const stateUnavailable = !view || campaignQuery.isError;
   const targetResolving = type === 'SURFACE_TRANSFER' && !!params?.txHash && !params?.deliveryId && !deliveryId;
   const bound = checks[0]?.data?.status === 'matched';
   const campaignUnderway = !!mission && view.missions.some(entry => !entry.completed);
-  const selected = !!view?.eligible && (participation ?? (campaignUnderway || bound));
+  const qualifies = canParticipateInCampaign({ type, params, view, building: lot?.building,
+    details: { ...details, deliveryId }, bindings: requests.map((request, index) => ({ ...request, ...checks[index]?.data })) });
+  const selected = qualifies && (participation ?? (campaignUnderway || bound));
   const pending = pendingTransactions.some(tx => {
     const assignment = tx.meta?.missionAssignment;
     return assignment && view?.campaign && BigInt(assignment.campaign) === BigInt(view.campaign)
       && BigInt(assignment.subject.id) === BigInt(crew.id);
   });
   const unavailable = checks.find(q => q.isLoading || q.isError || q.data?.status === 'unknown' || q.data?.status === 'mismatched');
-  const constructionMissing = checks.find((q, index) => index > 0 && requests[index].kind === 'Built' && q.data?.status === 'unbound');
+  const verificationPending = !!unavailable && participation !== false && !!mission;
   let verificationMessage;
   if (stateUnavailable) {
     verificationMessage = campaignQuery.isError
-      ? 'Campaign state is unavailable. Retry before submitting this action.'
+      ? errorMessages.missionUnavailable
       : 'Loading campaign state…';
   } else if (targetResolving) {
     verificationMessage = 'Waiting for the delivery to be indexed…';
-  } else if (selected && constructionMissing) {
-    verificationMessage = 'This building has no indexed campaign construction. Retry after indexing catches up, or use a campaign building.';
-  } else if (selected && unavailable) {
+  } else if (verificationPending) {
     verificationMessage = unavailable.isLoading ? 'Checking campaign bindings…' : bindingUnavailableMessage(unavailable.data);
   }
-  const message = error || verificationMessage;
+  const message = verificationMessage;
 
   const prepare = useCallback(async (key, vars, options) => {
-    setError(null);
     setChecking(true);
     try {
-      // Cancellation and abandonment do not earn evidence and stay native.
-      if (['CancelDelivery', 'ConstructionAbandon'].includes(key)) return options;
+      if (!MISSION_ACTIONS[key]) return options;
       if (stateUnavailable || targetResolving) throw new Error('Wait for campaign verification before submitting this action.');
+      if (verificationPending) throw new Error(verificationMessage);
       if (!selected) return options;
       const fresh = await api.getStarterMissions(crew.id);
       if (!active.current) return null;
-      if (String(fresh.campaign) !== String(view?.campaign)) throw new Error('The starter campaign changed. Reopen this action.');
-      const rule = MISSION_ACTIONS[key];
-      if (rule?.binding) {
-        const binding = await api.getMissionBinding({
-          campaign: fresh.campaign, subject: fresh.subject, kind: rule.binding,
-          entity: vars[rule.target], ...(rule.slot ? { slot: vars[rule.slot] } : {})
-        });
-        if (!active.current) return null;
-        if (binding.status === 'unknown' || binding.status === 'mismatched') throw new Error(bindingUnavailableMessage(binding));
-      }
-      if (!rule) throw new Error(`${key} does not support campaign credit. Use a supported action or turn off campaign participation.`);
+      if (String(fresh.campaign) !== String(view?.campaign)) throw new Error(`The ${STARTER_CAMPAIGN_NAME} campaign changed. Reopen this action.`);
       const available = fresh.missions.filter(m => m.accepted);
       const assignmentMission = available.find(m => !m.completed) || available[available.length - 1];
       if (!fresh.eligible || !assignmentMission) throw new Error('This crew cannot perform campaign work.');
-      return { ...options, missionAssignment: getStarterMissionAssignment(fresh, assignmentMission.id) };
+      const assignment = getStarterMissionAssignment(fresh, assignmentMission.id);
+      const qualifies = await verifyMissionAction({ key, vars, assignment, view: fresh,
+        getBinding: api.getMissionBinding, getEntity: api.getEntityById });
+      if (!active.current) return null;
+      return qualifies ? { ...options, missionAssignment: assignment } : options;
     } catch (e) {
       if (!active.current) return null;
-      setError(e.response || e.request ? 'Campaign verification is unavailable. Retry shortly.' : e.message || 'Campaign verification failed. Retry shortly.');
+      reportFailure(createAlert, e, { message: 'missionUnavailable' });
       return null;
     } finally {
       if (active.current) setChecking(false);
     }
-  }, [crew?.id, view?.campaign, mission, selected, stateUnavailable, targetResolving]);
+  }, [crew?.id, view?.campaign, selected, stateUnavailable, targetResolving, verificationPending, verificationMessage]);
 
-  const retry = () => { setError(null); campaignQuery.refetch(); checks.forEach(q => q.refetch()); };
+  const retry = () => { campaignQuery.refetch(); checks.forEach(q => q.refetch()); };
   return <MissionActionContext.Provider value={{
-    missionTitle: mission?.title,
-    visible: !!mission || stateUnavailable || targetResolving, ready: !stateUnavailable && !targetResolving, selected, bound, setDeliveryId, setSelected: value => { setParticipation(scope, value); setError(null); },
-    unavailable: !!unavailable, constructionMissing: !!constructionMissing, message, pending, checking, eligible: view?.eligible, retry, prepare
+    visible: qualifies || stateUnavailable || targetResolving || verificationPending, qualifies, missionTitle: mission?.title,
+    ready: !stateUnavailable && !targetResolving && !verificationPending, selected, bound, setDeliveryId, setDetails, setSelected: value => { setParticipation(scope, value); },
+    unavailable: !!unavailable, message, pending, checking, eligible: view?.eligible, retry, prepare
   }}>{children}</MissionActionContext.Provider>;
 };
 

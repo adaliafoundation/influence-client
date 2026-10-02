@@ -1,3 +1,4 @@
+import { errorMessages } from './errorMessages';
 import { appConfig } from '~/appConfig';
 import { UpdateIcon, WarningIcon, SettingsIcon, WalletIcon, ClipboardIcon } from '~/components/Icons';
 
@@ -11,15 +12,20 @@ const entries = {
     content: <span>{e.content}</span>
   }),
 
+  WalletConnectionRequired: (e) => ({
+    icon: <WarningIcon />,
+    content: <span>Please try again after connecting your {e.walletName} account: <strong>{e.address}</strong></span>
+  }),
+
   DeployAccount: (e) => ({
     icon: <WalletIcon />,
-    content: <span>You must deploy your account first. Click here to prompt a deployment transaction.</span>
+    content: <span>{errorMessages.setupRequired}</span>
   }),
 
   // TODO: this may be out of use...
   GenericLoadingError: (e) => ({
     content: (
-      <span>Error loading {e.label || 'data'}. Please refresh and try again.</span>
+      <span>{errorMessages.genericLoading(e.label)}</span>
     ),
   }),
 

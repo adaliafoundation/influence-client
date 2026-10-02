@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { errorMessages } from '../../../../lib/errorMessages';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Entity, Permission, Time } from '@influenceth/sdk';
 import styled from 'styled-components';
 import numeral from 'numeral';
@@ -46,6 +47,7 @@ import {
 import {
   getEntityCrew,
   getLotLeaseAuctionStatus,
+  getLotLeaseEligibility,
   getLotLeasePayment,
   canRestoreExpiredLotLease,
   canExtendAgreement,
@@ -159,7 +161,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const { currentAgreement, currentAgreementRaw, currentPolicy, cancelAgreement, enterAgreement, extendAgreement, pendingChange } = agreementManager;
   const { data: asteroid } = useAsteroid(locationsArrToObj(entity?.Location?.locations || []).asteroidId);
   const blockTime = useBlockTime();
-  const { crew } = useCrewContext();
+  const { crew, authorize } = useCrewContext();
   const { data: swayBalance } = useSwayBalance();
 
   const location = useHydratedLocation(locationsArrToObj(entity?.Location?.locations || []));
@@ -170,6 +172,8 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   const { data: buildingController, isLoading: buildingControllerIsLoading } = useCrew(entity?.building?.Control?.controller?.id);
 
   const isLotLease = entity?.label === Entity.IDS.LOT && permission === Permission.IDS.USE_LOT;
+  const lotLeaseCreationBlocked = isLotLease && !isExtension && !isTermination
+    && getLotLeaseEligibility({ asteroid, lot: entity, authorize }).status !== 'allowed';
   const auctionStatus = useMemo(
     () => isLotLease ? getLotLeaseAuctionStatus({ asteroid, lot: entity, blockTime }) : null,
     [asteroid, blockTime, entity, isLotLease]
@@ -394,7 +398,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
     const copied = await copyTextToClipboard(currentPolicy?.policyDetails?.contract);
     createAlert({
       type: 'ClipboardAlert',
-      data: { content: copied ? 'Contract address copied to clipboard.' : 'Unable to copy contract address.' },
+      data: { content: copied ? 'Contract address copied to clipboard.' : errorMessages.copyFailed },
       duration: 2000
     });
   }, [createAlert, currentPolicy?.policyDetails?.contract]);
@@ -413,21 +417,22 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   }, [maxTerm, minTerm]);
 
   const onEnterAgreement = useCallback(() => {
+    if (lotLeaseCreationBlocked) return;
     const recipient = controller?.Crew?.delegatedTo;
-    enterAgreement({ auctionPayment, isStarterLotLease: usingStarterLotLease, recipient, term, termPrice });
-  }, [auctionPayment, controller?.Crew?.delegatedTo, enterAgreement, term, termPrice, usingStarterLotLease]);
+    return enterAgreement({ auctionPayment, isStarterLotLease: usingStarterLotLease, recipient, term, termPrice });
+  }, [lotLeaseCreationBlocked, auctionPayment, controller?.Crew?.delegatedTo, enterAgreement, term, termPrice, usingStarterLotLease]);
 
   const onExtendAgreement = useCallback(() => {
     const recipient = controller?.Crew?.delegatedTo;
     if (!extensionAllowed) return;
-    extendAgreement({
+    return extendAgreement({
       recipient, term, termPrice,
       ...(isExpiredLeaseRenewal ? { permitted: getEntityCrew(crew?.id) } : {})
     });
   }, [controller?.Crew?.delegatedTo, crew?.id, extendAgreement, extensionAllowed, isExpiredLeaseRenewal, term, termPrice]);
 
   const onTerminateAgreement = useCallback(() => {
-    cancelAgreement({
+    return cancelAgreement({
       recipient: permitted?.Crew?.delegatedTo,
       refundAmount: Math.ceil(refundableAmount * TOKEN_SCALE[TOKEN.SWAY])
     })
@@ -485,6 +490,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
   }, [currentAgreement?.noticePeriod, currentPolicy?.policyType, entity, isLotLease, isManualAuctionBlocked, isAuctionPurchase, isExpiredLeaseRenewal, isExpiredExtension, isExtension, isTermination, onEnterAgreement, onExtendAgreement, onTerminateAgreement, stage, usingStarterLotLease]);
 
   const disableGo = useMemo(() => {
+    if (lotLeaseCreationBlocked) return true;
     if (isExpiredExtension) return true;
     if (insufficientAssets) return true;
     if (isAuctionPurchase && !auctionStatus?.isAuctionAvailable) return true;
@@ -492,7 +498,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
     if (isTermination && currentAgreement?._canGiveNoticeStart > blockTime) return true;
     if (!starterLotLeaseCandidate && (initialPeriod === '' || initialPeriod <= 0)) return true;
     return false;
-  }, [isExpiredExtension, auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
+  }, [lotLeaseCreationBlocked, isExpiredExtension, auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
   const leasePeriodInvalid = !starterLotLeaseCandidate && !isTermination && (isLeaseExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (initialPeriod === '' || initialPeriod <= 0);
   return (
     <>
@@ -642,7 +648,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
             <Alert scheme={alertScheme}>
               <div>
                 {entity.label === Entity.IDS.LOT
-                  ? <><LotControlIcon /> Lot Control (Exclusive)</>
+                  ? <><LotControlIcon /> Lot Lease (Exclusive Tenancy)</>
                   : <><PermissionIcon /> {Permission.TYPES[permission].name}</>
                 }
               </div>
@@ -650,7 +656,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                 ? (
                   <>
                     <Desc>
-                      Start the Notice Period, after which the asset agreement expires.
+                      Start the notice period. Access remains valid through the later of the lease expiry and the notice deadline.
                     </Desc>
                     {refundablePeriod > 0 && currentAgreement?.rate > 0 && (
                       <div style={{ padding: '0 10px' }}>
@@ -690,7 +696,6 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                     {isManualAuctionBlocked && (
                       <Desc>
                         This lot cannot be leased until the asteroid administrator starts its manual auction.
-                        The auction has not started. Its timer and price will be determined when the start transaction completes.
                       </Desc>
                     )}
                     {currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID && !isManualAuctionBlocked && (
@@ -730,8 +735,8 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
           <FlexSection style={{ alignItems: 'center', color: theme.colors.error, justifyContent: 'center' }}>
             <span style={{ fontSize: '28px', textAlign: 'center', width: 60 }}><WarningIcon /></span>
             <span style={{ flex: '1 0 calc(100% - 60px)', fontSize: '90%' }}>
-              My crew has an existing pre-paid agreement here with <b>{formatTimer(remainingPeriod, 2).toUpperCase()}</b> remaining.
-              This new agreement will replace the previous and go into effect immediately without refund, credit, or delay.
+              You have an existing pre-paid agreement here with <b>{formatTimer(remainingPeriod, 2).toUpperCase()}</b> remaining.
+              A new agreement would replace the previous and go into effect immediately without refund or credit.
             {/* 
               Crew has an existing agreement. Forming a new agreement will replace the existing one.
               There will be no credit or refund for the {formatTimer(remainingPeriod, 2)} that
@@ -767,17 +772,6 @@ const Wrapper = ({ entity: entityId, permission, isExtension, agreementPath, ...
 
   const agreementManager = useAgreementManager(entity, permission, agreementPath);
   const stage = agreementManager.pendingChange ? actionStages.STARTING : actionStages.NOT_STARTED;
-
-  // handle auto-closing on any status change
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && stage !== lastStatus.current) {
-      props.onClose();
-    }
-    if (!lastStatus.current) {
-      lastStatus.current = stage;
-    }
-  }, [stage, props]);
 
   useEffect(() => {
     if (!entityIsLoading && !entity) {

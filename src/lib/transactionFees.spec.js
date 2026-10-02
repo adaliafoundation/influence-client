@@ -69,7 +69,7 @@ test.each([true, false])('shows a top-up prompt when all payment methods fail (p
   options.account.execute.mockRejectedValue(new Error('Insufficient STRK balance'));
   await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
   expect(options.requestFeePermission).toHaveBeenCalledWith(available ? 'TOP_UP' : 'TOP_UP_STRK');
-  expect(options.openTopUp).toHaveBeenCalledTimes(available ? 1 : 0);
+  expect(options.openTopUp).toHaveBeenCalledTimes(1);
 });
 
 test.each(['estimatePaymasterTransactionFee', 'executePaymasterTransaction', 'execute'])('does not retry or request a top-up after rejection in %s', async (method) => {
@@ -92,4 +92,34 @@ test('respects declined fee-token permission', async () => {
   await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
   expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
   expect(options.account.execute).not.toHaveBeenCalled();
+});
+
+
+test.each(['Timeout waiting for wallet signature', 'Network request failed', 'Execute failed', 'Contract execution reverted', 'Insufficient max fee'])('does not suggest funding for a native transaction error: %s', async (message) => {
+  options.usePaymaster = false;
+  const error = new Error(message);
+  options.account.execute.mockRejectedValue(error);
+  await expect(executePaidTransaction(options)).rejects.toBe(error);
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+  expect(options.openTopUp).not.toHaveBeenCalled();
+  expect(error.suppressTransactionFailure).toBeUndefined();
+  expect(options.account.execute).toHaveBeenCalledTimes(1);
+});
+
+test('waiting for a wallet signature never opens a funding prompt', async () => {
+  jest.useFakeTimers();
+  try {
+    options.usePaymaster = false;
+    let sign;
+    options.account.execute.mockImplementation(() => new Promise(resolve => { sign = resolve; }));
+    const pending = executePaidTransaction(options);
+    jest.advanceTimersByTime(30000);
+    await Promise.resolve();
+    expect(options.requestFeePermission).not.toHaveBeenCalled();
+    expect(options.openTopUp).not.toHaveBeenCalled();
+    sign(tx);
+    await expect(pending).resolves.toEqual(tx);
+  } finally {
+    jest.useRealTimers();
+  }
 });

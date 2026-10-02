@@ -1,4 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import useSimulationEnabled from '~/hooks/useSimulationEnabled';
+import ActionSubmissionProvider from '~/components/ActionSubmissionProvider';
+import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
+import { actionDialogCompletion } from '~/lib/actionDialogCompletion';
+import IconButton from '~/components/IconButton';
+import { CloseIcon } from '~/components/Icons';
+import ActionDialogGate from './ActionDialogGate';
+import { useEffect, useMemo, useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { PuffLoader } from 'react-spinners';
 import { Tooltip } from 'react-tooltip';
@@ -197,32 +204,37 @@ const ActionMain = styled.div`
 `;
 
 // TODO: transition in
-export const ActionDialogInner = ({ actionImage, children, isLoading, stage }) => (
-  <Modal {...theming[stage]}>
-    <ModalInner isLoading={reactBool(isLoading)}>
-      {isLoading && <LoadingContainer><PuffLoader color="white" /></LoadingContainer>}
-      {!isLoading && (
-        <>
-          {actionImage && modalHeaders[actionImage] && <ActionImage src={modalHeaders[actionImage]} />}
-          <ActionMain>
-            {children}
-          </ActionMain>
-        </>
-      )}
-    </ModalInner>
-    <Tooltip id="actionDialogTooltip" place="left" />
-    <ClipCorner dimension={cornerSize} color={theming[stage]?.borderColor} />
-  </Modal>
-);
+export const ActionDialogInner = ({ actionImage, children, isLoading, stage, showClose }) => {
+  const submission = useActionSubmission();
+  return (
+    <Modal {...theming[stage]}>
+      <ModalInner isLoading={reactBool(isLoading)}>
+        {(isLoading || showClose) && submission && <IconButton aria-label="Close action dialog" onClick={submission.dismiss} style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}><CloseIcon /></IconButton>}
+        {isLoading && <LoadingContainer><PuffLoader color="white" /></LoadingContainer>}
+        {!isLoading && (
+          <>
+            {actionImage && modalHeaders[actionImage] && <ActionImage src={modalHeaders[actionImage]} />}
+            <ActionMain>
+              {children}
+            </ActionMain>
+          </>
+        )}
+      </ModalInner>
+      <Tooltip id="actionDialogTooltip" place="left" />
+      <ClipCorner dimension={cornerSize} color={theming[stage]?.borderColor} />
+    </Modal>
+  );
+};
 
-const ActionDialog = ({ type, params }) => {
+const ActionDialogContent = ({ type, params }) => {
   const setAction = useStore(s => s.dispatchActionDialog);
 
+  const submission = useActionSubmission();
   const allProps = useMemo(() => ({
     ...params,
-    onSetAction: setAction,
-    onClose: () => setAction(),
-  }), [params, setAction]);
+    onSetAction: submission.navigate,
+    onClose: submission.requestClose,
+  }), [params, submission.navigate, submission.requestClose]);
 
   useEffect(() => {
     const onKeyUp = (e) => {
@@ -232,7 +244,7 @@ const ActionDialog = ({ type, params }) => {
     return () => {
       document.removeEventListener('keyup', onKeyUp);
     }
-  }, []);
+  }, [setAction]);
 
   return (
     <Backdrop>
@@ -283,10 +295,38 @@ const ActionDialog = ({ type, params }) => {
   );
 }
 
+const ActionDialog = ({ type, params }) => {
+  const simulationEnabled = useSimulationEnabled();
+  const session = useRef({ type, params, key: 0 });
+  if (session.current.type !== type || session.current.params !== params) {
+    session.current = { type, params, key: session.current.key + 1 };
+  }
+  const dialog = useStore.getState().actionDialog;
+  const setAction = (...args) => {
+    if (useStore.getState().actionDialog === dialog) useStore.getState().dispatchActionDialog(...args);
+  };
+  const onSuccess = transactionKey => {
+    const completion = actionDialogCompletion(type, transactionKey);
+    if (completion === 'construct') {
+      const state = useStore.getState();
+      if (simulationEnabled && !state.simulation?.canFastForward) setAction();
+      else setAction('CONSTRUCT');
+    } else if (completion === 'close') {
+      if (type === 'SET_COURSE' && useStore.getState().actionDialog === dialog) {
+        useStore.getState().dispatchHudMenuOpened();
+        useStore.getState().dispatchTravelMode(false);
+      }
+      setAction();
+    }
+  };
+  return <ActionSubmissionProvider key={session.current.key} onClose={() => setAction()} onSetAction={setAction} onSuccess={onSuccess}>
+    <ActionDialogContent type={type} params={params} />
+  </ActionSubmissionProvider>;
+};
+
 const ActionDialogWrapper = () => {
   const actionDialog = useStore(s => s.actionDialog);
-  // const actionDialog = { params: { origin: { id: 755, label: 6 }, originSlot: 2 }, type: 'JETTISON_CARGO' }; // (for debugging)
-  return actionDialog?.type ? <ActionDialog {...actionDialog} /> : null;
+  return actionDialog?.type ? <ActionDialogGate><ActionDialog {...actionDialog} /></ActionDialogGate> : null;
 };
 
 export default ActionDialogWrapper;

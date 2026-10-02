@@ -4,6 +4,7 @@ import TerrainChunkPreparer from './TerrainChunkPreparer';
 import { initChunkTextures, rebuildChunkMaps } from './TerrainChunkUtils';
 import constants from '~/lib/constants';
 import terrainPerformance from '~/lib/terrainPerformance';
+import { reportBackgroundWorkError, withBackgroundWorkTimeout } from '../../../../lib/backgroundWork';
 
 import { WorkerQueuePriority } from '~/lib/workerQueue';
 
@@ -43,7 +44,9 @@ class TerrainChunkManager {
     this.targetPoolSize = TERRAIN_CHUNK_POOL_SIZE_MIN;
 
     this.ready = false;
-    initChunkTextures().then(() => { this.ready = true; });
+    withBackgroundWorkTimeout(initChunkTextures(), 'Terrain texture initialization')
+      .then(() => { if (!this.disposed) this.ready = true; })
+      .catch((error) => { if (!this.disposed) reportBackgroundWorkError(error); });
   }
 
   dispose() {

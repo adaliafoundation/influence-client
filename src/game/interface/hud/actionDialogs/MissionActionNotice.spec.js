@@ -15,7 +15,7 @@ jest.mock('~/components/Icons', () => ({
 test('names the mission and allows opting out of a bound action', () => {
   const setSelected = jest.fn();
   useMissionAction.mockReturnValue({
-    visible: true, ready: true, eligible: true, selected: true, bound: true,
+    visible: true, ready: true, qualifies: true, eligible: true, selected: true, bound: true,
     missionTitle: 'Make Landfall', setSelected
   });
   render(<ThemeProvider theme={{ colors: { main: 'teal' } }}><MissionActionNotice /></ThemeProvider>);
@@ -30,4 +30,12 @@ test.each(['STARTING', 'COMPLETING'])('hides campaign controls and indexing noti
   useMissionAction.mockReturnValue({ visible: true, ready: true, selected: true, pending: true, missionTitle: 'Make Landfall' });
   const { container } = render(<MissionActionNotice stage={stage} />);
   expect(container).toBeEmptyDOMElement();
+});
+
+
+test('an unrelated action has no checkbox, even when a verification message is visible', () => {
+  useMissionAction.mockReturnValue({ visible: true, ready: true, qualifies: false, message: 'Check campaign state', retry: jest.fn() });
+  render(<MissionActionNotice />);
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toBeInTheDocument();
 });

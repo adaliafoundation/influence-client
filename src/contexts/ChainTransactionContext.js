@@ -1,3 +1,7 @@
+import { errorMessages } from '../lib/errorMessages';
+import { createFundingError, isUserCancellation, reportFailure } from '../lib/errorReporting';
+import { deliveryPaymentTransfers } from '~/lib/deliveryAuthorization';
+import { recheckTransactionAuthorization } from '~/lib/transactionAuthorization';
 import { verifyMissionAction } from '~/lib/missionBindings';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
@@ -28,13 +32,13 @@ import {
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
 import { isWalletAccountLocked } from '~/lib/walletLock';
+import { isWalletRequestTimeout } from '../lib/walletErrors';
+import { getWalletLabel } from '~/lib/wallets';
 
 const RETRY_INTERVAL = 5e3; // 5 seconds
-const WALLET_RECONNECT_TIMEOUT = 30e3;
 const ChainTransactionContext = createContext();
 const EXPLICIT_AUTHORIZATION_PRIMARY_TYPE = 'InfluenceTransactionAuthorization';
 const PAYMASTER_FEE_TOKENS = [TOKEN.USDC, TOKEN.SWAY];
-const USER_REJECTED_TRANSACTION = /USER_REFUSED_OP|User abort|User rejected/i;
 
 // TODO: equalityTest default of 'i' doesn't make sense anymore
 
@@ -58,11 +62,7 @@ const customConfigs = {
   // customization of Systems configs from sdk
   AcceptDelivery: {
     equalityTest: ['delivery.id'],
-    getTransferConfig: ({ caller, delivery, price }) => ({
-      amount: safeBigInt(price || 0),
-      recipient: caller,
-      memo: Entity.packEntity(delivery)
-    })
+    getTransferConfig: deliveryPaymentTransfers
   },
   AcceptPrepaidAgreement: {
     equalityTest: ['target.id', 'target.label', 'permission'],
@@ -607,20 +607,21 @@ export function ChainTransactionProvider({ children }) {
     blockTime,
     chainId,
     getTransactionAccount,
+    refreshWalletConnection,
     isDeployed,
-    login,
     paymasterTokens,
     provider,
     sessionWallet,
     upgradeInsecureSession,
     walletAccount,
     walletCapabilities,
+    walletReadyForTransactions,
     walletId
   } = useSession();
   const queryClient = useQueryClient();
   const missionSubmissions = useRef(new Set());
   const activities = useActivitiesContext();
-  const { crew } = useCrewContext();
+  const { crew, recheckAuthorization } = useCrewContext();
   const { data: walletSource } = useWalletPurchasableBalances();
   const { data: swayBalanceSource } = useSwayBalance();
   const { data: usdcBalanceSource } = useUSDCBalance();
@@ -638,10 +639,10 @@ export function ChainTransactionProvider({ children }) {
   const usdcRef = useRef();
   usdcRef.current = usdcBalanceSource;
 
+  const executionRef = useRef();
   const walletAccountRef = useRef();
-  walletAccountRef.current = walletAccount;
-
-  const walletConnectionWaiters = useRef([]);
+  // Account discovery precedes login/session approval; signing must wait for both.
+  walletAccountRef.current = walletReadyForTransactions ? walletAccount : undefined;
 
   const createAlert = useStore(s => s.dispatchAlertLogged);
   const gameplay = useStore(s => s.gameplay);
@@ -657,6 +658,7 @@ export function ChainTransactionProvider({ children }) {
 
   const [promptingTransaction, setPromptingTransaction] = useState(false);
   const [feePrompt, setFeePrompt] = useState();
+  const [fundingRequirement, setFundingRequirement] = useState(null);
   const [nonce, setNonce] = useState();
   const sponsorshipUnavailableRef = useRef(false);
 
@@ -675,44 +677,22 @@ export function ChainTransactionProvider({ children }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!walletAccount) return;
-
-    walletConnectionWaiters.current.forEach(({ resolve, timeout }) => {
-      clearTimeout(timeout);
-      resolve(walletAccount);
+  const notifyWalletDisconnected = useCallback(() => {
+    const formattedAddress = accountAddress?.length > 10
+      ? `${accountAddress.slice(0, 6)}...${accountAddress.slice(-4)}`
+      : accountAddress;
+    const message = authenticated
+      ? `Please try again after connecting your ${getWalletLabel(walletId)} account: ${formattedAddress}`
+      : errorMessages.connection;
+    createAlert({
+      type: authenticated ? 'WalletConnectionRequired' : 'GenericAlert',
+      data: authenticated
+        ? { walletName: getWalletLabel(walletId), address: formattedAddress }
+        : { content: message },
+      level: 'warning',
     });
-    walletConnectionWaiters.current = [];
-  }, [walletAccount]);
-
-  useEffect(() => {
-    const waiters = walletConnectionWaiters;
-    return () => {
-      waiters.current.forEach(({ reject, timeout }) => {
-        clearTimeout(timeout);
-        reject(new Error('Wallet reconnect cancelled'));
-      });
-      waiters.current = [];
-    };
-  }, []);
-
-  const waitForWalletConnection = useCallback(async () => {
-    if (walletAccountRef.current) return walletAccountRef.current;
-
-    await login(walletId ? { [walletId]: true } : undefined);
-
-    if (walletAccountRef.current) return walletAccountRef.current;
-
-    return new Promise((resolve, reject) => {
-      const waiter = { resolve, reject };
-      waiter.timeout = setTimeout(() => {
-        walletConnectionWaiters.current = walletConnectionWaiters.current.filter((w) => w !== waiter);
-        reject(new Error('Wallet reconnect timed out'));
-      }, WALLET_RECONNECT_TIMEOUT);
-
-      walletConnectionWaiters.current.push(waiter);
-    });
-  }, [login, walletId]);
+    return message;
+  }, [accountAddress, authenticated, createAlert, walletId]);
 
   // Sets the nonce initially to allow for some local management
   useEffect(() => {
@@ -731,7 +711,7 @@ export function ChainTransactionProvider({ children }) {
     const upgraded = await upgradeInsecureSession();
     if (upgraded === false) {
       const error = new Error('Unable to upgrade account session after deployment.');
-      error.userMessage = 'Please sign in to continue.';
+      error.userMessage = errorMessages.signIn;
       throw error;
     }
   }, [upgradeInsecureSession]);
@@ -751,7 +731,7 @@ export function ChainTransactionProvider({ children }) {
 
       const error = new Error('User rejected explicit transaction authorization.');
       error.cause = e;
-      error.userMessage = 'Please authorize this purchase to continue.';
+      error.userMessage = errorMessages.actionFailed;
       throw error;
     }
   }, [accountAddress, chainId, walletCapabilities.usesClientRawSigning]);
@@ -791,7 +771,7 @@ export function ChainTransactionProvider({ children }) {
     ) {
       if (!appConfig.get('Starknet.paymasterProxy')) {
         const error = new Error('Privy sponsorship requires the Influence paymaster proxy.');
-        error.userMessage = 'Sponsored transactions are temporarily unavailable. Please try again shortly.';
+        error.userMessage = errorMessages.serviceUnavailable;
         throw error;
       }
 
@@ -812,7 +792,7 @@ export function ChainTransactionProvider({ children }) {
           ...(deploymentData ? { deploymentData } : {})
         });
       } catch (error) {
-        if (USER_REJECTED_TRANSACTION.test(error?.message || '')) throw error;
+        if (isUserCancellation(error)) throw error;
         paymasterAvailable = !isPaymasterUnavailable(error);
         if (paymasterAvailable && !isSponsorshipUnavailable(error)) throw error;
         if (paymasterAvailable) sponsorshipUnavailableRef.current = true;
@@ -1066,10 +1046,7 @@ export function ChainTransactionProvider({ children }) {
               // if don't have enough USDC + ETH to cover it, throw funds error
               if (totalPrice > safeBigInt(totalWalletValueInToken)) {
                 console.log('EXECUTE', wallet, wallet.combinedBalance, wallet.combinedBalance, wallet.combinedBalance?.to(totalPriceToken));
-                const fundsError = new Error('Insufficient wallet balance');
-                fundsError.additionalFundsRequired = parseInt(totalPrice - safeBigInt(totalWalletValueInToken));
-                fundsError.additionalFundsToken = totalPriceToken;
-                throw fundsError;
+                throw createFundingError(totalPrice - safeBigInt(totalWalletValueInToken), totalPriceToken, totalPrice);
 
               // else (do have enough USDC + ETH), but don't specifically have enough in totalPriceToken
               // to cover tx, prepend swap calls to cover it as well
@@ -1140,7 +1117,8 @@ export function ChainTransactionProvider({ children }) {
     prependEventAutoresolve,
     provider,
     sessionWallet,
-    usdcPerEth
+    usdcPerEth,
+    walletAccount
   ]);
 
   const contractsRef = useRef();
@@ -1149,7 +1127,7 @@ export function ChainTransactionProvider({ children }) {
   const getTxEvent = useCallback((txHash) => {
     const txHashBInt = safeBigInt(txHash);
     return (activities || []).find((a) => a.event?.transactionHash && safeBigInt(a.event?.transactionHash) === txHashBInt)?.event;
-  }, [activities?.length]);
+  }, [activities]);
 
   const transactionWaiters = useRef([]);
 
@@ -1161,6 +1139,7 @@ export function ChainTransactionProvider({ children }) {
   // handle newlyFailedTx in state + effect flow b/c doing directly in catch uses old values
   // of state (i.e. from when the callback was created)
   const [newlyFailedTx, setNewlyFailedTx] = useState();
+  const reportedReceipts = useRef(new Set());
   useEffect(() => {
     if (newlyFailedTx) {
       const { err, key, vars, txHash } = newlyFailedTx;
@@ -1171,8 +1150,9 @@ export function ChainTransactionProvider({ children }) {
       if (txEvent) {
         console.warn(`txEvent already exists for "failed" tx ${txHash}`, err);
         contracts[key]?.onConfirmed(txEvent, vars);
-        dispatchPendingTransactionComplete(txHash);
-      } else {
+        if (!STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
+      } else if (err?.execution_status === 'REVERTED' || err?.receipt?.execution_status === 'REVERTED') {
+        reportFailure(createAlert, err, { message: 'reverted', context: { action: key, transactionHash: txHash } });
         contracts[key]?.onTransactionError(err, vars);
         if (txHash) { // TODO: may want to display pre-tx failures if using session wallet
           dispatchFailedTransaction({
@@ -1181,8 +1161,14 @@ export function ChainTransactionProvider({ children }) {
             txHash,
             err: err?.message || 'Transaction was rejected.'
           });
-          dispatchPendingTransactionComplete(txHash);
+          dispatchPendingTransactionComplete(txHash, 'failed');
         }
+      }
+
+      if (!txEvent && txHash && err?.execution_status !== 'REVERTED' && err?.receipt?.execution_status !== 'REVERTED'
+        && !reportedReceipts.current.has(txHash)) {
+        reportedReceipts.current.add(txHash);
+        reportFailure(createAlert, err, { message: 'unknownOutcome', context: { action: key, transactionHash: txHash } });
       }
 
       // now that processed, clear this failure
@@ -1193,11 +1179,12 @@ export function ChainTransactionProvider({ children }) {
   // on initial load, set provider.waitForTransaction for any pendingTransactions
   // so that we can throw any extension-related or timeout errors needed
   useEffect(() => {
+    transactionWaiters.current = transactionWaiters.current.filter((hash) => pendingTransactions.some((tx) => tx.txHash === hash));
     if (provider && contracts && pendingTransactions?.length) {
       pendingTransactions.forEach(({ key, vars, meta, txHash }) => {
         // (sanity check) this should not be possible since pendingTransaction should not be created
         // without txHash... so we aren't even reporting this error to user since should not happen
-        if (!txHash) return dispatchPendingTransactionComplete(txHash);
+        if (!txHash) return dispatchPendingTransactionComplete(txHash, 'failed');
 
         if (!transactionWaiters.current.includes(txHash)) {
           transactionWaiters.current.push(txHash);
@@ -1211,7 +1198,6 @@ export function ChainTransactionProvider({ children }) {
               // now is a good time to check again if it is deployed
               if (receipt && !isDeployed) upgradeInsecureSession();
               if (receipt?.execution_status === 'SUCCEEDED' && (meta?.missionAssignment || STARTER_MISSION_SYSTEMS.has(key))) {
-                if (STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
                 queryClient.invalidateQueries({ queryKey: ['starterMissions'] });
                 queryClient.invalidateQueries({ queryKey: ['missionBindings'] });
                 if (key === 'CompleteStarterMission' || key === 'ClaimMissionReward') {
@@ -1229,11 +1215,9 @@ export function ChainTransactionProvider({ children }) {
             //     dispatchPendingTransactionComplete(txHash);
             //   }
             // })
-            .catch((err) => setNewlyFailedTx({ err, key, vars, txHash }))
-            .finally(() => {
-              // NOTE: keep this in "finally" so also performed on success (even though not handling success)
-              transactionWaiters.current = transactionWaiters.current.filter((tx) => tx !== txHash);
-            });
+            .catch((err) => setNewlyFailedTx({ err, key, vars, txHash }));
+          // Keep settled waiters registered until indexing clears the transaction.
+          // Recreating them on renders repeats receipt-driven invalidations.
         }
       });
     }
@@ -1250,25 +1234,33 @@ export function ChainTransactionProvider({ children }) {
         const txEvent = getTxEvent(txHash);
         if (txEvent) {
           contracts[key].onConfirmed(txEvent, vars);
-          dispatchPendingTransactionComplete(txHash);
+          if (!STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
         }
       });
     }
-  }, [getTxEvent, pendingTransactions?.length]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getTxEvent, pendingTransactions, contracts]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // on every new block, check for reverted tx's
-  // TODO: parse revert_reason to be more readible
-  // TODO: time out eventually?
+  // Retry receipt checks after a waiter times out, at most once per 30 seconds.
+  const receiptChecks = useRef(new Map());
   useEffect(() => {
-    if (contracts && pendingTransactions?.length) {
+    for (const hash of receiptChecks.current.keys()) {
+      if (!pendingTransactions.some((tx) => tx.txHash === hash)) receiptChecks.current.delete(hash);
+    }
+    if (provider && contracts && pendingTransactions?.length) {
       pendingTransactions.filter((tx) => !tx.txEvent).forEach((tx) => {
         // if it's been X+ seconds since submitted, check if it was reverted
         if (Math.floor(Date.now() / 1000) > Math.floor(tx.timestamp / 1000) + 30) {
           const { key, vars, txHash } = tx;
+          if (!txHash || getTxEvent(txHash)) return;
+          const previous = receiptChecks.current.get(txHash);
+          if (previous?.inFlight || Date.now() - (previous?.checkedAt || 0) < 30000) return;
+          const check = { inFlight: true, checkedAt: Date.now() };
+          receiptChecks.current.set(txHash, check);
 
           provider.getTransactionReceipt(txHash)
             .then((receipt) => {
               if (receipt && receipt.execution_status === 'REVERTED') {
+                reportFailure(createAlert, receipt, { message: 'reverted', context: { action: key, transactionHash: txHash } });
                 contracts[key].onTransactionError(receipt, vars);
                 dispatchFailedTransaction({
                   key,
@@ -1276,120 +1268,56 @@ export function ChainTransactionProvider({ children }) {
                   txHash,
                   err: receipt.revert_reason || 'Transaction was rejected.'
                 });
-                dispatchPendingTransactionComplete(txHash);
+                dispatchPendingTransactionComplete(txHash, 'failed');
               }
             })
             .catch((err) => {
               console.warn(err);
-            });
+            })
+            .finally(() => { check.inFlight = false; });
         }
       });
     }
   }, [blockNumber]);
 
   const handleExecutionExeption = useCallback((e, executeCalls, txDetails = {}) => {
-    const isNotDeployed = e?.message && (
-      e?.message.toLowerCase().includes('account not deployed')
-      || e?.message.toLowerCase().includes('account is not compatible with snip-9')
-    );
-    if (isNotDeployed) {
-      createAlert({
-        type: 'DeployAccount',
-        level: 'warning',
-        duration: 0,
-        hideCloseIcon: true,
-        onRemoval: () => {
-          walletAccount.deploy({ classHash: walletAccount.address });
-          // walletAccount.deploySelf({ classHash: walletAccount.address });
-          // TODO: would be nice if could use this format instead, but it's not clear how that works
-          // walletAccount.deployAccount({ contractAddress: accountAddress });
-          // executeCalls([
-          //   System.getFormattedCall(
-          //     appConfig.get('Starknet.Address.usdcToken'),
-          //     'transfer',
-          //     [
-          //       { value: accountAddress, type: 'ContractAddress' },
-          //       { value: 0n, type: 'u256' }
-          //     ]
-          //   )
-          // ]);
-        }
-      });
+    if (e?.fundingRequirement) {
+      setFundingRequirement(e.fundingRequirement);
+      e.suppressTransactionFailure = true;
+      return;
     }
-
-    if (!e?.suppressTransactionFailure && !USER_REJECTED_TRANSACTION.test(e?.message || '')) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: e?.userMessage || 'Transaction failed. Please try again. Check your STRK balance and top up your account if you cannot pay the network fee.' },
-        level: 'warning',
-        duration: 10000
-      });
-    }
-
-    if (!e?.suppressTransactionFailure && !/USER_REFUSED_OP|User abort|User rejected|Timeout/.test(e?.message) && txDetails) {
-      dispatchFailedTransaction({
-        ...txDetails,
-        txHash: null,
-        err: e?.message || e
-      });
-    }
-
-    // "Timeout" is in argent (at least) for when tx is auto-rejected b/c previous tx is still pending
-    // TODO: should hopefully be able to remove Timeout because would make sessions feel pretty useless
-    if (e?.message === 'Timeout') {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Previous tx is not yet accepted on l2. Wait for the extension notification and try again.' },
-        level: 'warning',
-        duration: 5000
-      });
-    }
-
-    if (/session expired|session\/(expired|revoked)/i.test(e?.message || '')) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Your wallet session is no longer valid. Please try again to approve a new session.' },
-        level: 'warning',
-        duration: 5000
-      });
+    reportFailure(createAlert, e, { context: { action: txDetails?.key, transactionHash: txDetails?.txHash } });
+    if (!e?.suppressTransactionFailure && !isUserCancellation(e) && !isWalletRequestTimeout(e) && txDetails?.key) {
+      dispatchFailedTransaction({ ...txDetails, txHash: null, err: e?.message || e });
     }
   }, [accountAddress, createAlert, dispatchFailedTransaction]);
 
   const deployAccount = useCallback(async () => {
     if (isDeployed) return { deployed: true, transaction: null };
 
-    let activeWalletAccount = walletAccountRef.current;
+    const activeWalletAccount = walletAccountRef.current;
     if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-      } catch (e) {
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: 'Reconnect your wallet to continue.' },
-          level: 'warning',
-        });
-        throw e;
-      } finally {
-        setPromptingTransaction(false);
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.deployAccount();
       }
+      throw new Error(notifyWalletDisconnected());
     }
 
     if (!walletCapabilities.requiresSponsoredTransactions) {
       const error = new Error('Wallet account deployment is not sponsored for this wallet.');
-      error.userMessage = 'Account deployment is not available for this wallet.';
+      error.userMessage = errorMessages.setupRequired;
       throw error;
     }
 
     if (!accountDeploymentData) {
       const error = new Error('Missing account deployment data.');
-      error.userMessage = 'Account setup is incomplete. Please reconnect and try again.';
+      error.userMessage = errorMessages.setupRequired;
       throw error;
     }
 
     if (!appConfig.get('Starknet.paymasterProxy')) {
       const error = new Error('Privy sponsorship requires the Influence paymaster proxy.');
-      error.userMessage = 'Sponsored transactions are temporarily unavailable. Please try again shortly.';
+      error.userMessage = errorMessages.serviceUnavailable;
       throw error;
     }
 
@@ -1431,58 +1359,35 @@ export function ChainTransactionProvider({ children }) {
     isDeployed,
     provider,
     requireSessionUpgrade,
-    waitForWalletConnection,
+    notifyWalletDisconnected,
+    refreshWalletConnection,
     walletCapabilities.requiresSponsoredTransactions
   ]);
 
   // Allows for multiple explicit / manual calls to be executed in a single transaction
   const executeCalls = useCallback(async (calls, options = {}) => {
-    let activeWalletAccount = walletAccountRef.current;
-    if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-      } catch (e) {
-        setPromptingTransaction(false);
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: 'Reconnect your wallet to continue.' },
-          level: 'warning',
-        });
-        return;
-      }
-    }
-
-    if (!activeWalletAccount) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Reconnect your wallet to continue.' },
-        level: 'warning',
-      });
-
+    if (!(calls?.length > 0)) {
+      console.error('no calls included in executeCalls input');
       return;
     }
 
-    if (!(calls?.length > 0)) {
-      console.error('no calls included in executeCalls input');
+    const activeWalletAccount = walletAccountRef.current;
+    if (!activeWalletAccount) {
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.executeCalls(calls, options);
+      }
+      notifyWalletDisconnected();
       return;
     }
 
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isWalletAccountLocked(activeWalletAccount)) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Account is unavailable.' },
-        level: 'warning',
-      });
-      setPromptingTransaction(false);
-      return;
-    }
-
-    // execute
     try {
+      if (await isWalletAccountLocked(activeWalletAccount)) {
+        notifyWalletDisconnected();
+        return;
+      }
       await requireExplicitAuthorization(activeWalletAccount, options);
       const tx = await executeWithAccount(calls, options);
 
@@ -1494,17 +1399,18 @@ export function ChainTransactionProvider({ children }) {
         if (txHash) {
           provider.waitForTransaction(txHash, { retryInterval: RETRY_INTERVAL })
             .then((receipt) => { if (receipt) upgradeInsecureSession(); })
+            .catch((error) => reportFailure(createAlert, error, { message: 'unknownOutcome', context: { transactionHash: txHash } }));
         }
       }
 
-      setPromptingTransaction(false);
       return tx;
     } catch (e) {
-      setPromptingTransaction(false);
       handleExecutionExeption(e, executeCalls);
-      throw e;  // rethrow
+      throw e;
+    } finally {
+      setPromptingTransaction(false);
     }
-  }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, waitForWalletConnection])
+  }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, notifyWalletDisconnected, refreshWalletConnection])
 
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}, options = {}) => {
@@ -1521,57 +1427,65 @@ export function ChainTransactionProvider({ children }) {
         txHash: uuid,
         waitingOn: 'TRANSACTION'
       });
-      return;
+      return { status: 'submitted', txHash: uuid };
     }
 
-    let activeWalletAccount = walletAccountRef.current;
-    let activeContracts = contractsRef.current;
+    const authorization = await recheckTransactionAuthorization(key, vars, recheckAuthorization);
+    if (authorization.status !== 'allowed') {
+      reportFailure(createAlert, authorization, { message: authorization.status === 'denied' ? 'accessChanged' : 'accessUnavailable', context: { action: key } });
+      return authorization;
+    }
 
+    const activeWalletAccount = walletAccountRef.current;
+    const activeContracts = contractsRef.current;
     if (!activeWalletAccount) {
-      setPromptingTransaction(true);
-      try {
-        activeWalletAccount = await waitForWalletConnection();
-        activeContracts = contractsRef.current;
-      } catch (e) {
-        setPromptingTransaction(false);
-        createAlert({
-          type: 'GenericAlert',
-          data: { content: 'Reconnect your wallet to continue.' },
-          level: 'warning',
-        });
-        return;
+      if (await refreshWalletConnection() && walletAccountRef.current) {
+        return executionRef.current.executeSystem(key, vars, meta, options);
       }
+      notifyWalletDisconnected();
+      return { status: 'failed' };
     }
 
-    if (!activeWalletAccount || !activeContracts || !activeContracts[key]) {
+    if (!activeContracts?.[key]) {
       createAlert({
         type: 'GenericAlert',
-        data: { content: activeWalletAccount ? 'Contract is invalid.' : 'Reconnect your wallet to continue.' },
+        data: { content: errorMessages.actionFailed },
         level: 'warning',
       });
-      setPromptingTransaction(false);
       return;
     }
 
     // start prompting state before isAccountLocked since *might* take some time
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
-    if (await isWalletAccountLocked(activeWalletAccount)) {
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Account is unavailable.' },
-        level: 'warning',
-      });
-      setPromptingTransaction(false);
-      return;
-    }
-
-    const assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
+    let submission;
+    let assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
     let missionKey;
     let ownsMissionSubmission = false;
     const { execute: contractExecute, onTransactionError } = activeContracts[key];
     try {
+      if (await isWalletAccountLocked(activeWalletAccount)) {
+        notifyWalletDisconnected();
+        return { status: 'failed' };
+      }
       if (key === 'MissionAction') throw new Error('Use a native action with missionAssignment for starter missions.');
+      if (assignment) {
+        if (options.missionAssignment) assertStarterMissionAction(key);
+        const view = await api.getStarterMissions(assignment.subject.id);
+        queryClient.setQueryData(starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), assignment.subject.id), view);
+        assertStarterMissionOperation(view, assignment, key, activeWalletAccount.address);
+        if (options.missionAssignment) {
+          const qualifies = await verifyMissionAction({ key, vars, assignment, view,
+            getBinding: api.getMissionBinding, getEntity: api.getEntityById });
+          if (!qualifies) {
+            assignment = null;
+            options = { ...options };
+            delete options.missionAssignment;
+            meta = { ...meta };
+            delete meta.missionAssignment;
+          }
+        }
+      }
       if (assignment) {
         missionKey = getMissionAssignmentKey(assignment);
         if (missionSubmissions.current.has(missionKey)
@@ -1580,40 +1494,34 @@ export function ChainTransactionProvider({ children }) {
         }
         missionSubmissions.current.add(missionKey);
         ownsMissionSubmission = true;
-        if (options.missionAssignment) assertStarterMissionAction(key);
-        const view = await api.getStarterMissions(assignment.subject.id);
-        queryClient.setQueryData(starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), assignment.subject.id), view);
-        assertStarterMissionOperation(view, assignment, key, activeWalletAccount.address);
-        if (options.missionAssignment) {
-          await verifyMissionAction({ key, vars, assignment, view,
-            getBinding: api.getMissionBinding, getEntity: api.getEntityById });
-        }
         meta = { ...meta, missionAssignment: assignment };
       }
       await requireExplicitAuthorization(activeWalletAccount, options);
       const tx = await contractExecute(vars, options);
+      const txHash = cleanseTxHash(tx);
+      if (!txHash) throw new Error('Wallet returned no transaction hash.');
       dispatchPendingTransaction({
         key,
         vars,
         meta,
         timestamp: blockTime ? (blockTime * 1000) : null,
-        txHash: cleanseTxHash(tx),
+        txHash,
         waitingOn: 'TRANSACTION'
       });
+      submission = { status: 'submitted', txHash };
     } catch (e) {
-      // handle additional funds required
-      if (e?.additionalUSDCRequired) {
-        setPromptingTransaction(false);
-        return e.additionalUSDCRequired;
-      }
       handleExecutionExeption(e, executeCalls, { key, vars, meta });
       onTransactionError(e, vars);
+      if (isWalletRequestTimeout(e)) submission = { status: 'unknown' };
     } finally {
       if (ownsMissionSubmission) missionSubmissions.current.delete(missionKey);
+      setPromptingTransaction(false);
     }
 
-    setPromptingTransaction(false);
-  }, [blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, waitForWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+    return submission;
+  }, [recheckAuthorization, blockTime, chainId, createAlert, handleExecutionExeption, queryClient, requireExplicitAuthorization, simulationEnabled, notifyWalletDisconnected, refreshWalletConnection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  executionRef.current = { deployAccount, executeCalls, executeSystem };
 
   const getPendingTx = useCallback((key, vars) => {
     // simulation will only ever have one concurrent?
@@ -1649,7 +1557,9 @@ export function ChainTransactionProvider({ children }) {
       executeCalls,
       getStatus,
       getPendingTx,
-      promptingTransaction
+      promptingTransaction,
+      fundingRequirement,
+      dismissFunding: () => setFundingRequirement(null)
     }}>
       {children}
       {feePrompt && (

@@ -1,3 +1,4 @@
+import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Building } from '@influenceth/sdk';
@@ -59,7 +60,7 @@ const MouseoverWarning = styled.span`
 `;
 
 const RepoBuilding = ({ asteroid, lot, actionManager, stage, ...props }) => {
-  const { repoBuilding, takeoverType } = actionManager;
+  const { repoBuilding, takeoverType, authorization } = actionManager;
   const { crew } = useCrewContext();
   const { data: delinquentController } = useCrew(lot?.building?.Control?.controller?.id);
 
@@ -80,7 +81,7 @@ const RepoBuilding = ({ asteroid, lot, actionManager, stage, ...props }) => {
             ? `Repossess ${buildingOrSite}`
             : 'Claim Construction Site',
           status: stage === actionStage.NOT_STARTED
-            ? (takeoverType === 'squatted' ? 'Owner Action' : 'Control Change')
+            ? (takeoverType === 'squatted' ? 'Repossession' : 'Control Change')
             : undefined,
         }}
         overrideColor={stage === actionStage.NOT_STARTED ? theme.colors.error : undefined}
@@ -109,8 +110,8 @@ const RepoBuilding = ({ asteroid, lot, actionManager, stage, ...props }) => {
             </DescTitle>
             <Desc>
               {takeoverType === 'squatted'
-                ? <>You have <b>Lot Control</b> and may assume control of this asset.</>
-                : <>The <b>Staging Time</b> has expired and any crew may assume control of this asset.</>
+                ? <>Your current lot rights allow you to assume control of this asset.</>
+                : <>The <b>Staging Time</b> has expired and no other active tenant protects this site. An eligible crew may claim it.</>
               }
             </Desc>
           </FlexSectionInputBlock>
@@ -156,8 +157,10 @@ const RepoBuilding = ({ asteroid, lot, actionManager, stage, ...props }) => {
         {stats?.length > 0 ? null : <div style={{ height: 20 }} />}
       </ActionDialogBody>
 
+      {stage === actionStage.NOT_STARTED && <AuthorizationNotice authorization={authorization} deniedMessage="Repossession requires current lot rights, or an expired construction site with no other active tenant." />}
       <ActionDialogFooter
         goLabel={takeoverType === 'squatted' ? 'Repossess' : 'Claim'}
+        disabled={authorization.status !== 'allowed'}
         onGo={repoBuilding}
         stage={stage}
         waitForCrewReady
@@ -178,10 +181,7 @@ const Wrapper = (props) => {
       }
     }
 
-    if (asteroid && lot && !repoManager.takeoverType) {
-      if (props.onClose) props.onClose();
-    }
-  }, [asteroid, lot, isLoading, repoManager.takeoverType]);
+  }, [asteroid, lot, isLoading]);
 
   return (
     <ActionDialogInner

@@ -1,3 +1,4 @@
+import { errorMessages } from '../lib/errorMessages';
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 
@@ -83,7 +84,7 @@ const DirectMessageDialog = ({ onClose, recipient }) => {
         createAlert({
           type: 'GenericAlert',
           level: 'warning',
-          data: { content: 'Encryption failed. Please refresh and try again.' },
+          data: { content: errorMessages.messageFailed },
           duration: 5000
         });
         return;
@@ -100,7 +101,7 @@ const DirectMessageDialog = ({ onClose, recipient }) => {
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Message cannot be empty.' },
+        data: { content: errorMessages.emptyMessage },
         duration: 5000
       });
     }

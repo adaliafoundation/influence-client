@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Inventory, Product, Ship, Time } from '@influenceth/sdk';
 
@@ -56,7 +56,7 @@ const Note = styled.div`
 const EmergencyModeCollect = ({ asteroid, lot, manager, ship, stage, ...props }) => {
   const syncedTime = useSyncedTime();
 
-  const { collectEmergencyPropellant, actionStage } = manager;
+  const { collectEmergencyPropellant } = manager;
 
   const { crew } = useCrewContext();
 
@@ -143,18 +143,8 @@ const EmergencyModeCollect = ({ asteroid, lot, manager, ship, stage, ...props })
   ]), [maxGenerationTime, ship, syncedTime]);
 
   const onCollect = useCallback(() => {
-    collectEmergencyPropellant();
+    return collectEmergencyPropellant();
   }, [collectEmergencyPropellant]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && actionStage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = actionStage;
-  }, [actionStage]);
 
   return (
     <>

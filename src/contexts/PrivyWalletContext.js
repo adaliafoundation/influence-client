@@ -1,3 +1,4 @@
+import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import { PrivyProvider, useLogin, usePrivy } from '@privy-io/react-auth';
 import { useCreateWallet, useSignRawHash } from '@privy-io/react-auth/extended-chains';
@@ -32,7 +33,7 @@ const waitForPrivyReady = async (stateRef) => {
 
   if (!stateRef.current.ready) {
     const error = new Error('Privy did not finish loading.');
-    error.userMessage = 'Influence Account login is taking too long. Please try again.';
+    error.userMessage = errorMessages.loginSlow;
     throw error;
   }
 
@@ -48,7 +49,7 @@ const waitForPrivyAuthenticated = async (stateRef) => {
 
   if (!stateRef.current.authenticated || !stateRef.current.user) {
     const error = new Error('Privy did not finish authentication.');
-    error.userMessage = 'Influence Account login is taking too long. Please try again.';
+    error.userMessage = errorMessages.loginSlow;
     throw error;
   }
 

@@ -20,7 +20,7 @@ import {
   Vector2,
   Vector3
 } from 'three';
-import { Address, Asteroid, Crewmate, Entity, Lot, Time } from '@influenceth/sdk';
+import { Address, Asteroid, Crewmate, Entity, Lot } from '@influenceth/sdk';
 import { useHistory } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -57,10 +57,11 @@ import useSession from '~/hooks/useSession';
 // ^^^
 
 const hopperRadius = 400;
+const minHopperControlPointHeight = 1000;
 const arcSegments = 50;
 const arcPointCount = arcSegments + 1;
 const crewMarkerHeight = 1159;
-const crewMarkerMinScale = 0.35;
+const crewMarkerMinScale = 0.2625;
 const crewMarkerMaxScale = 1.6;
 const arcColor = new Color(theme.colors.glowGreen);
 const hopperColor = new Color(theme.colors.glowGreen);
@@ -128,8 +129,10 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
   // Calculates the control point for the bezier curve
   const calculateControlPoint = useCallback((origin, dest, distance, frac = 0.5) => {
-    const ratio = 1 + Math.pow(distance / radius, 2);
-    return origin.clone().lerp(dest, frac).multiplyScalar(Math.min(ratio, 3.5));
+    const controlPoint = origin.clone().lerp(dest, frac);
+    const height = controlPoint.length() * Math.min(Math.pow(distance / radius, 2), 2.5);
+    // Short hops need clearance even when their distance-based arc is nearly flat.
+    return controlPoint.setLength(controlPoint.length() + Math.max(height, minHopperControlPointHeight));
   }, [radius]);
 
 
@@ -149,12 +152,13 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       await hydrateActivities(ongoingActivities, queryClient)
       return ongoingActivities;
     },
-    enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
+    enabled: !!(accountAddress && asteroidId && activeCrewsDisplay !== 'selected')
   });
 
   // define the travel params from the ongoing activities
   const ongoingTravel = useMemo(() => {
     const crews = {};
+    if (!accountAddress) return crews;
 
     // make sure selected crew is included (in case not on page OR in 'selected' mode)
     const ongoingActivities = [...(ongoing || [])];
@@ -176,20 +180,18 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         const finishTime = crew.Crew.readyAt;
         if (startTime <= blockTime && finishTime > blockTime) {
           const crewTravelBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.HOPPER_TRANSPORT_TIME, crew);
-          const crewDistBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.HOPPER_TRANSPORT_TIME, crew);
+          const crewDistBonus = getCrewAbilityBonuses(Crewmate.ABILITY_IDS.FREE_TRANSPORT_DISTANCE, crew);
           const station = locationsArrToObj(crew.Location.locations || []) || {};
           const visitedLotIndex = Lot.toIndex(visitedLot);
 
           const nowSec = Math.floor(Date.now() / 1000);
 
-          const travelTime = Time.toRealDuration(
-            Asteroid.getLotTravelTime(
-              asteroidId,
-              station.lotIndex,
-              visitedLotIndex,
-              crewTravelBonus.totalBonus,
-              crewDistBonus.totalBonus
-            ) || 0,
+          const travelTime = Asteroid.getLotTravelTimeReal(
+            asteroidId,
+            station.lotIndex,
+            visitedLotIndex,
+            crewTravelBonus.totalBonus,
+            crewDistBonus.totalBonus,
             crew._timeAcceleration
           );
 
@@ -345,7 +347,6 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         })
       );
       bgSprite.scale.set(850, 1159, 0);
-      bgSprite.layers.enable(BLOOM_LAYER); // need this to hide bloomed things behind it (weird sprite thing)
       bgSprite.renderOrder = 1001 + i * 2;
 
       const sprite = new Sprite(
@@ -357,8 +358,26 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
           opacity: 0
         })
       );
-      sprite.scale.set(750, 1000, 0);
-      // sprite.position.set(50, 79, 0);
+      sprite.scale.set(780, 1040, 0);
+      sprite.material.onBeforeCompile = (shader) => {
+        shader.uniforms.crewFrame = { value: bgSprite.material.map };
+        shader.uniforms.crewFrameScale = { value: new Vector2(
+          sprite.scale.x / bgSprite.scale.x,
+          sprite.scale.y / bgSprite.scale.y
+        ) };
+        shader.fragmentShader = `uniform sampler2D crewFrame;
+          uniform vec2 crewFrameScale;
+          ${shader.fragmentShader}`.replace(
+          '#include <alphamap_fragment>',
+          `#include <alphamap_fragment>
+          #ifdef USE_MAP
+            // The frame's opaque black interior defines the portrait opening.
+            vec2 frameUv = (vMapUv - 0.5) * crewFrameScale + 0.5;
+            vec4 frame = texture2D(crewFrame, frameUv);
+            diffuseColor.a *= frame.a * (1.0 - frame.r);
+          #endif`
+        );
+      };
       sprite.renderOrder = 1002 + i * 2;
 
       const crewMarker = new Group();
@@ -521,6 +540,16 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
   // listen for click events (toggle hopper selection, click through to crew page)
   const clickStatus = useRef();
+  useEffect(() => {
+    setHovered();
+    setSelected();
+    setCardHovered();
+    clickStatus.current = undefined;
+    clearTimeout(unselector.current);
+    unselector.current = null;
+    return () => clearTimeout(unselector.current);
+  }, [accountAddress]);
+
   useEffect(() => {
     if (hovered || selected) {
       const onMouseEvent = (e) => {

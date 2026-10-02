@@ -1,3 +1,4 @@
+import { notifyTransactionSettlement } from '../lib/transactionSettlement';
 import create from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import produce from 'immer';
@@ -6,6 +7,8 @@ import isEqual from 'lodash/isEqual';
 import { Address, Building, Entity, Lot } from '@influenceth/sdk';
 
 import constants from '~/lib/constants';
+import { pruneBridgeTransfers } from '../bridge/transfers';
+import { selectPersistedState } from '../lib/storePersistence';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import { TOKEN } from '~/lib/priceUtils';
 import {
@@ -91,6 +94,7 @@ const normalizeBridgeTransferRecord = (transfer) => Object.fromEntries(Object.en
   id: getBridgeTransferValue(transfer, 'id'),
   layer: getBridgeTransferValue(transfer, 'layer'),
   originChain: getBridgeTransferValue(transfer, 'originChain'),
+  network: getBridgeTransferValue(transfer, 'network'),
   status: getBridgeTransferValue(transfer, 'status'),
   toAddress: getBridgeTransferValue(transfer, 'toAddress'),
   txHash: getBridgeTransferValue(transfer, 'txHash'),
@@ -109,6 +113,7 @@ const useStore = create(
   subscribeWithSelector(
     persist((set, get) => ({
         actionDialog: {},
+        lotCameraTransition: null,
         missionParticipation: {},
         objectivePreferences: {},
         missionGuidance: null,
@@ -119,32 +124,11 @@ const useStore = create(
         openHudMenu: null,
         hudMenuState: {},
 
-        // TODO: more encapsulated structure, but might cause unnecessary re-renders more often
-        // simulation: {
-        //   enabled,
-        //   enabledActions: [],
-        //   coachmark: [],
-        //   state: { ...simulationStateDefault }
-        // },
         isNew: true,
         simulationEnabled: false,
         simulation: { ...simulationStateDefault },
         simulationActions: [],
         coachmarks: [],
-
-        // scene: {
-        //   belt: {
-        //     origin, destination, hovered, travelMode, travelSolution, cameraPos/* (zoomedFrom) */,
-        //   },
-        //   asteroid: {
-        //     origin, destination, hovered, resourceMap
-        //   },
-        //   lot: {
-        //     model
-        //   },
-        //   zoomStatus: 'belt', // belt, zooming-in / zooming-out, asteroid, zooming-to-scene, lot
-        //   transitionTo: {}
-        // },
 
         asteroids: {
           origin: null,
@@ -203,7 +187,6 @@ const useStore = create(
 
         gameplay: {
           activeCrewsDisplay: 'all', // selected, delegated, all
-          feeToken: null, // deprecated
           feeTokens: [TOKEN.USDC],
           useSessions: null
         },
@@ -450,6 +433,7 @@ const useStore = create(
           }
 
           state.asteroids.lot = null;
+          state.lotCameraTransition = null;
           state.asteroids.travelSolution = null;
           state.asteroids.zoomScene = null;
         })),
@@ -496,6 +480,7 @@ const useStore = create(
           state.asteroids.zoomStatus = status;
           if (!maintainLot) {
             state.asteroids.lot = null;
+            state.lotCameraTransition = null;
             state.asteroids.zoomScene = null;
           }
         })),
@@ -572,6 +557,14 @@ const useStore = create(
             { createdAt: Date.now(), status: 'submitted' },
             transfer
           );
+        })),
+
+        dispatchBridgeTransfersPruned: (ids = []) => set(produce(state => {
+          const retained = pruneBridgeTransfers(state.bridgeTransfers);
+          ids.forEach((id) => delete retained[id]);
+          if (Object.keys(retained).length !== Object.keys(state.bridgeTransfers || {}).length) {
+            state.bridgeTransfers = retained;
+          }
         })),
 
         dispatchBridgeTransferUpdated: (id, update) => set(produce(state => {
@@ -832,12 +825,19 @@ const useStore = create(
         })),
 
         dispatchLotSelected: (lotId) => set(produce(state => {
-          state.asteroids.lot = lotId > 0 ? lotId : null;
+          const nextLot = lotId > 0 ? lotId : null;
+          if (nextLot !== state.asteroids.lot) state.lotCameraTransition = nextLot;
+          state.asteroids.lot = nextLot;
           state.asteroids.zoomScene = null;
         })),
 
         dispatchRecenterCamera: (needsRecenter) => set(produce(state => {
           state.cameraNeedsRecenter = !!needsRecenter;
+          if (needsRecenter && state.asteroids.lot) state.lotCameraTransition = state.asteroids.lot;
+        })),
+
+        dispatchLotCameraSettled: (lotId) => set(produce(state => {
+          if (state.lotCameraTransition === lotId) state.lotCameraTransition = null;
         })),
 
         dispatchReorientCamera: (needsReorienting) => set(produce(state => {
@@ -890,10 +890,13 @@ const useStore = create(
           }
         })),
 
-        dispatchPendingTransactionComplete: (txHash) => set(produce(state => {
-          if (!state.pendingTransactions) state.pendingTransactions = [];
-          state.pendingTransactions = state.pendingTransactions.filter((tx) => tx.txHash !== txHash);
-        })),
+        dispatchPendingTransactionComplete: (txHash, status = 'indexed') => {
+          set(produce(state => {
+            if (!state.pendingTransactions) state.pendingTransactions = [];
+            state.pendingTransactions = state.pendingTransactions.filter((tx) => tx.txHash !== txHash);
+          }));
+          notifyTransactionSettlement(txHash, status);
+        },
 
         dispatchCanvasStacked: (id) => set(produce(state => {
           if (!state.canvasStack) state.canvasStack = [];
@@ -1031,47 +1034,32 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 9,
+      version: 10,
+      partialize: selectPersistedState,
+      // Filter on read too: older saves include navigation and other transient state.
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...selectPersistedState(persistedState)
+      }),
       migrate: (persistedState, oldVersion) => {
         const migrations = [
           (state, version) => {
-            if (version >= 1) return;
-            const active = state.asteroids.mapResourceId ? true : false;
-            const selected = state.asteroids.mapResourceId || null;
-            state.asteroids.resourceMap = { active, selected };
-            return state;
-          },
-          (state, version) => {
-            if (version >= 3) return;
-            if (state.asteroids.lot?.asteroidId && state.asteroids.lot?.lotId) {
-              state.asteroids.lot = Lot.toId(state.asteroids.lot?.asteroidId, state.asteroids.lot?.lotId);
-            } else {
-              state.asteroids.lot = null;
-            }
-            return state;
-          },
-          (state, version) => {
-            if (version >= 4) return;
-            state.assetSearch = { ...assetSearchDefaults };
-            return state;
-          },
-          (state, version) => {
-            if (version >= 5) return;
+            if (version >= 5) return state;
             state.gameplay = { autoswap: true };
             return state;
           },
           (state, version) => {
-            if (version >= 6) return;
+            if (version >= 6) return state;
             state.crewTutorials = {};
             return state;
           },
           (state, version) => {
-            if (version >= 7) return; // reset simulation to ensure bug fixed
+            if (version >= 7) return state; // reset simulation to ensure bug fixed
             state.simulation = { ...simulationStateDefault };
             return state;
           },
           (state, version) => {
-            if (version >= 8) return;
+            if (version >= 8) return state;
             state.gameplay.feeTokens = [TOKEN.USDC, TOKEN.ETH, TOKEN.STRK];
             if (state.gameplay.feeToken !== 'ETH') {
               state.gameplay.feeTokens.unshift(TOKEN.SWAY);
@@ -1079,10 +1067,15 @@ const useStore = create(
             return state;
           },
           (state, version) => {
-            if (version >= 9) return;
+            if (version >= 9) return state;
             delete state.starterPackWalletIntent;
             state.starterPackCheckout = null;
             state.starterPackCustomizationDrafts = {};
+            return state;
+          },
+          (state, version) => {
+            if (version >= 10) return state;
+            state.bridgeTransfers = pruneBridgeTransfers(state.bridgeTransfers);
             return state;
           },
         ];
@@ -1093,31 +1086,6 @@ const useStore = create(
 
         return persistedState;
       },
-      blacklist: [
-        // TODO: should these be stored elsewhere if ephemeral?
-        // TODO: the nested values are not supported by zustand
-        'actionDialog',
-        'missionGuidance',
-        'missionDetails',
-        'asteroids.hovered',
-        'asteroids.lot',
-        'asteroids.travelMode',
-        'asteroids.travelSolution',
-        'asteroids.zoomScene',
-        'asteroids.cinematicInitialPosition',
-        'canvasStack',
-        'cameraNeedsRecenter',
-        'cameraNeedsReorientation',
-        'coachmarks',
-        'cutscene',
-        'draggables',
-        'hudMenuState',
-        'launcherDialogOptions',
-        'lotLoader',
-        'simulationActions',
-        'timeOverride' // should this be in ClockContext?
-      ],
-
       // accomodate bigint's
       serialize: (state) => {
         return JSON.stringify(state, (_, v) => typeof v === 'bigint' ? `${v.toString()}n` : v);

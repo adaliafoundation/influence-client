@@ -1,3 +1,5 @@
+jest.mock('../lib/queryRecovery', () => ({ recoverQueries: jest.fn() }));
+const { recoverQueries } = require('../lib/queryRecovery');
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
@@ -47,10 +49,10 @@ test('polls unbound and unknown evidence without treating either as transaction 
   renderHook(() => useMissionBindings([request]), { wrapper });
   const query = useQueries.mock.calls[0][0].queries[0];
   expect(query.queryKey).toEqual(['missionBindings', 'sepolia', 'api', '123', String(Entity.packEntity(request.subject)), 'Process', String(Entity.packEntity(request.entity)), 2]);
-  expect(query.refetchInterval({ status: 'unknown' })).toBe(5000);
-  expect(query.refetchInterval({ status: 'unbound' })).toBe(5000);
-  expect(query.refetchInterval({ status: 'matched' })).toBe(false);
-  expect(query.refetchInterval({ status: 'mismatched' })).toBe(false);
+  expect(query.refetchInterval({ state: { data: { status: 'unknown' } } })).toBe(5000);
+  expect(query.refetchInterval({ state: { data: { status: 'unbound' } } })).toBe(5000);
+  expect(query.refetchInterval({ state: { data: { status: 'matched' } } })).toBe(false);
+  expect(query.refetchInterval({ state: { data: { status: 'mismatched' } } })).toBe(false);
 });
 
 
@@ -76,5 +78,5 @@ test('unchanged bindings do not repeatedly refetch starter progress', async () =
 test('refresh invalidates the queried target rather than every campaign binding', () => {
   renderHook(() => useMissionBindings([request]), { wrapper });
   act(() => socket.registerConnectionHandler.mock.calls[0][0](true));
-  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: useQueries.mock.calls[0][0].queries[0].queryKey, exact: true });
+  expect(recoverQueries).toHaveBeenCalledWith(expect.anything(), { queryKey: useQueries.mock.calls[0][0].queries[0].queryKey, exact: true });
 });

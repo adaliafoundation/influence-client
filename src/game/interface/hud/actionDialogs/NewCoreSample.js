@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Deposit, Lot, Product, Time } from '@influenceth/sdk';
 
 import { NewCoreSampleIcon, ResourceIcon } from '~/components/Icons';
@@ -145,7 +145,7 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
   const [sampleBounds, sampleTime] = useMemo(() => {
     return [
       lotAbundance ? Deposit.getSampleBounds(lotAbundance, 0, sampleQualityBonus.totalBonus) : null,
-      Time.toRealDuration(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
+      Time.toRealDurationCeil(Deposit.getSampleTime(sampleTimeBonus.totalBonus), crew?._timeAcceleration)
     ];
   }, [lotAbundance, sampleQualityBonus, sampleTimeBonus, crew?._timeAcceleration]);
 
@@ -159,14 +159,12 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
     const oneWayCrewTravelTime = crewTravelTime / 2;
     const drillTravelTime = usingCoreSampleEntitlement
       ? oneWayCrewTravelTime
-      : Time.toRealDuration(
-        Asteroid.getLotTravelTime(
-          asteroid.id,
-          drillSource.lotIndex,
-          Lot.toIndex(lot.id),
-          crewTravelBonus.totalBonus,
-          crewDistBonus.totalBonus
-        ),
+      : Asteroid.getLotTravelTimeReal(
+        asteroid.id,
+        drillSource.lotIndex,
+        Lot.toIndex(lot.id),
+        crewTravelBonus.totalBonus,
+        crewDistBonus.totalBonus,
         crew?._timeAcceleration
       );
 
@@ -238,23 +236,8 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
     },
   ]), [crew?._timeAcceleration, crewTravelBonus, crewTravelTime, sampleBounds, sampleQualityBonus, sampleTime, tripDetails]);
 
-  // handle auto-closing
-  const miniStatus = useRef();
-  useEffect(() => {
-    let newMiniStatus = 1;
-    if (currentSamplingAction) newMiniStatus = 2;
-    if (currentSamplingAction?.sampleId) newMiniStatus = 3;
-
-    // (close on status change from no sampleId to sampleId)
-    if (miniStatus.current && miniStatus.current !== newMiniStatus) {
-      props.onClose();
-    }
-
-    miniStatus.current = newMiniStatus;
-  }, [currentSamplingAction]);
-
   const onFinish = useCallback(() => {
-    finishSampling(currentSamplingAction?.sampleId)
+    return finishSampling(currentSamplingAction?.sampleId)
   }, [finishSampling, currentSamplingAction]);
 
   return (

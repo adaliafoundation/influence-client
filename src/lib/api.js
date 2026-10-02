@@ -1,3 +1,5 @@
+import { inventoryCandidateQuery } from './inventoryCandidates';
+import { collectInventoryCandidates } from './authorizationData';
 import { missionBindingUrl } from './missionBindings';
 import axios from 'axios';
 import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
@@ -7,7 +9,7 @@ import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
 import { getApiAuthHeaders } from './apiAuth';
-import { entityToAgreements, esbLocationQuery, esbPermissionQuery, safeBigInt, safeEntityId } from './utils';
+import { entityToAgreements, esbLocationQuery, safeBigInt, safeEntityId } from './utils';
 import { TOKEN, TOKEN_SCALE } from './priceUtils';
 
 // set default app version
@@ -277,40 +279,25 @@ const api = {
     return formatESEntityData(response.data);
   },
 
-  getAsteroidBuildingsWithAccessibleInventories: async (asteroidId, crewId, crewSiblingIds, crewDelegatedTo, withPermission) => {
+  getAsteroidBuildingInventoryCandidates: async (asteroidId, options) => {
     const buildingQueryBuilder = esb.boolQuery();
 
     // Exclude unplanned buildings
     buildingQueryBuilder.mustNot(esb.termQuery('Building.status', Building.CONSTRUCTION_STATUSES.UNPLANNED))
 
-    // has permission
-    if (withPermission) buildingQueryBuilder.filter(esbPermissionQuery(crewId, crewSiblingIds, crewDelegatedTo, withPermission));
-
     // on asteroid
     buildingQueryBuilder.filter(esbLocationQuery({ asteroidId }));
 
-    // has unlocked inventory
-    buildingQueryBuilder.filter(
-      esb.nestedQuery()
-        .path('Inventories')
-        .query(esb.termQuery('Inventories.status', Inventory.STATUSES.AVAILABLE))
-    );
+    buildingQueryBuilder.filter(inventoryCandidateQuery(options));
 
     const buildingQ = esb.requestBodySearch();
     buildingQ.query(buildingQueryBuilder);
-    buildingQ.from(0);
-    buildingQ.size(10000);
 
-    const response = await instance.post(`/_search/building`, buildingQ.toJSON());
-    
-    return formatESEntityData(response.data);
+    return collectInventoryCandidates(async (body) => (await instance.post('/_search/building', body)).data, buildingQ.toJSON());
   },
 
-  getAsteroidShipsWithAccessibleInventories: async (asteroidId, crewId, crewSiblingIds, crewDelegatedTo, withPermission) => {
+  getAsteroidShipInventoryCandidates: async (asteroidId, options) => {
     const shipQueryBuilder = esb.boolQuery();
-
-    // has permission
-    if (withPermission) shipQueryBuilder.filter(esbPermissionQuery(crewId, crewSiblingIds, crewDelegatedTo, withPermission));
 
     // on asteroid
     // (and not in orbit -- i.e. lotId is present and !== 0)
@@ -326,12 +313,7 @@ const api = {
         )
     );
 
-    // has unlocked inventory
-    shipQueryBuilder.filter(
-      esb.nestedQuery()
-        .path('Inventories')
-        .query(esb.termQuery('Inventories.status', Inventory.STATUSES.AVAILABLE))
-    );
+    shipQueryBuilder.filter(inventoryCandidateQuery(options));
 
     // ship is operational and not traveling or in emergency mode
     shipQueryBuilder.filter(esb.termQuery('Ship.status', Ship.STATUSES.AVAILABLE));
@@ -339,12 +321,8 @@ const api = {
 
     const shipQ = esb.requestBodySearch();
     shipQ.query(shipQueryBuilder);
-    shipQ.from(0);
-    shipQ.size(10000);
 
-    const response = await instance.post(`/_search/ship`, shipQ.toJSON());
-    
-    return formatESEntityData(response.data);
+    return collectInventoryCandidates(async (body) => (await instance.post('/_search/ship', body)).data, shipQ.toJSON());
   },
 
   getDeliveries: async (destination, origin, statuses) => {
@@ -393,7 +371,7 @@ const api = {
   },
 
   getTransactionActivities: async (txHashes) => {
-    const response = await instance.get(`/${apiVersion}/activity?${buildQuery({ txHash: txHashes.join(',') })}`);
+    const response = await instance.get(`/${apiVersion}/activity?${buildQuery({ txHash: txHashes.join(',') })}`, { timeout: 15000 });
     return {
       activities: response.data,
       blockNumber: parseBlockHeader(response.headers['starknet-block-number']),
@@ -521,6 +499,17 @@ const api = {
     })) || [];
 
     return orders;
+  },
+
+  getNextMarketOrderActivation: async (asteroidId) => {
+    const query = esb.boolQuery()
+      .filter(esbLocationQuery({ asteroidId }, 'locations'))
+      .filter(esb.termQuery('status', Order.STATUSES.OPEN))
+      .filter(esb.rangeQuery('validTime').gt(Math.floor(Date.now() / 1000)));
+    const request = esb.requestBodySearch().query(query).size(1)
+      .sort(esb.sort('validTime', 'asc')).source(['validTime']);
+    const response = await instance.post('/_search/order', request.toJSON());
+    return response?.data?.hits?.hits?.[0]?._source?.validTime || null;
   },
 
   getOrderList: async (exchangeId, productId) => {
@@ -966,7 +955,7 @@ const api = {
   },
 
   getBanxaOrder: async (orderId) => {
-    const response = await instance.get(`/${apiVersion}/banxa/orders/${orderId}`);
+    const response = await instance.get(`/${apiVersion}/banxa/orders/${orderId}`, { timeout: 15000 });
     return response.data;
   },
 

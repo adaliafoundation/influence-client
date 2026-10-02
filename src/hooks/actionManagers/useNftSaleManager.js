@@ -20,7 +20,7 @@ const useNftSaleManager = (entity) => {
   }), [entity]);
 
   const purchaseListing = useCallback(() => {
-    execute(
+    return execute(
       'FillNftSellOrder',
       {
         ...payload,
@@ -34,7 +34,7 @@ const useNftSaleManager = (entity) => {
 
   const updateListing = useCallback(
     (price) => {
-      execute(
+      return execute(
         'SetNftSellOrder',
         { ...payload, price: price * 1e6 },
         {

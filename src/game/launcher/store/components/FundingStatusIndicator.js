@@ -261,8 +261,6 @@ const FundingStatusIndicator = ({ collapsed = false }) => {
             </button>
           </Balance>
           <small>
-            {isFailed && 'USDC transfer failed. Start a new funding checkout when you are ready.'}
-            {isCancelled && 'USDC transfer cancelled. Start a new funding checkout when you are ready.'}
             {!isTerminalError && 'USDC transfer in progress. Banxa payments usually arrive in 2-10 minutes.'}
           </small>
           {elapsed && activeFundingIntent && (

@@ -1,8 +1,9 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 const React = require('react');
-const { render, screen, fireEvent, within } = require('@testing-library/react');
+const { render, screen, fireEvent, within, act } = require('@testing-library/react');
 require('@testing-library/jest-dom');
 const userEvent = require('@testing-library/user-event').default;
 const { ThemeProvider } = require('styled-components');
@@ -12,6 +13,7 @@ jest.mock('~/components/Icons', () => {
   const React = require('react');
   return Object.fromEntries(['CheckIcon','HelpIcon','LockIcon','PlayIcon','SwayIcon','TargetIcon','ChevronDoubleDownIcon','ChevronDoubleUpIcon','ForwardIcon','RewardsIcon'].map(name => [name, () => React.createElement('svg', { 'aria-hidden': true })]));
 }, { virtual: true });
+jest.mock('~/components/ActionSubmissionProvider', () => ({ __esModule: true, default: ({ children }) => children }), { virtual: true });
 jest.mock('~/components/ButtonAlt', () => ({ __esModule: true, default: ({ children, onClick, disabled }) => <button onClick={onClick} disabled={disabled}>{children}</button> }), { virtual: true });
 jest.mock('~/hooks/useCrewContext', () => ({ __esModule: true, default: () => ({ crew: { id: 501 } }) }), { virtual: true });
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: () => ({ authenticated: true }) }), { virtual: true });
@@ -124,7 +126,7 @@ test('available missions show objectives directly in the progress timeline', () 
 });
 
 
-test('shows SDK building thumbnails and clearly marked draft briefings', () => {
+test('shows SDK building thumbnails and mission briefings', () => {
   setup();
   fireEvent.click(screen.getByRole('button', { name: /Your foothold/i }));
   fireEvent.click(screen.getByRole('button', { name: /Make Landfall: Ready/ }));
@@ -134,7 +136,7 @@ test('shows SDK building thumbnails and clearly marked draft briefings', () => {
   expect(screen.getByRole('img', { name: 'Warehouse' })).not.toHaveAttribute('data-tooltip-id');
   expect(screen.getByRole('img', { name: 'Warehouse' }).closest('li')).toHaveTextContent('Plan your campaign Warehouse');
   expect(within(screen.getByRole('dialog')).queryByRole('complementary')).not.toBeInTheDocument();
-  expect(screen.getByRole('region', { name: 'Mission briefing' })).toHaveTextContent('[DRAFT]');
+  expect(screen.getByRole('region', { name: 'Mission briefing' })).toHaveTextContent('Learn how to choose a warehouse location');
 });
 
 test('route previews update the buildings and materials without changing mission actions', () => {
@@ -191,4 +193,45 @@ test('the starter invitation can open the campaign already expanded', () => {
   setup({}, undefined, true);
   expect(screen.getByRole('button', { name: /Your foothold/i })).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getAllByRole('listitem')).toHaveLength(8);
+});
+
+
+test('acceptance keeps the mission open through wallet, submission, refresh failure, and indexed updates', async () => {
+  const StarterMissions = require('./StarterMissions').default;
+  const useManager = require('~/hooks/actionManagers/useStarterMissionManager').default;
+  let finishWallet;
+  const manager = {
+    canManage: true, getPending: jest.fn(() => null),
+    accept: jest.fn(() => new Promise(resolve => { finishWallet = resolve; })),
+    complete: jest.fn(),
+    data: { active: true, campaign: '123', subject: { id: '501' }, eligible: true,
+      missions: [{ ...StarterMission.TYPES[0], canAccept: true }] }
+  };
+  useManager.mockImplementation(() => manager);
+  const page = <ThemeProvider theme={theme}><StarterMissions /></ThemeProvider>;
+  const { rerender } = render(page);
+  fireEvent.click(screen.getByRole('button', { name: /Your foothold/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Make Landfall: Ready/ }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.load(dialog.querySelector('img'));
+  fireEvent.click(screen.getByRole('button', { name: 'Accept mission' }));
+  expect(screen.getByRole('dialog')).toBe(dialog);
+  expect(screen.getByRole('button', { name: 'Accept mission' })).toBeDisabled();
+
+  manager.isError = true;
+  rerender(<ThemeProvider theme={theme}><StarterMissions /></ThemeProvider>);
+  expect(screen.getByRole('dialog')).toBe(dialog);
+  manager.getPending.mockReturnValue({ txHash: '0x123' });
+  await act(async () => finishWallet({ status: 'submitted', txHash: '0x123' }));
+  rerender(<ThemeProvider theme={theme}><StarterMissions /></ThemeProvider>);
+  expect(screen.getByRole('button', { name: 'Accept mission' })).toBeDisabled();
+  expect(screen.getByRole('dialog')).toBe(dialog);
+
+  manager.isError = false;
+  manager.data = { ...manager.data, missions: [{ ...StarterMission.TYPES[0], accepted: true }] };
+  manager.getPending.mockReturnValue(null);
+  rerender(<ThemeProvider theme={theme}><StarterMissions /></ThemeProvider>);
+  expect(screen.getByRole('dialog')).toBe(dialog);
+  expect(within(dialog).getByText('Mission accepted')).toBeInTheDocument();
+  expect(within(dialog).getByText('Plan your campaign Warehouse')).toBeInTheDocument();
 });

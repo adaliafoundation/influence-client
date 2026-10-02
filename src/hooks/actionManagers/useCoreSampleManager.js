@@ -1,5 +1,6 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Deposit, Entity } from '@influenceth/sdk';
+import { Deposit, Entity, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
@@ -11,10 +12,11 @@ import actionStages from '~/lib/actionStages';
 import { getStarterCoreSampleSource } from '~/lib/starterPacks';
 
 const useCoreSampleManager = (lotId, missionId) => {
+  const reportBlocked = useFailureReporter();
   const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
   const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
-  const { accountCrewIds, crew, pendingTransactions } = useCrewContext();
+  const { accountCrewIds, crew, pendingTransactions, recheckAuthorization } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities({ label: Entity.IDS.LOT, id: lotId });
 
@@ -164,7 +166,7 @@ const useCoreSampleManager = (lotId, missionId) => {
     const source = coreDrillSource || getStarterCoreSampleSource(crew);
     if (!source) return;
 
-    execute('SampleDepositStart', {
+    return execute('SampleDepositStart', {
       resource: resourceId,
       origin: { id: source.id, label: source.label },
       origin_slot: source.slot,
@@ -172,9 +174,15 @@ const useCoreSampleManager = (lotId, missionId) => {
     })
   }, [crew, execute, payload]);
 
-  const startImproving = useCallback((depositId, coreDrillSource, depositOwnerCrew) => {
+  const startImproving = useCallback(async (depositId, coreDrillSource, depositOwnerCrew) => {
     const sample = (lot?.deposits || []).find((c) => c.id === depositId);
-    execute(
+    const permission = await recheckAuthorization('can', [crew, sample, Permission.IDS.USE_DEPOSIT], [crew, sample]);
+    if (permission.status === 'unresolved' || (permission.status === 'denied' && !depositOwnerCrew)) return reportBlocked(permission);
+    if (coreDrillSource?.id) {
+      const originPermission = await recheckAuthorization('can', [crew, coreDrillSource, Permission.IDS.REMOVE_PRODUCTS], [crew, coreDrillSource]);
+      if (originPermission.status !== 'allowed') return reportBlocked(originPermission);
+    }
+    return execute(
       depositOwnerCrew ? 'PurchaseDepositAndImprove' : 'SampleDepositImprove',
       {
         ...payload,
@@ -189,12 +197,12 @@ const useCoreSampleManager = (lotId, missionId) => {
         resource: sample?.Deposit?.resource
       }
     )
-  }, [execute, lotId, payload]);
+  }, [reportBlocked, execute, lotId, payload, recheckAuthorization, crew, lot?.deposits]);
 
   const finishSampling = useCallback((sampleId) => {
     const selectedAction = currentSamplings.find((c) => c.action?.sampleId === sampleId);
     if (!selectedAction) return;
-    execute(
+    return execute(
       'SampleDepositFinish',
       {
         deposit: { id: selectedAction.action?.sampleId, label: Entity.IDS.DEPOSIT },

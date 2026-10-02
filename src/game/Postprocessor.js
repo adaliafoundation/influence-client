@@ -91,7 +91,8 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
       if (!obj.layers.isEnabled(BLOOM_LAYER)) {
         // TODO: is double-traversing some nodes, that's why these if's are here
         //  why is this happening?
-        if (obj.material.displacementMap) {
+        // Preserve sprite textures and transparency so they still mask bloom behind them.
+        if (obj.isSprite || obj.material.displacementMap) {
           if (!colors.current[obj.uuid]) {
             colors.current[obj.uuid] = obj.material.color.clone();
             obj.material.color.set(0x000000);
@@ -114,10 +115,10 @@ const Postprocessor = ({ enabled, bloomParams = defaultBloomParams }) => {
     } else if (obj.material && obj.material.opacity === 0) {
       obj.visible = true;
     } else if (obj.material) {
-      if (obj.material.displacementMap && colors.current[obj.uuid]) {
+      if (colors.current[obj.uuid]) {
         obj.material.color.copy(colors.current[obj.uuid]);
         delete colors.current[ obj.uuid ];
-      } else if (!obj.material.displacementMap && materials.current[ obj.uuid ]) {
+      } else if (materials.current[ obj.uuid ]) {
         obj.material = materials.current[ obj.uuid ];
         delete materials.current[ obj.uuid ];
       }

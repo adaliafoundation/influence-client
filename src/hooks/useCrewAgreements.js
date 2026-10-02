@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import { useMemo } from 'react';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -12,12 +13,12 @@ const useCrewAgreements = (enabled = true, includeWhereLessor = true, includeWhe
       data: crew?.id && enabled && data
         ? data?.filter((a) => (
           (includeWhereLessor && a.Control?.controller?.id === crew?.id)
-          || (includeWhereLessee && a._agreement?.permitted?.id === crew?.id)
+          || (includeWhereLessee && matchesCrewPermissionSubject(a._agreement?.permitted, crew))
         ))
         : undefined,
       isLoading
     }
-  }, [crew?.id, data, isLoading, enabled, includeWhereLessor, includeWhereLessee])
+  }, [crew, data, isLoading, enabled, includeWhereLessor, includeWhereLessee])
 };
 
 export default useCrewAgreements;

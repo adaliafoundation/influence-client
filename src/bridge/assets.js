@@ -73,6 +73,8 @@ const bridgeAssetConfigs = {
   }),
 };
 
+const bridgeNetwork = `${getConfig('Ethereum.chainId')}:${getConfig('Starknet.chainId')}`;
+
 const bridgeAssetTypes = Object.keys(bridgeAssetConfigs);
 
 const getBridgeAssetConfig = (assetType) => bridgeAssetConfigs[assetType];
@@ -89,6 +91,7 @@ const isBridgeAssetConfigured = (assetType) => {
 export {
   bridgeAssetConfigs,
   bridgeAssetTypes,
+  bridgeNetwork,
   getBridgeAssetConfig,
   getConfig,
   isBridgeAssetConfigured,

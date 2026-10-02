@@ -387,7 +387,7 @@ const Asteroids = () => {
         gsap.timeline().to(controls.object.position, { x: 4 * constants.AU, y: 0, z: controls.object.position.z, ease: 'slow.out' });
       }
     }
-  }, [cameraNeedsReorientation]);
+  }, [cameraNeedsReorientation, zoomStatus, controls, openHudMenu]);
 
   // mouse event handlers
   const onClick = useCallback((e) => {

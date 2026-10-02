@@ -9,6 +9,8 @@ import { entitiesCacheKey } from '~/lib/cacheKey';
 import { entityToAgreements } from '~/lib/utils';
 import { statuses as walletBuildingStatuses } from '~/hooks/useWalletBuildings';
 
+const mockPermissionComponents = () => ({ Control: null, PublicPolicies: [], WhitelistAgreements: [], WhitelistAccountAgreements: [], PrepaidAgreements: [], ContractAgreements: [] });
+
 const nowSec = () => Math.floor(Date.now() / 1e3);
 
 const contentsObjToArray = (contentsObj) => {
@@ -209,6 +211,7 @@ const MockDataManager = () => {
         const asteroidEntity = Entity.formatEntity({ id: Lot.toPosition(lotId)?.asteroidId, label: Entity.IDS.ASTEROID });
         
         const lot = {
+          ...mockPermissionComponents(),
           ...lotEntity,
           UseLot: { tenant: myCrewEntity },
           PublicPolicies: [],
@@ -255,6 +258,7 @@ const MockDataManager = () => {
               plannedAt: nowSec(),
               finishTime: nowSec()
             },
+            ...mockPermissionComponents(),
             Control: { controller: myCrewEntity },
             Inventories: getMockBuildingInventories(buildingType, buildingStatus, inventoryContents),
             Location: {
@@ -340,6 +344,7 @@ const MockDataManager = () => {
                 : Deposit.STATUSES.SAMPLING
               )
             },
+            ...mockPermissionComponents(),
             Control: { controller: myCrewEntity },
             Location: {
               location: lotEntity,
@@ -357,6 +362,7 @@ const MockDataManager = () => {
         if (shipId) {
           ship = {
             ...Entity.formatEntity({ id: shipId, label: Entity.IDS.SHIP }),
+            ...mockPermissionComponents(),
             Control: { controller: myCrewEntity },
             Inventories: getMockShipInventories(Ship.IDS.LIGHT_TRANSPORT, inventoryContents),
             Location: (
@@ -428,7 +434,7 @@ const MockDataManager = () => {
 
       // wallet agreements
       configs.push({
-        queryKey: [ 'agreements', SIMULATION_CONFIG.accountAddress ],
+        queryKey: [ 'agreements', SIMULATION_CONFIG.accountAddress, [SIMULATION_CONFIG.crewId] ],
         transformer: (data) => simulatedAgreements
       });
 

@@ -1,3 +1,4 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../lib/starterCampaign'), { virtual: true });
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
@@ -9,11 +10,11 @@ jest.mock('~/appConfig', () => ({ appConfig: { get: () => 'api' } }), { virtual:
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: jest.fn(() => ({ chainId: 'sepolia', token: 'token' })) }), { virtual: true });
 jest.mock('~/hooks/useCrewContext', () => ({ __esModule: true, default: jest.fn(() => ({ crew: { id: 501 }, pendingTransactions: [] })) }), { virtual: true });
 jest.mock('~/hooks/useSimulationEnabled', () => ({ __esModule: true, default: jest.fn(() => false) }), { virtual: true });
-jest.mock('~/hooks/useLot', () => ({ __esModule: true, default: () => ({ data: { building: { id: 999 } } }) }), { virtual: true });
+jest.mock('~/hooks/useLot', () => ({ __esModule: true, default: () => ({ data: { building: { id: 999, label: 5, Control: { controller: { label: 1, id: '501' } }, Building: { status: 3, buildingType: 3 } } } }) }), { virtual: true });
 jest.mock('~/hooks/useStore', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/hooks/useStarterMissions', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/hooks/useMissionBindings', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
-jest.mock('~/lib/api', () => ({ __esModule: true, default: { getStarterMissions: jest.fn(), getMissionBinding: jest.fn() } }), { virtual: true });
+jest.mock('~/lib/api', () => ({ __esModule: true, default: { getStarterMissions: jest.fn(), getMissionBinding: jest.fn(), getEntityById: jest.fn() } }), { virtual: true });
 jest.mock('~/lib/starterMissions', () => jest.requireActual('../lib/starterMissions'), { virtual: true });
 jest.mock('~/lib/missionBindings', () => jest.requireActual('../lib/missionBindings'), { virtual: true });
 const useStore = require('~/hooks/useStore').default;
@@ -23,7 +24,7 @@ const api = require('~/lib/api').default;
 const useSimulationEnabled = require('~/hooks/useSimulationEnabled').default;
 const useCrewContext = require('~/hooks/useCrewContext').default;
 const useSession = require('~/hooks/useSession').default;
-const { MissionActionProvider, useMissionAction, useMissionDeliveryTarget } = require('./MissionActionContext');
+const { MissionActionProvider, useMissionAction, useMissionDeliveryTarget, useMissionActionDetails } = require('./MissionActionContext');
 const subject = { label: Entity.IDS.CREW, id: '501' };
 const building = { label: Entity.IDS.BUILDING, id: '999' };
 const view = { active: true, eligible: true, campaign: '123', subject, missions: [{ id: 0, accepted: true, completed: true }, { id: 1, accepted: true }] };
@@ -34,14 +35,19 @@ beforeEach(() => {
   useSimulationEnabled.mockReturnValue(false);
   useSession.mockReturnValue({ chainId: 'sepolia', token: 'token' });
   useCrewContext.mockReturnValue({ crew: { id: 501 }, pendingTransactions: [] });
-  state = { asteroids: {}, missionParticipation: {}, dispatchMissionParticipation: jest.fn() };
+  state = { dispatchAlertLogged: jest.fn(), asteroids: {}, missionParticipation: {}, dispatchMissionParticipation: jest.fn() };
   useStore.mockImplementation(selector => selector(state));
   useStarterMissions.mockReturnValue({ data: view, refetch: jest.fn() });
-  useMissionBindings.mockReturnValue([]);
+  useMissionBindings.mockReset().mockImplementation(requests => requests.map(() => ({ data: { status: 'matched' } })));
+  api.getEntityById.mockResolvedValue({ Control: { controller: subject }, Building: { status: 3 } });
   api.getStarterMissions.mockResolvedValue(view);
   api.getMissionBinding.mockResolvedValue({ status: 'unbound' });
 });
-const setup = (type = 'PROCESS', params = { processorSlot: 2 }) => renderHook(() => useMissionAction(), {
+const processDetails = { recipes: 1, running: true };
+const setup = (type = 'PROCESS', params = { processorSlot: 2 }, details = processDetails) => renderHook(() => {
+  useMissionActionDetails(details);
+  return useMissionAction();
+}, {
   wrapper: ({ children }) => <MissionActionProvider type={type} params={params}>{children}</MissionActionProvider>
 });
 
@@ -62,16 +68,18 @@ test.each(['unknown', 'mismatched'])('unavailable verification never falls back 
   let prepared;
   await act(async () => { prepared = await result.current.prepare('ProcessProductsFinish', { processor: building, processor_slot: 2 }, {}); });
   expect(prepared).toBeNull();
-  expect(result.current.message).toBeTruthy();
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(1);
 });
 
-test('a retained campaign choice survives unbound indexing responses', async () => {
+test('a stale matched preview submits normally when the fresh binding is unbound', async () => {
   state.missionParticipation[scope] = true;
+  api.getMissionBinding.mockImplementation(async ({ kind }) => ({ status: kind === 'Built' ? 'matched' : 'unbound' }));
   const { result } = setup();
   let prepared;
   await act(async () => { prepared = await result.current.prepare('ProcessProductsFinish', { processor: building, processor_slot: 2 }, {}); });
-  // Fresh submission verification will reject unbound; do not issue an ordinary action.
-  expect(prepared.missionAssignment).toBeDefined();
+  expect(prepared).toEqual({});
+  expect(result.current.message).toBeUndefined();
+  expect(api.getMissionBinding).toHaveBeenCalled();
 });
 
 test('an ordinary unbound action stays native when the player opts out', async () => {
@@ -83,7 +91,7 @@ test('an ordinary unbound action stays native when the player opts out', async (
   expect(prepared).toBe(options);
 });
 
-test('accepted missions default to checked without writing a preference', () => {
+test('qualifying campaign actions default to checked without writing a preference', () => {
   const { result } = setup();
   expect(result.current.selected).toBe(true);
   expect(state.dispatchMissionParticipation).not.toHaveBeenCalled();
@@ -93,13 +101,12 @@ test('construction stays checked after landfall completes before the next missio
   useStarterMissions.mockReturnValue({ data: {
     ...view, missions: [{ id: 0, accepted: true, completed: true }, { id: 1, canAccept: true }]
   } });
-  useMissionBindings.mockReturnValue([{ data: { status: 'unbound' } }]);
+  useMissionBindings.mockReturnValue([{ data: { status: 'matched' } }]);
   const { result } = setup('CONSTRUCT', {});
   expect(result.current.selected).toBe(true);
 });
 
 test('explicit opt-out remains native even for a bound campaign asset', async () => {
-  useMissionBindings.mockReturnValue([{ data: { status: 'matched' } }]);
   const { result, rerender } = setup();
   act(() => result.current.setSelected(false));
   expect(state.dispatchMissionParticipation).toHaveBeenCalledWith(scope, false);
@@ -113,13 +120,14 @@ test('explicit opt-out remains native even for a bound campaign asset', async ()
   expect(api.getMissionBinding).not.toHaveBeenCalled();
 });
 
-test('opted-in unsupported actions stop rather than silently dropping campaign credit', async () => {
+test('unsupported actions stay native despite a retained participation preference', async () => {
   state.missionParticipation[scope] = true;
   const { result } = setup('FEED_CREW', {});
   let prepared;
   await act(async () => { prepared = await result.current.prepare('ResupplyFoodFromExchange', {}, {}); });
-  expect(prepared).toBeNull();
-  expect(result.current.message).toMatch(/does not support/);
+  expect(prepared).toEqual({});
+  expect(result.current.selected).toBe(false);
+  expect(result.current.visible).toBe(false);
 });
 
 test('the provider does not participate in unsupported dialogs', () => {
@@ -135,7 +143,7 @@ test('changing campaigns before submission requires reopening the action', async
   let prepared;
   await act(async () => { prepared = await result.current.prepare('ProcessProductsStart', {}, {}); });
   expect(prepared).toBeNull();
-  expect(result.current.message).toMatch(/campaign changed/);
+  expect(state.dispatchAlertLogged).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ report: expect.stringMatching(/campaign changed/) }) }));
 });
 
 
@@ -194,13 +202,13 @@ test('switching crews does not submit the old crew’s pending preparation', asy
 
 test('simulation and signed-out dialogs preserve ordinary gameplay', () => {
   useSimulationEnabled.mockReturnValue(true);
-  const simulation = setup();
-  expect(simulation.result.current).toBeNull();
-  simulation.unmount();
+  const { result: simulationResult, unmount } = setup();
+  expect(simulationResult.current).toBeNull();
+  unmount();
   useSimulationEnabled.mockReturnValue(false);
   useSession.mockReturnValue({ chainId: 'sepolia' });
-  const signedOut = setup();
-  expect(signedOut.result.current).toBeNull();
+  const { result: signedOutResult } = setup();
+  expect(signedOutResult.current).toBeNull();
   expect(useStarterMissions).not.toHaveBeenCalled();
 });
 
@@ -214,4 +222,72 @@ test('transaction-linked deliveries wait for their resolved entity before checki
   rerender({ deliveryId: 1234 });
   expect(result.current.ready).toBe(true);
   expect(useMissionBindings).toHaveBeenLastCalledWith([expect.objectContaining({ kind: 'Delivery', entity: { label: Entity.IDS.DELIVERY, id: 1234 } })]);
+});
+
+
+test('Make Landfall does not expose campaign participation for an ordinary incoming delivery', async () => {
+  const landfall = { ...view, missions: [{ id: 0, accepted: true }] };
+  useStarterMissions.mockReturnValue({ data: landfall });
+  useMissionBindings.mockImplementation(requests => requests.map(() => ({ data: { status: 'unbound' } })));
+  state.missionParticipation[scope] = true;
+  const { result } = setup('SURFACE_TRANSFER', { deliveryId: 97839 }, {});
+  expect(result.current.visible).toBe(false);
+  expect(result.current.selected).toBe(false);
+  expect(result.current.ready).toBe(true);
+  const options = { usePaymaster: false };
+  let prepared;
+  await act(async () => { prepared = await result.current.prepare('ReceiveDelivery', { delivery: { label: Entity.IDS.DELIVERY, id: 97839 } }, options); });
+  expect(prepared).toBe(options);
+  expect(api.getStarterMissions).not.toHaveBeenCalled();
+});
+
+test('an incoming campaign Warehouse receipt stays selected and can bind at receipt', async () => {
+  const warehouseView = { ...view, progress: { warehouseId: '999' } };
+  const warehouse = { ...building, Control: { controller: subject }, Building: { status: 3 } };
+  useStarterMissions.mockReturnValue({ data: warehouseView });
+  api.getStarterMissions.mockResolvedValue(warehouseView);
+  useMissionBindings.mockImplementation(requests => requests.map(({ kind }) => ({ data: { status: kind === 'Built' ? 'matched' : 'unbound' } })));
+  api.getMissionBinding.mockImplementation(async ({ kind }) => ({ status: kind === 'Built' ? 'matched' : 'unbound' }));
+  api.getEntityById.mockImplementation(async entity => entity.label === Entity.IDS.BUILDING ? warehouse : ({ Delivery: { dest: building, destSlot: 2 } }));
+  const { result } = setup('SURFACE_TRANSFER', { deliveryId: 1234 }, { destination: warehouse, destinationSlot: 2 });
+  expect(result.current.visible).toBe(true);
+  expect(result.current.selected).toBe(true);
+  let prepared;
+  await act(async () => { prepared = await result.current.prepare('ReceiveDelivery', { delivery: { label: Entity.IDS.DELIVERY, id: 1234 } }, {}); });
+  expect(prepared.missionAssignment).toBeDefined();
+});
+
+test('a delivery that becomes unbound after a matched preview preserves ordinary wallet options', async () => {
+  api.getEntityById.mockResolvedValue({ Delivery: { dest: building, destSlot: 1 } });
+  const { result } = setup('SURFACE_TRANSFER', { deliveryId: 97839 }, {});
+  expect(result.current.selected).toBe(true);
+  const options = { usePaymaster: false };
+  let prepared;
+  await act(async () => { prepared = await result.current.prepare('ReceiveDelivery', { delivery: { label: Entity.IDS.DELIVERY, id: 97839 } }, options); });
+  expect(prepared).toBe(options);
+  expect(result.current.message).toBeUndefined();
+});
+
+test('changing the selected building updates checkbox visibility without losing the preference', () => {
+  const wrapper = ({ children }) => <MissionActionProvider type="PLAN_BUILDING" params={{}}>{children}</MissionActionProvider>;
+  const { result, rerender } = renderHook(({ buildingType }) => {
+    useMissionActionDetails(React.useMemo(() => ({ buildingType }), [buildingType]));
+    return useMissionAction();
+  }, { wrapper, initialProps: { buildingType: 9 } });
+  expect(result.current.visible).toBe(false);
+  rerender({ buildingType: 1 });
+  expect(result.current.visible).toBe(true);
+  expect(result.current.selected).toBe(true);
+  rerender({ buildingType: 9 });
+  expect(result.current.visible).toBe(false);
+  expect(state.dispatchMissionParticipation).not.toHaveBeenCalled();
+});
+
+test('binding API failures do not turn selected campaign work into an ordinary action', async () => {
+  api.getMissionBinding.mockRejectedValue(new Error('Network failure'));
+  const { result } = setup();
+  let prepared;
+  await act(async () => { prepared = await result.current.prepare('ProcessProductsFinish', { processor: building, processor_slot: 2 }, {}); });
+  expect(prepared).toBeNull();
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(1);
 });

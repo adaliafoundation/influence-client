@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import useMarketQuery from './useMarketQuery';
 
 import useAsteroidBuildings from '~/hooks/useAsteroidBuildings';
 import api from '~/lib/api';
@@ -7,11 +7,11 @@ import api from '~/lib/api';
 const useOrderSummaryByExchange = (asteroidId, product) => {
   const { data: exchanges, isLoading: isLoadingBuildings } = useAsteroidBuildings(asteroidId, 'Exchange');
 
-  const { data: orderSummaries, isLoading: isLoadingOrders } = useQuery({
+  const { data: orderSummaries, isLoading: isLoadingOrders } = useMarketQuery({
     queryKey: [ 'exchangeOrderSummary', Number(asteroidId), Number(product) ],
     queryFn: () => api.getOrderSummaryByExchange(asteroidId, product),
     enabled: !!asteroidId && !!product
-  });
+  }, { asteroidId, products: [product] });
 
   const isLoading = isLoadingBuildings || isLoadingOrders;
   return useMemo(() => {
@@ -31,7 +31,7 @@ const useOrderSummaryByExchange = (asteroidId, product) => {
         })),
       isLoading
     };
-  }, [exchanges, orderSummaries, isLoading]);
+  }, [exchanges, orderSummaries, isLoading, product]);
 };
 
 export default useOrderSummaryByExchange;

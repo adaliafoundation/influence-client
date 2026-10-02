@@ -17,7 +17,7 @@ const useJettisonCargoManager = (origin) => {
   const jettisonCargo = useCallback(
     (originSlot, products, meta) => {
       if (payload.origin?.id && payload.caller_crew?.id) {
-        execute('DumpDelivery', {
+        return execute('DumpDelivery', {
           products: Object.keys(products).map((product) => ({ product, amount: Math.floor(products[product]) })),
           origin_slot: originSlot,
           ...payload

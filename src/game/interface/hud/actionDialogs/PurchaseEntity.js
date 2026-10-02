@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Entity, Ship } from '@influenceth/sdk';
 
@@ -32,22 +32,11 @@ const Note = styled.div`
   text-align: center;
 `;
 
-
 const PurchaseEntity = ({ asteroid, lot, entity, actionManager, stage, ...props }) => {
   const { purchaseListing } = actionManager;
   const { crew } = useCrewContext();
   const { data: controller } = useCrew(entity?.Control?.controller?.id);
   const { data: swayBalance } = useSwayBalance();
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    if (lastStatus.current && lastStatus.current !== stage) {
-      props.onClose();
-    } else if (!lastStatus.current) {
-      lastStatus.current = stage;
-    }
-  }, [stage]);
 
   const insufficientSway = useMemo(() => {
     return entity?.Nft?.price > swayBalance;

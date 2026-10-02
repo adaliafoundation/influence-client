@@ -5,10 +5,10 @@ global.TextEncoder = TextEncoder;
 jest.mock('~/lib/priceUtils', () => ({ TOKEN: { SWAY: 'sway' }, TOKEN_SCALE: { sway: 1e6 } }), { virtual: true });
 jest.mock('~/lib/utils', () => ({ safeBigInt: (value) => BigInt(value || 0) }), { virtual: true });
 
-const { Building, Permission } = require('@influenceth/sdk');
+const { Building, Entity, Permission } = require('@influenceth/sdk');
 const { canRestoreExpiredLotLease, canExtendAgreement, getLotLeaseAuctionStatus } = require('./leaseUtils');
 const blockTime = 10000000;
-const agreement = { permission: Permission.IDS.USE_LOT, endTime: 1000, rate: 100 };
+const agreement = { permission: Permission.IDS.USE_LOT, endTime: 1000, noticeTime: 0, rate: 100 };
 const asteroid = { PrepaidAgreementAuctionSet: { mode: Permission.AUCTION_MODES.MANUAL, gracePeriod: 0 } };
 const lot = {
   PrepaidAgreements: [agreement],
@@ -48,9 +48,10 @@ test('automatic auctions use the lease expiration time', () => {
 });
 
 describe('expired lot lease restoration eligibility', () => {
-  const expiredAgreement = { ...agreement, permitted: { id: 2493 } };
+  const expiredAgreement = { ...agreement, permitted: { id: 2493, label: Entity.IDS.CREW } };
   const buildingLot = {
     ...lot,
+    UseLot: { tenant: expiredAgreement.permitted },
     building: { ...lot.building, Control: { controller: { id: 5630 } } }
   };
 
@@ -89,7 +90,7 @@ test.each([
   [1001, false, false],
   [1000, true, true],
 ])('extension at time %s with restoration %s is allowed: %s', (blockTime, isExpiredLeaseRenewal, expected) => {
-  expect(canExtendAgreement({ agreement: { endTime: 1000 }, blockTime, isExpiredLeaseRenewal })).toBe(expected);
+  expect(canExtendAgreement({ agreement: { endTime: 1000, noticeTime: 0 }, blockTime, isExpiredLeaseRenewal })).toBe(expected);
 });
 
 test('owning another eligible crew does not allow the selected unrelated crew to restore', () => {
@@ -97,7 +98,7 @@ test('owning another eligible crew does not allow the selected unrelated crew to
     crewId: 999,
     accountCrewIds: [999, 2493],
     lot,
-    expiredAgreement: { ...agreement, permitted: { id: 2493 } }
+    expiredAgreement: { ...agreement, permitted: { id: 2493, label: Entity.IDS.CREW } }
   })).toBe(false);
 });
 
@@ -108,4 +109,41 @@ test('active and expired lot lease helpers share the inclusive notice boundary',
   expect(getExpiredUseLotAgreement([lease], 100)).toBeNull();
   expect(getActiveUseLotAgreement([lease], 101)).toBeNull();
   expect(getExpiredUseLotAgreement([lease], 101)).toBe(lease);
+});
+
+test('cancelled agreements cannot be extended', () => {
+  expect(canExtendAgreement({ agreement: { endTime: 1000, noticeTime: 10 }, blockTime: 100 })).toBe(false);
+});
+test('cleared tenancy cannot be restored from a historical agreement', () => {
+  expect(canRestoreExpiredLotLease({ crewId: 1, expiredAgreement: { noticeTime: 0, permitted: { id: 1, label: Entity.IDS.CREW } }, lot: { UseLot: { tenant: null }, building: { Building: { status: 3 } } } })).toBe(false);
+});
+
+describe('lot lease eligibility', () => {
+  const { getLotLeaseEligibility } = require('./leaseUtils');
+  const { evaluateAuthorization } = require('./authorization');
+  const asteroidCrew = { label: Entity.IDS.CREW, id: 101, Crew: { delegatedTo: '0x123' } };
+  const buildingCrew = { label: Entity.IDS.CREW, id: 102, Crew: { delegatedTo: '0x456' } };
+  const asteroid = { Control: { controller: { label: asteroidCrew.label, id: asteroidCrew.id } } };
+  const occupiedLot = controller => ({ building: {
+    label: Entity.IDS.BUILDING, id: 201, Control: { controller }, Building: { status: Building.CONSTRUCTION_STATUSES.OPERATIONAL }
+  } });
+  const check = (lot, crews = [asteroidCrew, buildingCrew], targetAsteroid = asteroid) => getLotLeaseEligibility({
+    asteroid: targetAsteroid, lot,
+    authorize: (method, args, entities) => evaluateAuthorization({ method, args, entities: [...entities, ...crews], blockTime: 1000 })
+  });
+
+  test('blocks a building controlled by the asteroid crew', () => {
+    expect(check(occupiedLot(asteroidCrew)).status).toBe('denied');
+  });
+  test('blocks a different controlling crew delegated to the same wallet', () => {
+    expect(check(occupiedLot(buildingCrew), [asteroidCrew, { ...buildingCrew, Crew: { delegatedTo: '0x0123' } }]).status).toBe('denied');
+  });
+  test('allows buildings controlled by an independent account and empty lots', () => {
+    expect(check(occupiedLot(buildingCrew)).status).toBe('allowed');
+    expect(check({ building: null }).status).toBe('allowed');
+  });
+  test('waits for missing controller and delegate data', () => {
+    expect(check(occupiedLot(buildingCrew), [], {}).status).toBe('unresolved');
+    expect(check(occupiedLot({ label: buildingCrew.label, id: buildingCrew.id }), []).status).toBe('unresolved');
+  });
 });

@@ -1,3 +1,4 @@
+jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
 const React = require('react');
 const { render, screen, fireEvent } = require('@testing-library/react');
 require('@testing-library/jest-dom');
@@ -58,7 +59,7 @@ beforeEach(() => {
 
 test('an eligible new crew sees an expanded starter invitation in Ready', () => {
   mount();
-  expect(screen.getByText('Begin your starter campaign')).toBeVisible();
+  expect(screen.getByText('Begin campaign: Your Foothold in Adalia')).toBeVisible();
   fireEvent.click(screen.getByText('Show details'));
   expect(state.getState().dispatchLauncherPage).toHaveBeenCalledWith('missions', 'starter');
   expect(state.getState().dispatchMissionDetails).not.toHaveBeenCalled();
@@ -66,10 +67,10 @@ test('an eligible new crew sees an expanded starter invitation in Ready', () => 
 
 test('acceptance moves the invitation from Ready to an active mission in In Progress without another action', () => {
   const rendered = mount();
-  expect(screen.getByText('Begin your starter campaign')).toBeVisible();
+  expect(screen.getByText('Begin campaign: Your Foothold in Adalia')).toBeVisible();
   view = { ...view, missions: [{ id: 0, title: 'Make Landfall', accepted: true }] };
   rendered.rerender(<ThemeProvider theme={theme}><Context.Provider value={{ execute, getStatus: () => null }}><ActionItems /></Context.Provider></ThemeProvider>);
-  expect(screen.queryByText('Begin your starter campaign')).not.toBeInTheDocument();
+  expect(screen.queryByText('Begin campaign: Your Foothold in Adalia')).not.toBeInTheDocument();
   expect(screen.queryByText('Mission: Make Landfall')).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('In Progress'));
   expect(screen.getByText('Mission: Make Landfall')).toBeVisible();
@@ -86,11 +87,11 @@ test('collapse and tab preferences survive remounting without affecting another 
   first.unmount();
   expect(state.getState().objectivePreferences['crew-1']).toEqual({ filter: 'progress', collapsed: true });
   const second = mount();
-  expect(screen.queryByText('Begin your starter campaign')).not.toBeInTheDocument();
+  expect(screen.queryByText('Begin campaign: Your Foothold in Adalia')).not.toBeInTheDocument();
   second.unmount();
   useMissionScope.mockReturnValue('crew-2');
   mount();
-  expect(screen.getByText('Begin your starter campaign')).toBeVisible();
+  expect(screen.getByText('Begin campaign: Your Foothold in Adalia')).toBeVisible();
 });
 
 test('Finish All sends only activity calls even with a claimable mission in Ready', () => {

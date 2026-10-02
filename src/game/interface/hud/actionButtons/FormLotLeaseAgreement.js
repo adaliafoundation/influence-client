@@ -3,10 +3,12 @@ import { useCallback, useMemo } from 'react';
 import { FormLotAgreementIcon, SwayIcon } from '~/components/Icons';
 import useAgreementManager from '~/hooks/actionManagers/useAgreementManager';
 import useStore from '~/hooks/useStore';
+import useCrewContext from '~/hooks/useCrewContext';
 import { daysToSeconds, formatFixed } from '~/lib/utils';
 import { STARTER_LOT_LEASE_TERM, isStarterLotLeaseCandidate } from '~/lib/starterPacks';
 import {
   getLotLeaseAuctionStatus,
+  getLotLeaseEligibility,
   canRestoreExpiredLotLease,
   toSway
 } from '~/lib/leaseUtils';
@@ -17,17 +19,16 @@ import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import theme from '~/theme';
 
 // TODO: arguably, it would be more consistent to show this button in a disabled state, at least in some conditions
-const isVisible = ({ asteroid, lot, blockTime, crew }) => {
+const isVisible = ({ asteroid, lot, blockTime, crew, authorize }) => {
+  if (getLotLeaseEligibility({ asteroid, lot, authorize }).status !== 'allowed') return false;
   let visible = false;
 
   const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
   const isExpiredAuctionLease = !!(lot?.building && auctionStatus.expiredAgreement && !lot?._activeUseLotAgreement);
 
-  // visible when lot selected and lot is available to crew (and uncontrolled or not controlled by occupant)
-  if (lot && Permission.getPolicyDetails(lot, crew, blockTime)[Permission.IDS.USE_LOT]?.crewStatus === 'available') {
-    if (!lot.Control?.controller?.id) visible ||= true;
-    if ((lot.building || lot.surfaceShip)?.Control?.controller?.id !== lot.Control.controller.id) visible ||= true;
-  }
+  // Lease offers are presentation data, not evidence of current USE_LOT access.
+  const policy = lot && Permission.getPolicyDetails(lot, undefined, blockTime)[Permission.IDS.USE_LOT];
+  visible = !!policy && [Permission.POLICY_IDS.PREPAID, Permission.POLICY_IDS.CONTRACT].includes(policy.policyType);
 
   if (!visible && isExpiredAuctionLease && auctionStatus.isAuctionAvailable) {
     visible = true;
@@ -48,6 +49,8 @@ const isVisible = ({ asteroid, lot, blockTime, crew }) => {
 };
 
 const FormLotLeaseAgreement = ({ asteroid, blockTime, crew, lot, simulation, simulationActions, _disabled }) => {
+  const { authorize } = useCrewContext();
+  const leaseEligibility = getLotLeaseEligibility({ asteroid, lot, authorize });
   const { currentPolicy, pendingChange } = useAgreementManager(lot, Permission.IDS.USE_LOT);
   const setCoachmarkRef = useCoachmarkRefSetter();
 
@@ -110,6 +113,8 @@ const FormLotLeaseAgreement = ({ asteroid, blockTime, crew, lot, simulation, sim
       label: <>Lease Lot (<SwayIcon />{leaseRate} / day)</>,
     };
   }, [asteroid, blockTime, crew, currentPolicy?.policyDetails?.initialTerm, currentPolicy?.policyDetails?.rate, currentPolicy?.policyType, lot]);
+
+  if (leaseEligibility.status !== 'allowed') return null;
 
   return (
     <ActionButton

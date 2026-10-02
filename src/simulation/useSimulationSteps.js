@@ -31,7 +31,7 @@ const DELAY_MESSAGE = 1000;
 
 const useSimulationSteps = () => {
   const { connecting, login } = useSession();
-  const { crew, pendingTransactions } = useCrewContext();
+  const { crew, pendingTransactions, authorize } = useCrewContext();
   const simulation = useSimulationState();
   const history = useHistory();
 
@@ -107,14 +107,15 @@ const useSimulationSteps = () => {
     let selectedLotIsLeasable = false;
     let selectedLotIsMine = false;
     if (selectedLot) {
-      const crewStatus = Permission.getPolicyDetails(selectedLot, crew)[Permission.IDS.USE_LOT]?.crewStatus;
+      const usage = authorize('lotUsage', [crew, selectedLot], [crew, selectedLot?._permissionTargets?.lot, selectedLot?._permissionTargets?.asteroid]);
+      const policy = Permission.getPolicyDetails(selectedLot)[Permission.IDS.USE_LOT];
       selectedLotIsLeasable = (
-        crewStatus === 'available'
+        usage.status === 'denied' && policy?.policyType === Permission.POLICY_IDS.PREPAID
         && selectedLot?.Location?.location?.id === SIMULATION_CONFIG.asteroidId
         && !selectedLot?.building
         && !selectedLot?.surfaceShip
       );
-      selectedLotIsMine = (crewStatus === 'controller');
+      selectedLotIsMine = usage.status === 'allowed';
     }
 
     // next available unused lot
@@ -1058,7 +1059,7 @@ const useSimulationSteps = () => {
         }
       },
     ];
-  }, [
+  }, [authorize,
     actionDialog,
     connecting,
     crew,

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Building, Entity, Permission } from '@influenceth/sdk';
+import { Building, Entity } from '@influenceth/sdk';
 
 import useCrewContext from '~/hooks/useCrewContext';
 import api from '~/lib/api';
@@ -32,16 +32,16 @@ const useAsteroidBuildings = (asteroidId, reqComponent = 'Building', reqOneOfPer
       // else, use empty crew (will only return public)... this is (at least) necessary
       // to calculate starterpack price for logged out / no-recruit crews
       } else {
-        data = (allData || []).filter((entity) => !!perms.find((p) => Permission.isPermitted({}, p, entity)));
+        data = (allData || []).filter((entity) => !!perms.find((p) => entity.PublicPolicies?.some((policy) => policy.permission === p && policy.public !== false)));
       }
     }
     return {
       data,
       isLoading,
       refetch,
-      dataUpdatedAt: Date.now() // to capture changes to crewCan
+      dataUpdatedAt
     };
-  }, [crew, crewCan, dataUpdatedAt, isLoading, perms, refetch]);
+  }, [allData, crew, crewCan, dataUpdatedAt, isLoading, perms, refetch]);
 };
 
 export default useAsteroidBuildings;

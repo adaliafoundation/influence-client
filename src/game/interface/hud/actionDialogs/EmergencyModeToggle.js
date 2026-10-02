@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { Inventory, Product, Ship } from '@influenceth/sdk';
 
@@ -49,7 +49,7 @@ const Note = styled.div`
 `;
 
 const EmergencyModeToggle = ({ asteroid, lot, manager, ship, stage, ...props }) => {
-  const { activateEmergencyMode, deactivateEmergencyMode, actionStage } = manager;
+  const { activateEmergencyMode, deactivateEmergencyMode } = manager;
 
   const { crew } = useCrewContext();
 
@@ -106,21 +106,11 @@ const EmergencyModeToggle = ({ asteroid, lot, manager, ship, stage, ...props }) 
 
   const onToggle = useCallback(() => {
     if (inEmergencyMode) {
-      deactivateEmergencyMode();
+      return deactivateEmergencyMode();
     } else {
-      activateEmergencyMode();
+      return activateEmergencyMode();
     }
   }, [activateEmergencyMode, deactivateEmergencyMode, inEmergencyMode]);
-
-  // handle auto-closing
-  const lastStatus = useRef();
-  useEffect(() => {
-    // (close on status change from)
-    if (lastStatus.current && actionStage !== lastStatus.current) {
-      props.onClose();
-    }
-    lastStatus.current = actionStage;
-  }, [actionStage]);
 
   const actionDetails = useMemo(() => {
     const icon = inEmergencyMode ? <EmergencyModeExitIcon /> : <EmergencyModeEnterIcon />;

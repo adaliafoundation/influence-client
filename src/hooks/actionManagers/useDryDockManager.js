@@ -1,3 +1,4 @@
+import useFailureReporter from '../useFailureReporter';
 import { useCallback, useContext, useMemo } from 'react';
 import { DryDock, Entity, Permission } from '@influenceth/sdk';
 
@@ -9,9 +10,10 @@ import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 
 const useDryDockManager = (lotId, slot = 1) => {
+  const reportBlocked = useFailureReporter();
   const blockTime = useBlockTime();
   const { execute, getPendingTx, getStatus } = useContext(ChainTransactionContext);
-  const { crew, crewCan } = useCrewContext();
+  const { crew, crewCan, authorize, recheckAuthorization } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities(lot?.building);
 
@@ -51,10 +53,9 @@ const useDryDockManager = (lotId, slot = 1) => {
         current.originSlot = actionItem.event.returnValues.originSlot;
         current.shipType = actionItem.event.returnValues.shipType;
         current.startTime = actionItem._startTime || actionItem.event.timestamp;
-        current._isAccessible = (
-          (actionItem.event.returnValues.callerCrew.id === crew?.id)
-          || crewCan(Permission.IDS.ASSEMBLE_SHIP, lot.building)
-        );
+        const control = authorize('controls', [crew, slotDryDock.outputShip], [crew, slotDryDock.outputShip]);
+        current._isAccessible = control.status === 'allowed'
+          || (control.status === 'denied' && crewCan(Permission.IDS.ASSEMBLE_SHIP, lot.building));
       }
       current.shipId = slotDryDock?.outputShip.id;
       current.finishTime = slotDryDock?.finishTime;
@@ -85,10 +86,10 @@ const useDryDockManager = (lotId, slot = 1) => {
       status,
       stage
     ];
-  }, [actionItems, blockTime, getPendingTx, getStatus, payload, slotDryDock?.status]);
+  }, [actionItems, blockTime, getPendingTx, getStatus, payload, slotDryDock, authorize, crew, crewCan, lot?.building]);
 
   const startShipAssembly = useCallback((shipType, origin, originSlot, leaseDetails) => {
-    execute(
+    return execute(
       leaseDetails ? 'LeaseAndAssembleShipStart' : 'AssembleShipStart',
       {
         ...payload,
@@ -103,8 +104,19 @@ const useDryDockManager = (lotId, slot = 1) => {
     )
   }, [execute, payload]);
 
-  const finishShipAssembly = useCallback((destination) => {
-    execute(
+  const finishShipAssembly = useCallback(async (destination) => {
+    const ship = slotDryDock?.outputShip;
+    const control = await recheckAuthorization('controls', [crew, ship], [crew, ship]);
+    if (control.status === 'unresolved') return reportBlocked(control);
+    if (control.status === 'denied') {
+      const access = await recheckAuthorization('can', [crew, lot?.building, Permission.IDS.ASSEMBLE_SHIP], [crew, lot?.building]);
+      if (access.status !== 'allowed') return reportBlocked(access);
+    }
+    if (destination?.label === Entity.IDS.BUILDING) {
+      const access = await recheckAuthorization('spaceportProtection', [crew, ship, destination], [crew, ship, destination]);
+      if (access.status !== 'allowed') return reportBlocked(access);
+    }
+    return execute(
       'AssembleShipFinish', 
       {
         ...payload,
@@ -115,7 +127,7 @@ const useDryDockManager = (lotId, slot = 1) => {
         shipType: currentAssembly?.shipType
       }
     );
-  }, [currentAssembly?.shipType, execute, payload]);
+  }, [reportBlocked, currentAssembly?.shipType, execute, payload, recheckAuthorization, crew, lot?.building, slotDryDock?.outputShip]);
 
   return {
     startShipAssembly,

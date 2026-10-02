@@ -17,7 +17,7 @@ const AccessSubrow = styled.tr`
     align-items: center;
     color: ${p => {
       if (p.value === 'controller') return p.theme.colors.brightMain;
-      else if (p.value === 'granted' || p.value === 'under contract') return p.theme.colors.success;
+      else if (p.value === 'granted') return p.theme.colors.success;
       else if (p.value === 'restricted') return p.theme.colors.error;
       return 'white';
     }};
@@ -45,7 +45,7 @@ const AccessRowMin = styled.div`
 const useColumns = () => {
   const { accountAddress } = useSession();
   const blockTime = useBlockTime();
-  const { accountCrewIds, crew } = useCrewContext();
+  const { accountCrewIds, crew, crewAuthorization } = useCrewContext();
 
   return useMemo(() => {
     const columns = [
@@ -132,15 +132,16 @@ const useColumns = () => {
         label: 'Access',
         noMinWidth: true,
         selector: row => {
-          const policyDetails = Permission.getPolicyDetails(row, crew, blockTime);
+          const policyDetails = Permission.getPolicyDetails(row, undefined, blockTime);
 
           let lines = {};
           Object.keys(policyDetails).forEach((permId) => {
-            if (policyDetails[permId].crewStatus === 'available') {
-              lines[permId] = `${policyDetails[permId].policyDetails.rate}_${policyDetails[permId].policyDetails.initialTerm}`;
-            } else {
-              lines[permId] = policyDetails[permId].crewStatus;
-            }
+            const access = crewAuthorization(Number(permId), row);
+            const policy = policyDetails[permId];
+            if (access.status === 'unresolved') lines[permId] = 'checking';
+            else if (access.status === 'allowed') lines[permId] = ['controller', 'shared-delegate', 'exact-entity'].includes(access.reason) ? 'controller' : 'granted';
+            else if (policy.policyType === Permission.POLICY_IDS.PREPAID) lines[permId] = `${policy.policyDetails.rate}_${policy.policyDetails.initialTerm}`;
+            else lines[permId] = 'restricted';
           });
 
           const isSingleRow = (new Set(Object.values(lines))).size === 1;
@@ -209,7 +210,7 @@ const useColumns = () => {
     ];
 
     return columns.filter((c) => c && (accountAddress || !c.requireLogin));
-  }, [accountAddress, accountCrewIds, blockTime, crew]);
+  }, [crewAuthorization, accountAddress, accountCrewIds, blockTime, crew]);
 };
 
 export default useColumns;

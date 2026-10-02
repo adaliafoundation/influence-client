@@ -13,9 +13,10 @@ test('every campaign requirement has reusable guidance, including each distinct 
   });
 });
 
-test('draft guidance contains no specific asset selections or transaction handlers', () => {
+test('guidance pages have matching optional highlights', () => {
   Object.values(gameplayGuides).forEach(guide => {
-    guide.pages.forEach(page => expect(page).toMatch(/^\[DRAFT\].*\[DRAFT\]$/));
-    guide.highlights.forEach(highlight => expect(highlight).toMatch(/^(hudMenu|actionButton)/));
+    expect(guide.highlights).toHaveLength(guide.pages.length);
+    guide.pages.forEach(page => expect(page.trim().length).toBeGreaterThan(0));
+    guide.highlights.filter(Boolean).forEach(highlight => expect(highlight).toMatch(/^(hudCrewLocation|hudMenu|actionButton)/));
   });
 });

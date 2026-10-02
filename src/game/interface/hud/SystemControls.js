@@ -7,8 +7,7 @@ import {
   CrewmateCreditIcon,
   MenuIcon,
   SwayIcon,
-  UpdateIcon,
-  WarningIcon
+  UpdateIcon
 } from '~/components/Icons';
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
@@ -31,16 +30,6 @@ const StyledSystemControls = styled.div`
   top: 0;
   transition: opacity 250ms ease;
   z-index: 2;
-`;
-
-const MobileWarning = styled.div`
-  align-items: center;
-  color: orangered;
-  display: flex;
-  font-size: 13px;
-  @media (min-width: ${p => p.theme.breakpoints.mobile + 1}px) {
-    display: none;
-  }
 `;
 
 const SwayBalance = styled.div`
@@ -267,11 +256,6 @@ const SystemControls = () => {
 
   return (
     <StyledSystemControls id="topMenu">
-      <MobileWarning style={{ marginRight: 10 }}>
-        <WarningIcon />
-        <span style={{ marginLeft: 5 }}>Device size is not well supported.</span>
-      </MobileWarning>
-
       {totalRecruitCredits
         ? (
           <CrewmateCreditBalance>

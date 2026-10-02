@@ -1,3 +1,4 @@
+import { errorMessages } from '../../lib/errorMessages';
 import { useCallback, useContext, useMemo } from 'react';
 import { Entity } from '@influenceth/sdk';
 
@@ -47,7 +48,7 @@ const useBuyAsteroid = (id) => {
       createAlert({
         type: 'GenericAlert',
         level: 'warning',
-        data: { content: 'Asteroid sales are not currently active.' },
+        data: { content: errorMessages.asteroidSalesClosed },
         duration: 5000
       });
 

@@ -7,7 +7,7 @@ const { QueryClient, QueryClientProvider } = require('@tanstack/react-query');
 const { Entity } = require('@influenceth/sdk');
 jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
-jest.mock('~/lib/api', () => ({}), { virtual: true });
+jest.mock('~/lib/api', () => ({ getEntityById: jest.fn() }), { virtual: true });
 jest.mock('~/lib/shipEjectionEligibility', () => ({ ...jest.requireActual('../lib/shipEjectionEligibility'), loadShipEjectionEligibility: jest.fn() }), { virtual: true });
 const useCrewContext = require('~/hooks/useCrewContext');
 const useSession = require('~/hooks/useSession');
@@ -32,7 +32,12 @@ test('pending policy checks stay checking, and invalidations refresh an open dia
   await act(async () => resolve({ status: 'allowed', ship }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadShipEjectionEligibility.mockResolvedValue({ status: 'blocked', reason: 'Ship has permission to remain' });
-  await act(async () => client.invalidateQueries({ queryKey: ['shipEjectionEligibility'] }));
+  let finishRefresh;
+  loadShipEjectionEligibility.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+  act(() => { client.invalidateQueries({ queryKey: ['shipEjectionEligibility'] }); });
+  await waitFor(() => expect(finishRefresh).toBeDefined());
+  expect(result.current.eligibility.status).toBe('allowed');
+  await act(async () => finishRefresh({ status: 'blocked' }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
 });
 
@@ -56,16 +61,20 @@ test('changing selected crew during a pending recheck cannot authorize the old p
   expect((await result.current.recheck({ shipId: 9, crewId: 1 })).status).toBe('checking');
 });
 
-test('agreement expiry, controller updates and ship movement recompute eligibility', async () => {
+test('blocks defer checks until submission; controller and movement changes refresh eligibility', async () => {
   const { result, rerender } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
   loadShipEjectionEligibility.mockResolvedValue({ status: 'blocked' });
   useSession.mockReturnValue({ accountAddress: '0x123', blockTime: 101 });
   rerender();
-  await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
+  expect(result.current.eligibility.status).toBe('allowed');
+  expect(loadShipEjectionEligibility).toHaveBeenCalledTimes(1);
+  expect((await result.current.recheck({ shipId: 9, crewId: 1 })).status).toBe('blocked');
+  expect(loadShipEjectionEligibility.mock.calls.at(-1)[0].blockTime).toBe(101);
   loadShipEjectionEligibility.mockResolvedValue({ status: 'allowed' });
   ship = { ...ship, Control: { controller: { id: 3 } }, Location: { location: { label: Entity.IDS.BUILDING, id: 8 } } };
   rerender();
+  await waitFor(() => expect(loadShipEjectionEligibility).toHaveBeenCalledTimes(3));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
 });
 
@@ -74,4 +83,25 @@ test('failed reads remain checking', async () => {
   const { result } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
   await waitFor(() => expect(loadShipEjectionEligibility).toHaveBeenCalled());
   expect(result.current.eligibility.status).toBe('checking');
+});
+
+
+test('display uses cached dependency reads while explicit rechecks remain fresh', async () => {
+  const api = require('~/lib/api');
+  client.setDefaultOptions({ queries: { retry: false, staleTime: 300000 } });
+  const controller = { label: Entity.IDS.CREW, id: 22, Crew: {} };
+  client.setQueryData(['entity', Entity.IDS.CREW, 22], controller);
+  api.getEntityById.mockReset().mockResolvedValue(controller);
+  loadShipEjectionEligibility.mockImplementation(async ({ api: source }) => {
+    await source.getEntityById({ label: Entity.IDS.CREW, id: 22 });
+    return { status: 'allowed' };
+  });
+  const { result } = renderHook(() => useShipEjectionEligibility(ship), { wrapper });
+  await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
+  expect(api.getEntityById).not.toHaveBeenCalled();
+  const query = client.getQueryCache().find({ queryKey: ['shipEjectionEligibility'], exact: false });
+  expect(query.meta.affectsEntity(controller)).toBe(true);
+  expect(query.meta.affectsEntity({ label: Entity.IDS.CREW, id: 999 })).toBe(false);
+  await result.current.recheck({ shipId: 9, crewId: 1 });
+  expect(api.getEntityById).toHaveBeenCalledTimes(1);
 });

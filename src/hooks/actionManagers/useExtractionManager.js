@@ -1,5 +1,5 @@
 import { useCallback, useContext, useMemo } from 'react';
-import { Entity, Extractor, Permission } from '@influenceth/sdk';
+import { Entity, Extractor } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
@@ -56,10 +56,7 @@ const useExtractionManager = (lotId, slot = 1, missionId) => {
         current._cachedData = actionItem.data;
         current.depositId = actionItem.event.returnValues.deposit.id;
         current.startTime = actionItem._startTime || actionItem.event.timestamp;
-        current._isAccessible = (
-          (actionItem.event.returnValues.callerCrew.id === crew?.id)
-          || crewCan(Permission.IDS.EXTRACT_RESOURCES, lot.building)
-        );
+        current._isAccessible = !!crew;
       }
       current.destination = slotExtractor?.destination;
       current.destinationSlot = slotExtractor?.destinationSlot;
@@ -100,7 +97,7 @@ const useExtractionManager = (lotId, slot = 1, missionId) => {
   }, [actionItems, blockTime, crew?.id, crewCan, getPendingTx, getStatus, payload, slotExtractor?.status]);
 
   const startExtraction = useCallback((amount, deposit, destination, destinationSlot, depositRecipient, lease) => {
-    execute(
+    return execute(
       'FlexibleExtractResourceStart',
       {
         ...payload,
@@ -122,7 +119,7 @@ const useExtractionManager = (lotId, slot = 1, missionId) => {
   }, [execute, payload]);
 
   const finishExtraction = useCallback(() => {
-    execute('ExtractResourceFinish', payload, { lotId });
+    return execute('ExtractResourceFinish', payload, { lotId });
   }, [execute, payload]);
 
   return {

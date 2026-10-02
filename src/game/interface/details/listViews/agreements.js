@@ -1,3 +1,4 @@
+import { matchesCrewPermissionSubject } from '~/lib/authorization';
 import { useMemo } from 'react';
 import theme from '~/theme';
 import styled from 'styled-components';
@@ -237,7 +238,7 @@ const useColumns = () => {
                     agreementPath={row._agreement._path} />
                 </div>
               )
-            } else if (row._agreement.permitted?.id === crew?.id || (crew?.Crew?.delegatedTo && row._agreement.permitted === crew.Crew.delegatedTo)) {
+            } else if (matchesCrewPermissionSubject(row._agreement.permitted, crew)) {
               return (
                 <div style={{ padding: '10px 15px' }}>
                   <actionButtons.ExtendAgreement.Component
@@ -258,7 +259,7 @@ const useColumns = () => {
     ];
 
     return columns.filter((c) => accountAddress || !c.requireLogin);
-  }, [accountAddress, accountCrewIds, blockTime, crew?.id]);
+  }, [accountAddress, accountCrewIds, blockTime, crew, actionProps]);
 };
 
 export default useColumns;

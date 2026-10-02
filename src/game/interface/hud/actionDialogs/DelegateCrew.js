@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
+import { useCallback, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Address } from '@influenceth/sdk';
-import LoadingAnimation from 'react-spinners/PuffLoader';
 
 import Button from '~/components/ButtonAlt';
 import { CrewIcon } from '~/components/Icons';
@@ -72,42 +72,21 @@ const DelegateCrew = ({ crew, crewId, onClose }) => {
   const id = crewId || crew?.id;
   const { delegateCrew, getDelegationStatus } = useCrewDelegationManager(id);
   const [address, setAddress] = useState('');
-  const [attempted, setAttempted] = useState(false);
-  const [prompting, setPrompting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const normalizedAddress = useMemo(() => normalizeStarknetAddress(address), [address]);
   const normalizedOwnerAddress = useMemo(() => normalizeStarknetAddress(crew?.Nft?.owner), [crew?.Nft?.owner]);
   const normalizedDelegatedAddress = useMemo(() => normalizeStarknetAddress(crew?.Crew?.delegatedTo), [crew?.Crew?.delegatedTo]);
   const status = getDelegationStatus(normalizedAddress);
-  const isBusy = prompting || status === 'pending';
+  const submission = useActionSubmission();
+  const isBusy = submission?.busy || status === 'pending';
   const disabled = !normalizedAddress
     || (!!normalizedOwnerAddress && Address.areEqual(normalizedAddress, normalizedOwnerAddress))
     || (!!normalizedDelegatedAddress && Address.areEqual(normalizedAddress, normalizedDelegatedAddress))
     || isBusy;
 
-  const onSubmit = useCallback(async () => {
-    if (disabled) return;
-    setAttempted(true);
-    setPrompting(true);
-    try {
-      await delegateCrew(normalizedAddress);
-    } finally {
-      setPrompting(false);
-    }
+  const onSubmit = useCallback(() => {
+    if (!disabled) return delegateCrew(normalizedAddress);
   }, [delegateCrew, disabled, normalizedAddress]);
-
-  useEffect(() => {
-    if (attempted && status === 'pending') {
-      setSubmitted(true);
-    }
-  }, [attempted, status]);
-
-  useEffect(() => {
-    if (submitted && status !== 'pending') {
-      onClose();
-    }
-  }, [onClose, status, submitted]);
 
   return (
     <ActionDialogInner
@@ -140,9 +119,9 @@ const DelegateCrew = ({ crew, crewId, onClose }) => {
         </Content>
       </ActionDialogBody>
       <Footer>
-        <Button disabled={nativeBool(isBusy)} onClick={onClose}>Cancel</Button>
+        <Button onClick={submission?.dismiss || onClose}>Cancel</Button>
         <Button disabled={nativeBool(disabled)} isTransaction onClick={onSubmit}>
-          {isBusy ? <LoadingAnimation color="white" size="1em" /> : 'Delegate Crew'}
+          Delegate Crew
         </Button>
       </Footer>
     </ActionDialogInner>
