@@ -99,12 +99,12 @@ export function CrewProvider({ children }) {
     };
   }, [blockTime, simulationState]);
 
-  const { data: realRawCrews, isLoading: crewsLoading, dataUpdatedAt: rawCrewsUpdatedAt } = useWalletCrews();
-  const rawCrews = useMemo(() => simulationCrew ? [simulationCrew] : realRawCrews, [simulationCrew, rawCrewsUpdatedAt]);
+  const { data: realRawCrews, isLoading: crewsLoading } = useWalletCrews();
+  const rawCrews = useMemo(() => simulationCrew ? [simulationCrew] : realRawCrews, [simulationCrew, realRawCrews]);
 
   const combinedCrewRoster = useMemo(
     () => (rawCrews || []).reduce((acc, c) => [...acc, ...c.Crew.roster], []),
-    [rawCrews, rawCrewsUpdatedAt]
+    [rawCrews]
   );
   const { data: myCrewCrewmates, isLoading: crewmatesLoading } = useQuery({
     queryKey: entitiesCacheKey(Entity.IDS.CREWMATE, combinedCrewRoster.join(',')), // TODO: joined key
@@ -167,7 +167,9 @@ export function CrewProvider({ children }) {
   // update crews' _ready value
   const crews = useMemo(() => {
     if (!crewsAndCrewmatesReady || !rawCrews) return [];
-    return rawCrews.map((c) => {
+    return rawCrews.map((rawCrew) => {
+      // Hydration must not mutate query data or reuse a previous crew snapshot.
+      const c = { ...rawCrew, Crew: { ...rawCrew.Crew } };
       if (!!crewmateMap) {
         c._crewmates = c.Crew.roster.map((i) => crewmateMap[i]).filter((c) => !!c);
 
@@ -194,17 +196,13 @@ export function CrewProvider({ children }) {
 
         // if there is a launchtime set, overwrite food so 100% until launch
         if (openAccessJSTime) {
-          try { // sometimes this is reported as a read-only property?
-            c.Crew.lastFed = Math.max(Math.min(blockTime, openAccessJSTime / 1e3), c.Crew.lastFed);
-          } catch (e) {
-            console.warn('lastFed overwrite failed. refresh the page.', e);
-          }
+          c.Crew.lastFed = Math.max(Math.min(blockTime, openAccessJSTime / 1e3), c.Crew.lastFed);
         }
       }
 
       return c;
     })
-  }, [blockTime, crewmateMap, crewsAndCrewmatesReady, CREW_SCHEDULE_BUFFER, rawCrews, rawCrewsUpdatedAt]);
+  }, [blockTime, crewmateMap, crewsAndCrewmatesReady, CREW_SCHEDULE_BUFFER, rawCrews]);
 
   const accountCrewIds = useMemo(() => (rawCrews || []).map((c) => c.id), [rawCrews]);
 
@@ -297,8 +295,7 @@ export function CrewProvider({ children }) {
       _siblingCrewIds: (accountCrewIds || []).filter((id) => id !== selectedCrew.id),
       _timeAcceleration: parseInt(TIME_ACCELERATION), // (attach to crew for easy use in bonus calcs)
     }
-  // (launched and ready are required for some reason to get final to update)
-  }, [accountCrewIds, actionTypeTriggered, selectedCrew, selectedCrew?._ready, selectedCrewLocation, CREW_SCHEDULE_BUFFER, TIME_ACCELERATION]);
+  }, [accountCrewIds, actionTypeTriggered, selectedCrew, selectedCrewLocation, CREW_SCHEDULE_BUFFER, TIME_ACCELERATION]);
 
   // return all pending transactions that are specific to this crew AND those that are not specific to any crew
   const pendingTransactions = useMemo(() => {
@@ -316,31 +313,34 @@ export function CrewProvider({ children }) {
         (prevRawCrews = []) => {
           return prevRawCrews.map((c) => {
             if (c.id === updatedCrew.id) {
-              // TODO: any reason not to just replace the whole Crew component here?
-              c.Crew.actionRound = updatedCrew.Crew.actionRound;
-              c.Crew.actionStrategy = updatedCrew.Crew.actionStrategy;
-              c.Crew.actionType = updatedCrew.Crew.actionType;
-              c.Crew.actionWeight = updatedCrew.Crew.actionWeight;
-              c.Crew.lastFed = updatedCrew.Crew.lastFed;
-              c.Crew.readyAt = updatedCrew.Crew.readyAt;
-
-              // since refreshReadyAt can only happen on selectedCrewId, untrigger random event
-              // (in case random event resolution is what brought us here)
-              setActionTypeTriggered(false);
+              return {
+                ...c,
+                Crew: {
+                  ...c.Crew,
+                  actionRound: updatedCrew.Crew.actionRound,
+                  actionStrategy: updatedCrew.Crew.actionStrategy,
+                  actionType: updatedCrew.Crew.actionType,
+                  actionWeight: updatedCrew.Crew.actionWeight,
+                  lastFed: updatedCrew.Crew.lastFed,
+                  readyAt: updatedCrew.Crew.readyAt,
+                },
+              };
             }
             return c;
           });
         }
       );
+      // Resolving a random event can be what triggered this refresh.
+      setActionTypeTriggered(false);
     }
-  }, [accountAddress, selectedCrewId]);
+  }, [accountAddress, selectedCrewId, queryClient]);
 
   // make sure a default-selected crew makes it into state (if logged in)
   useEffect(() => {
-    if (authenticated && crewsAndCrewmatesReady && selectedCrew?.id !== selectedCrew) {
+    if (authenticated && crewsAndCrewmatesReady && selectedCrew?.id !== selectedCrewId) {
       dispatchCrewSelected(selectedCrew?.id || undefined);
     }
-  }, [authenticated, crewsAndCrewmatesReady, selectedCrew]);
+  }, [authenticated, crewsAndCrewmatesReady, selectedCrew?.id, selectedCrewId, dispatchCrewSelected]);
 
   const captain = useMemo(() => {
     if (simulationState && !simulationState.crewmate) return null;

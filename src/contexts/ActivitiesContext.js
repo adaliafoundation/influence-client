@@ -5,6 +5,7 @@ import { isEqual, uniqBy } from 'lodash';
 import { Address, Entity } from '@influenceth/sdk';
 
 import useSession from '~/hooks/useSession';
+import useBlockSync from '~/hooks/useBlockSync';
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useStore from '~/hooks/useStore';
@@ -58,6 +59,7 @@ export function ActivitiesProvider({ children }) {
   } = useSession();
   const { crew, refreshReadyAt } = useCrewContext();
   const simulation = useSimulationState();
+  useBlockSync(token && !simulation, blockNumber, setBlockNumber, setBlockTime);
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
   const {
@@ -322,28 +324,30 @@ export function ActivitiesProvider({ children }) {
         });
       if (debugInvalidation) console.log('deduped final invalidate', finalInvalidations);
 
-      // Publish confirmations only after active consumers have refreshed their data.
-      await Promise.all(finalInvalidations.map((queryKey) => {
-        if (appConfig.get('App.verboseLogs')) console.log('invalidate', queryKey);
-        return queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
-      }));
-      await marketSubscriptionsByClient.get(queryClient)?.flush();
+      // The indexed activity confirms completion. Start refreshing its views,
+      // but do not let slow or failed requests hold the transaction pending.
+      Promise.all([
+        ...finalInvalidations.map((queryKey) => {
+          if (appConfig.get('App.verboseLogs')) console.log('invalidate', queryKey);
+          return queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        }),
+        marketSubscriptionsByClient.get(queryClient)?.flush(),
+        ...(shouldRefreshReadyAt ? [refreshReadyAt()] : []),
+      ]).catch((error) => {
+        if (generation !== activityGeneration.current) return;
+        console.warn('Unable to refresh activity data', error);
+      });
 
       if (generation !== activityGeneration.current) return;
       setActivities((prevActivities) => uniqBy([
         ...transformedActivities,
         ...prevActivities
       ], 'key'));
-
-      if (shouldRefreshReadyAt) {
-        refreshReadyAt();
-      }
-
     };
     setTimeout(() => {
       processActivities().catch((error) => {
         if (generation !== activityGeneration.current) return;
-        // A failed refresh must remain eligible for recovery on the next poll.
+        // Failed activity preparation must remain eligible for recovery on the next poll.
         transformedActivities.forEach(({ key }) => receivedActivityIds.current.delete(key));
         console.warn('Unable to process transaction activities', error);
       });

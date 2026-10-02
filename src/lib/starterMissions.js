@@ -2,13 +2,13 @@ import { Address, Entity, StarterMission, System } from '@influenceth/sdk';
 import { MISSION_ACTIONS } from './missionBindings';
 
 export const STARTER_MISSION_IMAGES = {
-  [StarterMission.IDS.MAKE_LANDFALL]: 'stories/fly-me-to-the-moon/1.jpg',
-  [StarterMission.IDS.PROSPECT_THE_SURFACE]: 'stories/groundbreaking/1.jpg',
-  [StarterMission.IDS.BEGIN_EXTRACTION]: 'stories/groundbreaking/1.jpg',
+  [StarterMission.IDS.MAKE_LANDFALL]: 'stories/foothold/1.jpg',
+  [StarterMission.IDS.PROSPECT_THE_SURFACE]: 'stories/prospect-the-surface/1.png',
+  [StarterMission.IDS.BEGIN_EXTRACTION]: 'stories/begin-extraction/1.png',
   [StarterMission.IDS.ESTABLISH_STORAGE]: 'stories/establish-storage/1.jpg',
   [StarterMission.IDS.REFINE_THE_YIELD]: 'stories/keep-em-separated/1.jpg',
   [StarterMission.IDS.CULTIVATE_LIFE]: 'stories/the-cake-is-a-half-truth/1.jpg',
-  [StarterMission.IDS.MANUFACTURE_GOODS]: 'stories/no-sound-in-space/1.jpg',
+  [StarterMission.IDS.MANUFACTURE_GOODS]: 'stories/manufacture-goods/1.png',
   [StarterMission.IDS.CLOSE_THE_PRODUCTION_LOOP]: 'stories/close-the-production-loop/1.jpg'
 };
 

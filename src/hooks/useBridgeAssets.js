@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccount, useBalance } from 'wagmi';
 
-import { bridgeAssetConfigs, getBridgeAssetConfig } from '~/bridge/assets';
+import { bridgeNetwork, bridgeAssetConfigs, getBridgeAssetConfig } from '~/bridge/assets';
+import { isSwayDepositComplete } from '~/bridge/sway';
+import { isActiveBridgeTransfer, isBridgeTransferIndexed, isBridgeTransferInScope, pruneBridgeTransfers } from '~/bridge/transfers';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import { useSwayBalance } from '~/hooks/useWalletTokenBalance';
@@ -69,13 +71,6 @@ const isReceiveReady = (transfer) => (
   )
 );
 
-const isActiveProgressItem = (item) => !['complete', 'COMPLETE', 'failed'].includes(getTransferValue(item, 'status'));
-
-const hasAnyAsset = (assets, assetIds) => {
-  const ids = new Set((assetIds || []).map(Number));
-  return (assets || []).some((asset) => ids.has(Number(asset.id)));
-};
-
 const getChain = (value) => value?.toLowerCase();
 
 const isAssetVisibleOnChain = (asset, chain) => {
@@ -117,12 +112,43 @@ const getAssetBridgeProgressItems = (assets, assetType, excludedAssetIds) => (
     ))
 );
 
-const toLocalTransferArray = (bridgeTransfers) => {
-  try {
-    return Object.keys(bridgeTransfers || {}).map((key) => normalizeProgressItem(bridgeTransfers[key]));
-  } catch (e) {
-    return [];
-  }
+const useLocalBridgeTransfers = (assetType, ethereumAddress, starknetAddress) => {
+  const localTransferMap = useStore(s => s.bridgeTransfers);
+  const pruneTransfers = useStore(s => s.dispatchBridgeTransfersPruned);
+  useEffect(() => {
+    pruneTransfers();
+    const interval = setInterval(() => pruneTransfers(), 30 * 1000);
+    return () => clearInterval(interval);
+  }, [pruneTransfers]);
+  return useMemo(() => Object.values(pruneBridgeTransfers(localTransferMap))
+    .filter((item) => item.assetType === assetType && isBridgeTransferInScope(item, { network: bridgeNetwork, ethereumAddress, starknetAddress }))
+    .map((item) => normalizeProgressItem(item)), [assetType, ethereumAddress, localTransferMap, starknetAddress]);
+};
+
+const useRetireIndexedTransfers = (localTransfers, crossings, ethereumAssets, starknetAssets) => {
+  const pruneTransfers = useStore(s => s.dispatchBridgeTransfersPruned);
+  const ethereumData = ethereumAssets?.data;
+  const ethereumUpdatedAt = ethereumAssets?.dataUpdatedAt;
+  const starknetData = starknetAssets?.data;
+  const starknetUpdatedAt = starknetAssets?.dataUpdatedAt;
+  const retiredIds = useMemo(() => localTransfers.filter((item) => {
+    const toStarknet = item.direction === 'l1_to_l2';
+    const updatedAt = toStarknet ? starknetUpdatedAt : ethereumUpdatedAt;
+    // A cached ownership snapshot from before submission is not completion evidence.
+    const assets = updatedAt > item.createdAt ? (toStarknet ? starknetData : ethereumData) : [];
+    return isBridgeTransferIndexed(item, crossings, assets);
+  }).map((item) => item.id), [crossings, ethereumData, ethereumUpdatedAt, localTransfers, starknetData, starknetUpdatedAt]);
+  useEffect(() => {
+    if (retiredIds.length) pruneTransfers(retiredIds);
+  }, [pruneTransfers, retiredIds]);
+  return retiredIds;
+};
+
+const bridgeQueryOptions = {
+  refetchInterval: 30 * 1000,
+  staleTime: 30 * 1000,
+  refetchOnMount: 'always',
+  refetchOnWindowFocus: true,
 };
 
 const normalizeProgressItem = (transfer, fallbackAssetType) => {
@@ -147,9 +173,11 @@ const normalizeProgressItem = (transfer, fallbackAssetType) => {
     direction: direction || (
       getTransferValue(transfer, 'origin') === 'STARKNET' && getTransferValue(transfer, 'destination') === 'ETHEREUM'
         ? 'l2_to_l1'
-        : undefined
+        : (getTransferValue(transfer, 'origin') === 'ETHEREUM' ? 'l1_to_l2' : undefined)
     ),
     error: getTransferValue(transfer, 'error'),
+    eventTimestamp: getTransferValue(transfer, 'event')?.timestamp,
+    events: getTransferValue(transfer, 'events'),
     fromAddress: getTransferValue(transfer, 'fromAddress'),
     id: getTransferValue(transfer, 'id') || getTransferValue(transfer, '_id') || getTransferValue(transfer, 'txHash'),
     layer: getTransferValue(transfer, 'layer'),
@@ -167,84 +195,70 @@ const normalizeProgressItem = (transfer, fallbackAssetType) => {
 const useBridgeAssets = (assetType) => {
   const { address: ethereumAddress } = useAccount();
   const { accountAddress: starknetAddress } = useSession();
-  const localTransferMap = useStore(s => s.bridgeTransfers);
-  const localTransfers = useMemo(() => toLocalTransferArray(localTransferMap), [localTransferMap]);
+  const localTransfers = useLocalBridgeTransfers(assetType, ethereumAddress, starknetAddress);
   const config = getBridgeAssetConfig(assetType);
-  const hasActiveLocalTransfers = useMemo(() => (
-    localTransfers
-      .some((item) => getTransferAssetType(item) === assetType && isActiveProgressItem(item))
-  ), [assetType, localTransfers]);
 
   const ethereumAssets = useQuery({
-    queryKey: ['bridgeAssets', assetType, 'ethereum', ethereumAddress],
+    queryKey: ['bridgeAssets', assetType, 'ethereum', ethereumAddress, bridgeNetwork],
     queryFn: () => api.getBridgeWalletAssets({
       address: ethereumAddress,
       chain: 'ethereum',
       label: config.entityLabel
     }),
     enabled: !!ethereumAddress && !!config?.entityLabel,
-    refetchInterval: hasActiveLocalTransfers ? 30 * 1000 : false,
-    staleTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    ...bridgeQueryOptions,
   });
 
   const starknetAssets = useQuery({
-    queryKey: ['bridgeAssets', assetType, 'starknet', starknetAddress],
+    queryKey: ['bridgeAssets', assetType, 'starknet', starknetAddress, bridgeNetwork],
     queryFn: () => api.getBridgeWalletAssets({
       address: starknetAddress,
       chain: 'starknet',
       label: config.entityLabel
     }),
     enabled: !!starknetAddress && !!config?.entityLabel,
-    refetchInterval: hasActiveLocalTransfers ? 30 * 1000 : false,
-    staleTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    ...bridgeQueryOptions,
   });
 
-  const hasActiveIndexedBridgeAssets = useMemo(() => (
-    [...(ethereumAssets.data || []), ...(starknetAssets.data || [])]
-      .some((asset) => asset?.Nft?.bridge?.status && asset.Nft.bridge.status !== 'COMPLETE')
-  ), [ethereumAssets.data, starknetAssets.data]);
-
   const l2ToL1Crossings = useQuery({
-    queryKey: ['bridgeCrossings', assetType, 'l2ToL1', ethereumAddress, starknetAddress],
+    queryKey: ['bridgeCrossings', assetType, 'l2ToL1', ethereumAddress, starknetAddress, bridgeNetwork],
     queryFn: () => api.getBridgeCrossings({
       destination: 'ETHEREUM',
-      fromAddress: starknetAddress,
+      fromAddress: ethereumAddress ? undefined : starknetAddress,
       origin: 'STARKNET',
       toAddress: ethereumAddress
     }),
     enabled: !!assetType && (!!ethereumAddress || !!starknetAddress),
-    refetchInterval: hasActiveLocalTransfers || hasActiveIndexedBridgeAssets ? 30 * 1000 : false,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    ...bridgeQueryOptions,
   });
 
   const l1ToL2Crossings = useQuery({
-    queryKey: ['bridgeCrossings', assetType, 'l1ToL2', ethereumAddress, starknetAddress],
+    queryKey: ['bridgeCrossings', assetType, 'l1ToL2', ethereumAddress, starknetAddress, bridgeNetwork],
     queryFn: () => api.getBridgeCrossings({
       destination: 'STARKNET',
       origin: 'ETHEREUM',
       toAddress: starknetAddress
     }),
     enabled: !!assetType && !!starknetAddress,
-    refetchInterval: hasActiveLocalTransfers || hasActiveIndexedBridgeAssets ? 30 * 1000 : false,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    ...bridgeQueryOptions,
   });
+
+  const indexedCrossings = useMemo(() => [
+    ...toArray(l1ToL2Crossings.data),
+    ...toArray(l2ToL1Crossings.data)
+  ].filter((item) => getTransferAssetType(item) === assetType)
+    .map((item) => normalizeProgressItem(item, assetType)), [assetType, l1ToL2Crossings.data, l2ToL1Crossings.data]);
+  const retiredIds = useRetireIndexedTransfers(
+    localTransfers, indexedCrossings,
+    ethereumAssets, starknetAssets
+  );
 
   const progressItems = useMemo(() => {
     const visibleEthereumAssets = (ethereumAssets.data || [])
       .filter((asset) => isAssetVisibleOnChain(asset, 'ethereum'));
     const visibleStarknetAssets = (starknetAssets.data || [])
       .filter((asset) => isAssetVisibleOnChain(asset, 'starknet'));
-    const indexed = [
-      ...toArray(l1ToL2Crossings.data),
-      ...toArray(l2ToL1Crossings.data)
-    ]
-      .filter((item) => !getTransferAssetType(item) || getTransferAssetType(item) === assetType)
-      .filter((item) => getTransferValue(item, 'status') !== 'COMPLETE')
-      .map((item) => normalizeProgressItem(item, assetType));
+    const indexed = indexedCrossings.filter(isActiveBridgeTransfer);
     const indexedAssetIds = indexed.reduce((ids, item) => {
       item.assetIds?.forEach((id) => ids.add(Number(id)));
       return ids;
@@ -253,31 +267,16 @@ const useBridgeAssets = (assetType) => {
       ...getAssetBridgeProgressItems(visibleEthereumAssets, assetType, indexedAssetIds),
       ...getAssetBridgeProgressItems(visibleStarknetAssets, assetType, indexedAssetIds)
     ];
-    const indexedProgressAssetIds = indexedAssetBridgeProgress.reduce((ids, item) => {
-      item.assetIds?.forEach((id) => ids.add(Number(id)));
-      return ids;
-    }, new Set(indexedAssetIds));
-    const local = localTransfers
-      .filter((item) => getTransferAssetType(item) === assetType)
-      .map((item) => normalizeProgressItem(item, assetType))
-      .filter((item) => (
-        !(
-          item.direction === 'l1_to_l2'
-          && hasAnyAsset(visibleStarknetAssets, item.assetIds)
-        )
-        && !(
-          item.direction === 'l2_to_l1'
-          && hasAnyAsset(visibleEthereumAssets, item.assetIds)
-        )
-        && !(
-          item.direction === 'receive_l1'
-          && hasAnyAsset(visibleEthereumAssets, item.assetIds)
-        )
-        && !item.assetIds?.some((id) => indexedProgressAssetIds.has(Number(id)))
-      ));
+    const local = localTransfers.filter((item) => item.assetType === assetType && !retiredIds.includes(item.id));
 
-    return [...local, ...indexedAssetBridgeProgress, ...indexed];
-  }, [assetType, ethereumAssets.data, l1ToL2Crossings.data, l2ToL1Crossings.data, localTransfers, starknetAssets.data]);
+    // Indexed messages keep their full batches; only optimistic display rows may be partial.
+    const indexedProgress = [...indexed, ...indexedAssetBridgeProgress];
+    const visibleLocal = local.map((item) => ({
+      ...item,
+      assetIds: item.assetIds.filter((id) => !indexedProgress.some((progress) => progress.assetIds.includes(id)))
+    })).filter((item) => item.assetIds.length > 0);
+    return [...indexedProgress, ...visibleLocal];
+  }, [assetType, ethereumAssets.data, indexedCrossings, localTransfers, retiredIds, starknetAssets.data]);
 
   return {
     config,
@@ -294,51 +293,55 @@ const useBridgeAssets = (assetType) => {
 };
 
 const useBridgeSway = () => {
+  const queryClient = useQueryClient();
+  const pruneTransfers = useStore(s => s.dispatchBridgeTransfersPruned);
   const { address: ethereumAddress } = useAccount();
-  const { accountAddress: starknetAddress } = useSession();
+  const { accountAddress: starknetAddress, provider } = useSession();
   const starknetSway = useSwayBalance(starknetAddress);
-  const localTransferMap = useStore(s => s.bridgeTransfers);
-  const localTransfers = useMemo(() => toLocalTransferArray(localTransferMap), [localTransferMap]);
-  const hasActiveLocalTransfers = useMemo(() => (
-    localTransfers.some((item) => getTransferAssetType(item) === 'sway' && isActiveProgressItem(item))
-  ), [localTransfers]);
+  const localTransfers = useLocalBridgeTransfers('sway', ethereumAddress, starknetAddress);
 
   const ethereumSway = useBalance({
     address: ethereumAddress,
     token: appConfig.get('Ethereum.Address.swayToken') || undefined,
     query: {
       enabled: !!ethereumAddress && !!appConfig.get('Ethereum.Address.swayToken'),
-      refetchInterval: hasActiveLocalTransfers ? 30 * 1000 : false,
-      staleTime: 60 * 1000,
-      refetchOnWindowFocus: false,
+      ...bridgeQueryOptions,
     }
   });
 
   const swayCrossings = useQuery({
-    queryKey: ['bridgeSwayCrossings', ethereumAddress, starknetAddress],
+    queryKey: ['bridgeSwayCrossings', ethereumAddress, starknetAddress, bridgeNetwork],
     queryFn: () => api.getSwayCrossings({
-      fromAddress: starknetAddress,
+      fromAddress: ethereumAddress ? undefined : starknetAddress,
       toAddress: ethereumAddress
     }),
     enabled: !!ethereumAddress || !!starknetAddress,
-    refetchInterval: hasActiveLocalTransfers ? 30 * 1000 : false,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    ...bridgeQueryOptions,
   });
 
-  const crossingItems = useMemo(() => {
-    const local = localTransfers
-      .filter((item) => getTransferAssetType(item) === 'sway')
-      .map((item) => normalizeProgressItem(item, 'sway'));
-    const indexed = toArray(swayCrossings.data).map((item) => normalizeProgressItem(item, 'sway'));
-    const seen = new Set();
-    return [...indexed, ...local].filter((item) => {
-      const key = item.txHash || item.id || `${item.direction}:${item.amount}:${item.fromAddress}:${item.toAddress}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [localTransfers, swayCrossings.data]);
+  const indexed = useMemo(() => toArray(swayCrossings.data)
+    .map((item) => normalizeProgressItem(item, 'sway')), [swayCrossings.data]);
+  const deposits = localTransfers.filter((item) => item.direction === 'l1_to_l2');
+  const depositStatuses = useQueries({ queries: deposits.map((item) => ({
+    queryKey: ['bridgeSwayDeposit', bridgeNetwork, item.txHash],
+    queryFn: () => provider.getL1MessagesStatus(item.txHash),
+    enabled: !!provider,
+    ...bridgeQueryOptions,
+  })) });
+  const completedDepositIds = deposits.filter((item, index) => isSwayDepositComplete(depositStatuses[index]?.data))
+    .map((item) => item.id);
+  useEffect(() => {
+    if (!completedDepositIds.length) return;
+    pruneTransfers(completedDepositIds);
+    queryClient.invalidateQueries({ queryKey: ['walletBalance', 'sway', starknetAddress] });
+    ethereumSway.refetch();
+  }, [completedDepositIds, ethereumSway, pruneTransfers, queryClient, starknetAddress]);
+  const indexedIds = useRetireIndexedTransfers(localTransfers, indexed);
+  const retiredIds = [...indexedIds, ...completedDepositIds];
+  const crossingItems = [
+    ...indexed,
+    ...localTransfers.filter((item) => !retiredIds.includes(item.id))
+  ];
 
   return {
     ethereumSway,

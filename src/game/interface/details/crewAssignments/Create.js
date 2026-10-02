@@ -768,7 +768,7 @@ const ClassSelector = ({ classObjects, crewmate, onUpdateClass, onClose }) => {
         <CloseButton onClick={onClose} hasBackground={false} borderless><CloseIcon /></CloseButton>
       </MouseoverHighlightTitle>
       <ClassSelectionArea>
-        {Object.values(Crewmate.CLASS_IDS).map((classId) => (
+        {Object.values(Crewmate.CLASS_IDS).filter((classId) => classId !== Crewmate.CLASS_IDS.UNDECIDED).map((classId) => (
           <SelectableClass
             key={classId}
             isSelected={crewmate?.Crewmate?.class === classId}

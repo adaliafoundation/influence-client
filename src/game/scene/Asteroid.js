@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { AxesHelper, CameraHelper, Color, DirectionalLight, DirectionalLightHelper, Vector3 } from 'three';
 import gsap from 'gsap';
@@ -1201,17 +1201,20 @@ const AsteroidComponent = () => {
       <group ref={quadtreeRef} />
 
       {config && terrainInitialized && zoomStatus === 'in' && (
-        <Lots
-          attachTo={quadtreeRef.current}
-          asteroidId={asteroidId.current}
-          axis={rotationAxis.current}
-          cameraAltitude={cameraAltitude}
-          cameraAutomationVersion={cameraAutomationVersion}
-          cameraNormalized={cameraNormalized}
-          config={config}
-          getCameraIsAnimating={() => automatingCamera.current}
-          getRotation={() => rotation.current}
-          getLockToSurface={() => lockToSurface.current} />
+        // Lot textures load on arrival; keep their suspension from hiding the terrain.
+        <Suspense fallback={null}>
+          <Lots
+            attachTo={quadtreeRef.current}
+            asteroidId={asteroidId.current}
+            axis={rotationAxis.current}
+            cameraAltitude={cameraAltitude}
+            cameraAutomationVersion={cameraAutomationVersion}
+            cameraNormalized={cameraNormalized}
+            config={config}
+            getCameraIsAnimating={() => automatingCamera.current}
+            getRotation={() => rotation.current}
+            getLockToSurface={() => lockToSurface.current} />
+        </Suspense>
       )}
 
       {/* TODO: fade telemetry out at higher zooms */}

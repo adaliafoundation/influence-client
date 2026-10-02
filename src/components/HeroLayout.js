@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 
 import Button from '~/components/ButtonAlt';
 import Loader from '~/components/Loader';
 
 const foldOffset = 28;
+const minimumCoverHeight = 138;
 
 const opacityTransition = keyframes`
   0% { opacity: 0; }
@@ -23,6 +24,12 @@ const CoverImage = styled.div`
     height: 33%;
     max-height: none;
   }
+
+  ${p => p.$collapsible && `
+    flex-shrink: 0;
+    height: calc(max(${minimumCoverHeight}px, min(50% + ${foldOffset}px, 100% - ${p.belowFoldMin + 80}px)) - var(--hero-collapse, 0px));
+    max-height: none;
+  `}
 
   &:before {
     background-color: #111;
@@ -152,6 +159,7 @@ const Footer = styled.div`
 
 const HeroLayout = ({
   autoHeight,
+  collapseOnScroll = 0,
   children,
   belowFoldMin = 256,
   coverImage,
@@ -165,6 +173,17 @@ const HeroLayout = ({
   styleOverrides = {}
 }) => {
   const [imageLoaded, setImageLoaded] = useState();
+  const layoutRef = useRef();
+  const coverRef = useRef();
+  const collapseRef = useRef(0);
+
+  const handleScroll = useCallback((event) => {
+    // Compensating padding keeps the scroll range stable as the body grows.
+    const expandedHeight = coverRef.current.clientHeight + collapseRef.current;
+    const collapse = Math.max(0, Math.min(event.currentTarget.scrollTop, collapseOnScroll, expandedHeight - minimumCoverHeight));
+    collapseRef.current = collapse;
+    layoutRef.current.style.setProperty('--hero-collapse', `${collapse}px`);
+  }, [collapseOnScroll]);
 
   useEffect(() => {
     setImageLoaded();
@@ -175,26 +194,30 @@ const HeroLayout = ({
   }, [coverImage]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+    <div ref={layoutRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: collapseOnScroll ? 'hidden' : undefined }}>
       <InvisibleImage src={coverImage} onError={onImageLoaded} onLoad={onImageLoaded} />
       <CoverImage
+        ref={coverRef}
+        $collapsible={!!collapseOnScroll}
         autoHeight={autoHeight}
         src={imageLoaded}
         belowFoldMin={belowFoldMin}
         center={coverImageCenter}
         ready={coverImage === imageLoaded} />
-      <AboveFold ready={!!imageLoaded} hasSubtitle={!!subtitle} style={styleOverrides?.aboveFold}>
+      <AboveFold ready={!!imageLoaded} hasSubtitle={!!subtitle} style={{ ...(collapseOnScroll ? { flexShrink: 0 } : {}), ...styleOverrides?.aboveFold }}>
         {title && <Title style={styleOverrides?.title}>{title}</Title>}
         {subtitle && <Subtitle>{subtitle}</Subtitle>}
         <Rule style={styleOverrides?.rule} />
       </AboveFold>
-      <BelowFold autoHeight={autoHeight} belowFoldMin={belowFoldMin} style={styleOverrides?.belowFold}>
+      <BelowFold autoHeight={autoHeight} belowFoldMin={belowFoldMin} style={{ ...(collapseOnScroll ? { flex: '1 1 0', minHeight: 0 } : {}), ...styleOverrides?.belowFold }}>
         {!imageLoaded && <Loader />}
         {imageLoaded && (
           <>
             {flourish && <FlourishWrapper flourishWidth={flourishWidth}>{flourish}</FlourishWrapper>}
-            <Body flourishWidth={flourishWidth} style={styleOverrides?.body}>
-              {children}
+            <Body flourishWidth={flourishWidth}
+              onScroll={collapseOnScroll ? handleScroll : undefined}
+              style={{ ...(collapseOnScroll ? { overflowY: 'auto', scrollbarWidth: 'thin', overflowAnchor: 'none' } : {}), ...styleOverrides?.body }}>
+              {collapseOnScroll ? <div style={{ display: 'flow-root', paddingTop: 'var(--hero-collapse, 0px)' }}>{children}</div> : children}
             </Body>
           </>
         )}

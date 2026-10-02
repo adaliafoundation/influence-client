@@ -13,15 +13,17 @@ import starterMissionStories from '~/lib/starterMissionStories';
 import { Eyebrow, Muted, Reward } from './MissionStyles';
 
 const Content = styled.div`
-  height: 100%;
-  overflow-y: auto;
   padding: 0 10px 20px 0;
-  scrollbar-width: thin;
 `;
 const Section = styled.section`
   border-top: 1px solid #273039;
   margin-top: 22px;
   padding-top: 18px;
+`;
+const Briefing = styled(Section)`
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 10px;
 `;
 const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete, onClose, onGuide }) => {
   const [submitting, setSubmitting] = useState(false);
@@ -68,16 +70,17 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
       wrapperProps={{ style: { position: 'fixed', zIndex: 10000 } }}
       detailsProps={{ ref: bodyRef, role: 'dialog', 'aria-modal': true, 'aria-label': mission.title, tabIndex: -1, onKeyDown: handleKeyDown, style: { outline: 'none' } }}>
       <HeroLayout
+        collapseOnScroll={150}
         coverImage={getLicensedAssetUrl(STARTER_MISSION_IMAGES[mission.id])}
         title={mission.title}
         styleOverrides={{ body: { flex: '1 1 0', minWidth: 0 } }}
         subtitle={<Reward><SwayIcon /> {mission.reward.toLocaleString()} SWAY</Reward>}
         rightButton={{ label: 'Close', onClick: onClose }}>
         <Content>
-              {!!story.length && <Section aria-label="Mission briefing">
+              {!!story.length && <Briefing aria-label="Mission briefing">
                 <Eyebrow>Mission briefing</Eyebrow>
                 {story.map((paragraph, index) => <Muted key={index}>{paragraph}</Muted>)}
-              </Section>}
+              </Briefing>}
               <Section aria-label="Mission progress" aria-live="polite">
                 <Eyebrow>Progress</Eyebrow>
                 <MissionTimeline mission={mission} objectives={objectives} eligible={view.eligible}

@@ -9,7 +9,8 @@ import { useAccount, useChainId, useConfig, usePublicClient, useSwitchChain } fr
 import { ethereumContracts } from '@influenceth/sdk';
 
 import { configuredChain } from '~/contexts/WagmiContext';
-import { getBridgeAssetConfig, getConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { bridgeNetwork, getBridgeAssetConfig, getConfig, isBridgeAssetConfigured } from '~/bridge/assets';
+import { getBridgeBatchError } from '~/bridge/limits';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 
@@ -73,6 +74,8 @@ const useBridgeActions = () => {
   const updateBridgeTransfer = useStore(s => s.dispatchBridgeTransferUpdated);
 
   const [busyKey, setBusyKey] = useState();
+  const [swayDepositStatus, setSwayDepositStatus] = useState();
+  const [claimedAsteroidIds, setClaimedAsteroidIds] = useState([]);
 
   const ensureEthereumReady = useCallback(async () => {
     if (!isConnected || !ethereumAddress) {
@@ -99,7 +102,7 @@ const useBridgeActions = () => {
 
   const trackEthereumTx = useCallback(async ({ hash, transfer }) => {
     const waitingStatus = transfer.waitingStatus;
-    logBridgeTransfer({ id: hash, txHash: hash, layer: 'l1', ...transfer });
+    logBridgeTransfer({ id: hash, txHash: hash, layer: 'l1', network: bridgeNetwork, ...transfer });
     try {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status === 'reverted') throw new Error('Ethereum transaction reverted.');
@@ -112,7 +115,7 @@ const useBridgeActions = () => {
   }, [logBridgeTransfer, publicClient, updateBridgeTransfer]);
 
   const trackStarknetTx = useCallback(async ({ txHash, transfer, waitForL1 = false }) => {
-    logBridgeTransfer({ id: txHash, txHash, layer: 'l2', ...transfer });
+    logBridgeTransfer({ id: txHash, txHash, layer: 'l2', network: bridgeNetwork, ...transfer });
     try {
       await starknetProvider.waitForTransaction(txHash, { retryInterval: 5e3 });
       updateBridgeTransfer(txHash, { status: waitForL1 ? 'waiting_l1' : 'confirmed' });
@@ -124,6 +127,11 @@ const useBridgeActions = () => {
   }, [logBridgeTransfer, starknetProvider, updateBridgeTransfer]);
 
   const bridgeAssetsToStarknet = useCallback(async ({ assetType, assets }) => {
+    const batchError = getBridgeBatchError(assets.length);
+    if (batchError) {
+      notifyBridge(createAlert, batchError);
+      return null;
+    }
     if (!accountAddress) {
       login();
       return null;
@@ -212,6 +220,11 @@ const useBridgeActions = () => {
   ]);
 
   const bridgeAssetsToEthereum = useCallback(async ({ assetType, assets }) => {
+    const batchError = getBridgeBatchError(assets.length);
+    if (batchError) {
+      notifyBridge(createAlert, batchError);
+      return null;
+    }
     if (!ensureStarknetReady()) return null;
     if (!isBridgeAssetConfigured(assetType)) {
       notifyBridge(createAlert, errorMessages.serviceUnavailable);
@@ -314,35 +327,39 @@ const useBridgeActions = () => {
 
     setBusyKey(`mint-${asteroidId}`);
     try {
-      const hash = await writeContract(wagmiConfig, {
+      const request = {
+        account: ethereumAddress,
         address: getConfig('Ethereum.Address.arvadCrewmateSale'),
         abi: ethereumContracts.ArvadCrewSale,
         functionName: 'mintCrewWithAsteroid',
         args: [BigInt(asteroidId)]
-      });
-      notifyBridge(createAlert, 'Crew mint transaction submitted.');
-      startTransferTracking(trackEthereumTx({
-        hash,
-        transfer: {
-          assetType: 'crewmates',
-          assetIds: [Number(asteroidId)],
-          direction: 'mint_crew',
-          fromAddress: ethereumAddress,
-          originChain: 'ethereum',
-          toAddress: ethereumAddress,
-          status: 'submitted',
-          waitingStatus: 'complete'
-        }
-      }));
+      };
+      // A failed estimate must stop here, before MetaMask substitutes a block-sized fallback.
+      const estimatedGas = await publicClient.estimateContractGas(request);
+      const gas = (estimatedGas * 120n + 99n) / 100n;
+      const hash = await writeContract(wagmiConfig, { ...request, gas });
+      notifyBridge(createAlert, 'Crewmate mint transaction submitted.');
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === 'reverted') throw new Error('Ethereum transaction reverted.');
+      setClaimedAsteroidIds((ids) => [...new Set([...ids, Number(asteroidId)])]);
+      queryClient.invalidateQueries({ queryKey: ['bridgeAssets'] });
+      notifyBridge(createAlert, 'Crewmate minted.');
       return hash;
     } catch (e) {
-      console.warn(errorMessages.bridgeFailed, e);
-      reportFailure(createAlert, e, { message: 'bridgeFailed' });
+      const revert = e.walk?.((cause) => cause?.name === 'ContractFunctionRevertedError');
+      const reason = revert?.name === 'ContractFunctionRevertedError' ? revert.reason : undefined;
+      if (reason === 'ArvadCrewSale: asteroid has already been used to mint crew') {
+        setClaimedAsteroidIds((ids) => [...new Set([...ids, Number(asteroidId)])]);
+      }
+      reportFailure((alert) => createAlert({
+        ...alert,
+        data: { ...alert.data, content: reason || alert.data.content }
+      }), e, { message: 'actionFailed', context: { action: 'MintCrewmate', asteroidId } });
       return null;
     } finally {
       setBusyKey();
     }
-  }, [createAlert, ensureEthereumReady, ethereumAddress, trackEthereumTx, wagmiConfig]);
+  }, [createAlert, ensureEthereumReady, ethereumAddress, publicClient, queryClient, wagmiConfig]);
 
   const bridgeSwayToStarknet = useCallback(async (amount) => {
     if (!accountAddress) {
@@ -359,6 +376,7 @@ const useBridgeActions = () => {
     }
 
     setBusyKey('sway-l1');
+    setSwayDepositStatus('Checking SWAY approval…');
     try {
       const bridgeAmount = toBridgeAmount(amount);
       const allowance = await readContract(wagmiConfig, {
@@ -368,15 +386,21 @@ const useBridgeActions = () => {
         args: [ethereumAddress, bridgeAddress]
       });
       if (allowance < bridgeAmount) {
+        setSwayDepositStatus('Approve SWAY spending in your Ethereum wallet.');
         const approveHash = await writeContract(wagmiConfig, {
           address: tokenAddress,
           abi: ethereumContracts.SwayToken,
           functionName: 'approve',
           args: [bridgeAddress, bridgeAmount]
         });
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        setSwayDepositStatus('Waiting for approval confirmation…');
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        if (receipt.status === 'reverted') throw new Error('SWAY approval transaction reverted.');
       }
 
+      setSwayDepositStatus(allowance < bridgeAmount
+        ? 'Approval confirmed. Preparing the bridge transaction…'
+        : 'SWAY is approved. Preparing the bridge transaction…');
       const [amountLow, amountHigh] = toU256Parts(bridgeAmount);
       const messageFee = await starknetProvider.estimateMessageFee({
         from_address: bridgeAddress,
@@ -385,6 +409,7 @@ const useBridgeActions = () => {
         payload: [accountAddress, amountLow.toString(), amountHigh.toString(), ethereumAddress]
       }, 'latest');
 
+      setSwayDepositStatus('Confirm the bridge transaction in your Ethereum wallet.');
       const hash = await writeContract(wagmiConfig, {
         address: bridgeAddress,
         abi: ethereumContracts.SwayBridge,
@@ -412,6 +437,7 @@ const useBridgeActions = () => {
       reportFailure(createAlert, e, { message: 'bridgeFailed' });
       return null;
     } finally {
+      setSwayDepositStatus();
       setBusyKey();
     }
   }, [
@@ -521,6 +547,8 @@ const useBridgeActions = () => {
     bridgeSwayToEthereum,
     bridgeSwayToStarknet,
     busyKey,
+    claimedAsteroidIds,
+    swayDepositStatus,
     mintCrewFromAsteroid,
     receiveAssetsOnEthereum,
     receiveSwayOnEthereum,
@@ -530,6 +558,8 @@ const useBridgeActions = () => {
     bridgeSwayToEthereum,
     bridgeSwayToStarknet,
     busyKey,
+    claimedAsteroidIds,
+    swayDepositStatus,
     mintCrewFromAsteroid,
     receiveAssetsOnEthereum,
     receiveSwayOnEthereum,

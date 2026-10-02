@@ -7,6 +7,7 @@ import isEqual from 'lodash/isEqual';
 import { Address, Building, Entity, Lot } from '@influenceth/sdk';
 
 import constants from '~/lib/constants';
+import { pruneBridgeTransfers } from '../bridge/transfers';
 import { selectPersistedState } from '../lib/storePersistence';
 import { getGraphicsDefaults } from '~/lib/graphics/quality';
 import { TOKEN } from '~/lib/priceUtils';
@@ -93,6 +94,7 @@ const normalizeBridgeTransferRecord = (transfer) => Object.fromEntries(Object.en
   id: getBridgeTransferValue(transfer, 'id'),
   layer: getBridgeTransferValue(transfer, 'layer'),
   originChain: getBridgeTransferValue(transfer, 'originChain'),
+  network: getBridgeTransferValue(transfer, 'network'),
   status: getBridgeTransferValue(transfer, 'status'),
   toAddress: getBridgeTransferValue(transfer, 'toAddress'),
   txHash: getBridgeTransferValue(transfer, 'txHash'),
@@ -555,6 +557,14 @@ const useStore = create(
             { createdAt: Date.now(), status: 'submitted' },
             transfer
           );
+        })),
+
+        dispatchBridgeTransfersPruned: (ids = []) => set(produce(state => {
+          const retained = pruneBridgeTransfers(state.bridgeTransfers);
+          ids.forEach((id) => delete retained[id]);
+          if (Object.keys(retained).length !== Object.keys(state.bridgeTransfers || {}).length) {
+            state.bridgeTransfers = retained;
+          }
         })),
 
         dispatchBridgeTransferUpdated: (id, update) => set(produce(state => {
@@ -1024,7 +1034,7 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 9,
+      version: 10,
       partialize: selectPersistedState,
       // Filter on read too: older saves include navigation and other transient state.
       merge: (persistedState, currentState) => ({
@@ -1061,6 +1071,11 @@ const useStore = create(
             delete state.starterPackWalletIntent;
             state.starterPackCheckout = null;
             state.starterPackCustomizationDrafts = {};
+            return state;
+          },
+          (state, version) => {
+            if (version >= 10) return state;
+            state.bridgeTransfers = pruneBridgeTransfers(state.bridgeTransfers);
             return state;
           },
         ];

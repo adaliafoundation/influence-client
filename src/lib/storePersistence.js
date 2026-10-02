@@ -1,3 +1,5 @@
+import { pruneBridgeTransfers } from '../bridge/transfers';
+
 // Persist user choices and ongoing account work, never scene or navigation state.
 const persistedKeys = [
   'isNew', 'missionParticipation', 'objectivePreferences',
@@ -23,5 +25,6 @@ const pick = (state, keys) => Object.fromEntries(
 
 export const selectPersistedState = (state = {}) => ({
   ...pick(state, persistedKeys),
+  ...(state.bridgeTransfers ? { bridgeTransfers: pruneBridgeTransfers(state.bridgeTransfers) } : {}),
   ...(state.graphics ? { graphics: pick(state.graphics, graphicsKeys) } : {})
 });

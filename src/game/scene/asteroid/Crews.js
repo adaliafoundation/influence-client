@@ -152,12 +152,13 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       await hydrateActivities(ongoingActivities, queryClient)
       return ongoingActivities;
     },
-    enabled: !!(asteroidId && activeCrewsDisplay !== 'selected')
+    enabled: !!(accountAddress && asteroidId && activeCrewsDisplay !== 'selected')
   });
 
   // define the travel params from the ongoing activities
   const ongoingTravel = useMemo(() => {
     const crews = {};
+    if (!accountAddress) return crews;
 
     // make sure selected crew is included (in case not on page OR in 'selected' mode)
     const ongoingActivities = [...(ongoing || [])];
@@ -539,6 +540,16 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
 
   // listen for click events (toggle hopper selection, click through to crew page)
   const clickStatus = useRef();
+  useEffect(() => {
+    setHovered();
+    setSelected();
+    setCardHovered();
+    clickStatus.current = undefined;
+    clearTimeout(unselector.current);
+    unselector.current = null;
+    return () => clearTimeout(unselector.current);
+  }, [accountAddress]);
+
   useEffect(() => {
     if (hovered || selected) {
       const onMouseEvent = (e) => {

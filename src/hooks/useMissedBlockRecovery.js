@@ -10,11 +10,8 @@ const useMissedBlockRecovery = (enabled, isBlockMissing, setIsBlockMissing) => {
 
   useEffect(() => {
     if (!enabled) return undefined;
-    let blurred = false;
-    const onBlur = () => { blurred = true; };
-    const onFocus = () => {
-      if (!blurred) return;
-      blurred = false;
+    const recover = () => {
+      if (document.visibilityState === 'hidden') return;
       if (!recovery.current.isBlockMissing) return;
 
       // Clear before starting the refresh so a new gap during recovery is kept.
@@ -22,13 +19,14 @@ const useMissedBlockRecovery = (enabled, isBlockMissing, setIsBlockMissing) => {
       recovery.current.setIsBlockMissing(false);
       queryClient.invalidateQueries({}, { cancelRefetch: false });
     };
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
+    recover();
+    window.addEventListener('focus', recover);
+    document.addEventListener('visibilitychange', recover);
     return () => {
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('focus', recover);
+      document.removeEventListener('visibilitychange', recover);
     };
-  }, [enabled, queryClient]);
+  }, [enabled, isBlockMissing, queryClient]);
 };
 
 export default useMissedBlockRecovery;

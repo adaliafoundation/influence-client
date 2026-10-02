@@ -8,8 +8,10 @@ import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useStore from '~/hooks/useStore';
 import useWebsocket from '~/hooks/useWebsocket';
 import api from '~/lib/api';
+import { marketSubscriptionsByClient } from '../lib/marketSubscriptions';
 
 jest.mock('@influenceth/sdk', () => ({ Address: {}, Entity: { IDS: {} } }));
+jest.mock('~/hooks/useBlockSync', () => () => {}, { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useGetActivityConfig', () => jest.fn(), { virtual: true });
@@ -60,18 +62,19 @@ beforeEach(() => {
   api.getTransactionActivities.mockResolvedValue({ activities: [activity] });
 });
 afterEach(() => {
+  marketSubscriptionsByClient.delete(client);
   client.clear();
   jest.useRealTimers();
 });
 
-test('refreshes a recovered purchase once and preserves completion across state updates', async () => {
+test('publishes a recovered purchase before refetch completes and preserves completion across state updates', async () => {
   let finishRefresh;
   invalidate.mockImplementation(() => new Promise(resolve => { finishRefresh = resolve; }));
   const { rerender } = render(tree());
   await advance(0);
   await advance(2500);
   expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(1);
-  expect(consume).toHaveBeenLastCalledWith([]);
+  expect(consume.mock.calls.at(-1)[0]).toEqual([expect.objectContaining({ key: 'event-1' })]);
 
   for (let i = 0; i < 5; i += 1) {
     session = { ...session, blockNumber: i + 2 };
@@ -175,4 +178,62 @@ test('retries an activity when preparing its refresh failed', async () => {
   expect(onBeforeReceived).toHaveBeenCalledTimes(2);
   expect(invalidate).toHaveBeenCalledTimes(1);
   expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+});
+
+
+test.each(['CrewmateRecruited', 'SellOrderFilled', 'ConstructionStarted'])(
+  '%s publishes after the delay without waiting for entity, market, or readiness refreshes', async (name) => {
+    const indexedActivity = { ...activity, event: { ...activity.event, name } };
+    api.getTransactionActivities.mockResolvedValue({ activities: [indexedActivity] });
+    const pending = new Promise(() => {});
+    invalidate.mockReturnValue(pending);
+    const flush = jest.fn(() => pending);
+    const refreshReadyAt = jest.fn(() => pending);
+    marketSubscriptionsByClient.set(client, { flush });
+    useCrewContext.mockReturnValue({ crew: { id: 1 }, refreshReadyAt });
+    useGetActivityConfig.mockReturnValue(() => ({
+      onBeforeReceived: async () => [], invalidations: [['entity', 1, 1]], requiresCrewTime: true,
+    }));
+    render(tree());
+    await advance(0);
+    await advance(2499);
+    expect(consume).toHaveBeenLastCalledWith([]);
+    expect(invalidate).not.toHaveBeenCalled();
+    await advance(1);
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(refreshReadyAt).toHaveBeenCalledTimes(1);
+    expect(consume.mock.calls.at(-1)[0]).toEqual([expect.objectContaining({ event: indexedActivity.event })]);
+    await advance(30000);
+    expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledTimes(2);
+  }
+);
+
+test.each(['entity', 'market', 'readiness'])('a failed %s refresh does not undo completion or replay the activity', async (source) => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const error = new Error('Refresh failed');
+  const refresh = jest.fn().mockRejectedValue(error);
+  if (source === 'entity') invalidate.mockImplementation(refresh);
+  if (source === 'market') marketSubscriptionsByClient.set(client, { flush: refresh });
+  if (source === 'readiness') {
+    useCrewContext.mockReturnValue({ crew: { id: 1 }, refreshReadyAt: refresh });
+    useGetActivityConfig.mockReturnValue(() => ({
+      onBeforeReceived: async () => [], invalidations: [], requiresCrewTime: true,
+    }));
+  }
+  render(tree());
+  await advance(0);
+  await advance(2500);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+  expect(warn).toHaveBeenCalledWith('Unable to refresh activity data', error);
+  await advance(30000);
+  const onMessage = socket.registerMessageHandler.mock.calls[0][0];
+  act(() => onMessage({ type: activity.event.name, body: activity }));
+  await advance(1000);
+  await advance(2500);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
+  expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
+  warn.mockRestore();
 });
