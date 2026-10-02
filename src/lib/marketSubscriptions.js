@@ -1,4 +1,5 @@
 import { Entity, Lot } from '@influenceth/sdk';
+import { recoverQueries } from './queryRecovery';
 
 export const marketSubscriptionsByClient = new WeakMap();
 
@@ -79,7 +80,10 @@ export const createMarketSubscriptions = ({ client, socket, api }) => {
       if (Number(values.validTime) > Date.now() / 1000) schedule(Number(values.validTime));
     }, `Asteroid::${asteroidId}`);
     room.connection = socket.registerConnectionHandler(connected => {
-      if (connected) { refresh([...room.records]); discover(); }
+      if (connected) {
+        room.records.forEach(record => recoverQueries(client, { queryKey: record.key, exact: true }));
+        discover();
+      }
     });
     rooms.set(asteroidId, room);
     discover();

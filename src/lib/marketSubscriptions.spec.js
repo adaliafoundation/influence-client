@@ -65,8 +65,10 @@ test('discovers a pre-existing future order and refreshes at activation without 
 });
 
 test('reconnect refreshes current scopes and release cancels pending work', async () => {
+  client.setQueryData(['inventoryOrders', 5, 99], []);
   const release = subscriptions.acquire(['inventoryOrders', 5, 99], { asteroidId: 1, storage: { label: 5, id: 99 } });
   await flush();
+  client.invalidateQueries.mockClear();
   socket.registerConnectionHandler.mock.calls[0][0](true);
   await flush();
   expect(client.invalidateQueries).toHaveBeenCalledTimes(1);

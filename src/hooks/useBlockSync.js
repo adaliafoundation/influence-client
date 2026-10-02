@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '~/lib/api';
+import { recoverGameplayQueries } from '../lib/queryRecovery';
 
 const STALE_AFTER = 60000;
 
@@ -32,7 +33,7 @@ const useBlockSync = (enabled, blockNumber, setBlockNumber, setBlockTime) => {
           setBlockNumber(previous => Math.max(previous, data.blockNumber));
           setBlockTime(previous => Math.max(previous, data.blockTimestamp));
           // Missing block notifications can also mean missing entity updates.
-          await queryClient.invalidateQueries({}, { cancelRefetch: false });
+          await recoverGameplayQueries(queryClient);
         }
       } catch (error) {
         if (!cancelled) console.warn('Unable to refresh stalled block updates', error);

@@ -1,3 +1,5 @@
+jest.mock('../lib/queryRecovery', () => ({ recoverQueries: jest.fn() }));
+const { recoverQueries } = require('../lib/queryRecovery');
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
@@ -76,5 +78,5 @@ test('unchanged bindings do not repeatedly refetch starter progress', async () =
 test('refresh invalidates the queried target rather than every campaign binding', () => {
   renderHook(() => useMissionBindings([request]), { wrapper });
   act(() => socket.registerConnectionHandler.mock.calls[0][0](true));
-  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: useQueries.mock.calls[0][0].queries[0].queryKey, exact: true });
+  expect(recoverQueries).toHaveBeenCalledWith(expect.anything(), { queryKey: useQueries.mock.calls[0][0].queries[0].queryKey, exact: true });
 });

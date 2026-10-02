@@ -6,7 +6,6 @@ import { Crewmate, Entity, RandomEvent, Ship, System } from '@influenceth/sdk';
 import { appConfig } from '~/appConfig';
 import useAuthorizationService from '~/hooks/useAuthorizationService';
 import useConstants from '~/hooks/useConstants';
-import useMissedBlockRecovery from '~/hooks/useMissedBlockRecovery';
 import useEntity from '~/hooks/useEntity';
 import useSession from '~/hooks/useSession';
 import useSimulationState from '~/hooks/useSimulationState';
@@ -32,7 +31,7 @@ const simulationNftConfig = {
 const CrewContext = createContext();
 
 export function CrewProvider({ children }) {
-  const { accountAddress, authenticated, blockNumber, blockTime, provider, token, isBlockMissing, setIsBlockMissing } = useSession();
+  const { accountAddress, authenticated, blockNumber, blockTime, provider, token } = useSession();
   const simulationState = useSimulationState();
 
   const queryClient = useQueryClient();
@@ -360,8 +359,6 @@ export function CrewProvider({ children }) {
 
   const crewControls = useCallback((target) =>
     authorize('controls', [finalSelectedCrew, target], [finalSelectedCrew, target]).status === 'allowed', [authorize, finalSelectedCrew]);
-
-  useMissedBlockRecovery(!!finalSelectedCrew, isBlockMissing, setIsBlockMissing);
 
   const [crewMovementActivity, setCrewMovementActivity] = useState(null);
   useEffect(() => setCrewMovementActivity(null), [selectedCrew?.id]);

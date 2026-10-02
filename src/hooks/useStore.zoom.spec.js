@@ -65,7 +65,38 @@ test.each([0, 1, 2, 3, 4, 5, 6, 7, 8])('migrates version %s while preserving acc
   expect(useStore.getState().selectedCrewId).toBe(42);
   expect(useStore.getState().pendingTransactions).toEqual(saved.pendingTransactions);
   expect(useStore.getState().starterPackCheckout).toBeNull();
-  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(9);
+  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(10);
+});
+
+test('migrates version 9 bridge records without clearing current purchase or account work', async () => {
+  const transfer = {
+    id: '0x123', txHash: '0x123', createdAt: Date.now(), network: '1:SN_MAIN',
+    assetType: 'asteroids', assetIds: [141], direction: 'l1_to_l2',
+    fromAddress: '0xa', toAddress: '0xb', status: 'waiting_l2'
+  };
+  const saved = {
+    ...initialState,
+    currentSession: { token: 'keep-token' }, selectedCrewId: 42,
+    pendingTransactions: [{ txHash: '0x456' }],
+    starterPackCheckout: { purchaseId: 'current' },
+    starterPackCustomizationDrafts: { current: { name: 'My crew' } },
+    bridgeTransfers: {
+      legacy: { ...transfer, network: undefined },
+      completed: { ...transfer, status: 'COMPLETE' },
+      current: transfer
+    }
+  };
+  localStorage.setItem(STORE_NAME, JSON.stringify({ state: saved, version: 9 }));
+  await useStore.persist.rehydrate();
+  const state = useStore.getState();
+  for (const key of ['currentSession', 'selectedCrewId', 'pendingTransactions',
+    'starterPackCheckout', 'starterPackCustomizationDrafts']) {
+    expect(state[key]).toEqual(saved[key]);
+  }
+  expect(state.bridgeTransfers).toEqual({ current: transfer });
+  const stored = JSON.parse(localStorage.getItem(STORE_NAME));
+  expect(stored.version).toBe(10);
+  expect(stored.state.bridgeTransfers).toEqual({ current: transfer });
 });
 
 test('live navigation still animates but is not persisted', () => {

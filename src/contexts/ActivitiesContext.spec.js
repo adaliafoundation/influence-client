@@ -10,7 +10,7 @@ import useWebsocket from '~/hooks/useWebsocket';
 import api from '~/lib/api';
 import { marketSubscriptionsByClient } from '../lib/marketSubscriptions';
 
-jest.mock('@influenceth/sdk', () => ({ Address: {}, Entity: { IDS: {} } }));
+jest.mock('@influenceth/sdk', () => ({ Address: {}, Entity: { IDS: { BUILDING: 5, SHIP: 6, ASTEROID: 3, LOT: 7, CREW: 1, CREWMATE: 2, DEPOSIT: 4 } } }));
 jest.mock('~/hooks/useBlockSync', () => () => {}, { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useCrewContext', () => jest.fn(), { virtual: true });
@@ -236,4 +236,59 @@ test.each(['entity', 'market', 'readiness'])('a failed %s refresh does not undo 
   expect(consume.mock.calls.at(-1)[0]).toHaveLength(1);
   expect(api.getTransactionActivities).toHaveBeenCalledTimes(1);
   warn.mockRestore();
+});
+
+
+test('reconnect and missed-block recovery share targeted refreshes without resetting displayed data', async () => {
+  state.pendingTransactions = [];
+  session.setIsBlockMissing = jest.fn();
+  client.setQueryData(['entity', 5, 10], { id: 10 });
+  client.setQueryData(['swapQuote', 'a', 'b'], 42);
+  const reset = jest.spyOn(client, 'resetQueries');
+  let finish;
+  invalidate.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const { rerender } = render(tree());
+  const connection = socket.registerConnectionHandler.mock.calls[0][0];
+  act(() => connection(false));
+  await advance(6000);
+  act(() => connection(true));
+  session = { ...session, isBlockMissing: true };
+  rerender(tree());
+  await advance(0);
+  expect(reset).not.toHaveBeenCalled();
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['entity', 5, 10], exact: true }, { cancelRefetch: false });
+  expect(client.getQueryData(['entity', 5, 10])).toEqual({ id: 10 });
+  await act(async () => finish());
+});
+
+test('initial connection and brief disconnects do not trigger general recovery', async () => {
+  state.pendingTransactions = [];
+  client.setQueryData(['entity', 5, 10], {});
+  render(tree());
+  const connection = socket.registerConnectionHandler.mock.calls[0][0];
+  act(() => connection(true));
+  act(() => connection(false));
+  await advance(4000);
+  await act(async () => connection(true));
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+test('activity invalidation refreshes matching search pages and leaves other asteroids cached', async () => {
+  const matching = ['search', 'buildings', { from: 100, asteroid: 1 }];
+  const unrelated = ['search', 'buildings', { from: 0, asteroid: 2 }];
+  for (const key of [matching, unrelated]) {
+    client.getQueryCache().build(client, { queryKey: key, meta: { searchFilters: { asteroidId: key[2].asteroid } } });
+    client.setQueryData(key, { hits: [], total: 200 });
+  }
+  useGetActivityConfig.mockReturnValue(() => ({
+    onBeforeReceived: async () => [],
+    invalidations: [{ id: 10, label: 5, newGroupEval: { updatedValues: { status: 2 }, filters: { asteroidId: 1 } } }]
+  }));
+  render(tree());
+  await advance(0);
+  await advance(2500);
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: matching, refetchType: 'active' });
+  expect(invalidate.mock.calls.some(([filter]) => filter.queryKey === unrelated)).toBe(false);
+  expect(invalidate.mock.calls.some(([filter]) => filter.queryKey?.length === 2 && filter.queryKey[0] === 'search')).toBe(false);
 });

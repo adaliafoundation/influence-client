@@ -13,7 +13,6 @@ jest.mock('@influenceth/sdk', () => ({
 jest.mock('~/appConfig', () => ({ appConfig: { get: () => undefined } }), { virtual: true });
 jest.mock('~/hooks/useAuthorizationService', () => () => ({}), { virtual: true });
 jest.mock('~/hooks/useConstants', () => () => ({ data: { CREW_SCHEDULE_BUFFER: 10, TIME_ACCELERATION: 1 } }), { virtual: true });
-jest.mock('~/hooks/useMissedBlockRecovery', () => () => {}, { virtual: true });
 jest.mock('~/hooks/useEntity', () => () => ({}), { virtual: true });
 jest.mock('~/hooks/useSession', () => () => ({ accountAddress: 'owner', authenticated: true, blockTime: 100, token: 'token' }), { virtual: true });
 jest.mock('~/hooks/useSimulationState', () => () => null, { virtual: true });

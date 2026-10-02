@@ -1,3 +1,5 @@
+jest.mock('../lib/queryRecovery', () => ({ recoverQueries: jest.fn() }));
+const { recoverQueries } = require('../lib/queryRecovery');
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
@@ -54,11 +56,11 @@ test('the background subscriber switches crew rooms and refetches after reconnec
   expect(socket.registerMessageHandler).toHaveBeenCalledWith(expect.any(Function), 'Crew::502');
   expect(useQuery).toHaveBeenLastCalledWith(expect.objectContaining({ queryKey: ['starterMissions', 'sepolia', 'api', '502'] }));
   act(() => socket.registerConnectionHandler.mock.calls[1][0](true));
-  expect(refetch).toHaveBeenCalledTimes(1);
+  expect(recoverQueries).toHaveBeenCalledWith(expect.anything(), { queryKey: ['starterMissions', 'sepolia', 'api', '502'], exact: true });
   const onMessage = socket.registerMessageHandler.mock.calls[2][0];
   act(() => { onMessage({ type: 'MissionCompleted' }); jest.advanceTimersByTime(500); });
   act(() => onMessage({ type: 'CURRENT_STARKNET_BLOCK_NUMBER' }));
-  expect(refetch).toHaveBeenCalledTimes(3);
+  expect(refetch).toHaveBeenCalledTimes(2);
   unmount();
   expect(socket.unregisterMessageHandler.mock.calls.map(([id]) => id)).toContain('Crew::502');
 });

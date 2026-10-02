@@ -7,6 +7,7 @@ import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import api from '~/lib/api';
+import { recoverQueries } from '../lib/queryRecovery';
 import { canonicalCrewId, isMissionTransactionIndexed, starterMissionsQueryKey } from '~/lib/starterMissions';
 
 const useStarterMissions = (crewId, { subscribe = false } = {}) => {
@@ -53,13 +54,19 @@ const useStarterMissions = (crewId, { subscribe = false } = {}) => {
       }
     };
     const registrations = [registerMessageHandler(onMessage), registerMessageHandler(onMessage, `Crew::${id}`)];
-    const connection = registerConnectionHandler((connected) => { if (connected) refresh(); });
+    const connection = registerConnectionHandler((connected) => {
+      if (connected) {
+        dirty = false;
+        clearTimeout(timer);
+        recoverQueries(queryClient, { queryKey: starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), id), exact: true });
+      }
+    });
     return () => {
       clearTimeout(timer);
       registrations.forEach(unregisterMessageHandler);
       unregisterConnectionHandler(connection);
     };
-  }, [subscribe, enabled, id, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
+  }, [subscribe, enabled, id, chainId, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
   return query;
 };
 

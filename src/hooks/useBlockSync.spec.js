@@ -14,6 +14,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   client = new QueryClient();
+  client.setQueryData(['entity', 1, 1], {});
   invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue();
   setBlockNumber = jest.fn();
   setBlockTime = jest.fn();

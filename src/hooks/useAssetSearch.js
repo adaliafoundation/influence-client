@@ -6,6 +6,7 @@ import esb from 'elastic-builder';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
 import constants from '~/lib/constants';
+import { searchInvalidationFilters } from '../lib/searchInvalidation';
 import { esbPermissionCandidateQuery, esbLocationQuery } from '~/lib/utils';
 
 const filtersToQuery = {};
@@ -278,6 +279,7 @@ const useAssetSearch = (assetType, { from = 0, size = 2000 } = {}) => {
     queryKey: [ 'search', esAssetType, query ],
     queryFn: () => esAssetType ? api.searchAssets(esAssetType, query) : [],
     enabled: !!query,
+    meta: { searchFilters: searchInvalidationFilters(esAssetType, throttledFilters || {}) },
     placeholderData: keepPreviousData
   });
 };

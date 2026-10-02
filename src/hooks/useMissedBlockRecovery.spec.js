@@ -8,8 +8,9 @@ const refocus = () => act(() => {
   window.dispatchEvent(new Event('focus'));
 });
 
-test('a missed block refreshes once, while a later gap still triggers recovery', () => {
+test('a missed block refreshes once, while a later gap still triggers recovery', async () => {
   const client = new QueryClient();
+  client.setQueryData(['entity', 1, 1], {});
   const invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue();
   const wrapper = ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { result, unmount } = renderHook(() => {
@@ -20,14 +21,14 @@ test('a missed block refreshes once, while a later gap still triggers recovery',
 
   refocus();
   expect(invalidate).not.toHaveBeenCalled();
-  act(() => result.current(true));
+  await act(async () => result.current(true));
   expect(invalidate).toHaveBeenCalledTimes(1);
   for (let i = 0; i < 10; i += 1) refocus();
   expect(invalidate).toHaveBeenCalledTimes(1);
-  act(() => result.current(true));
+  await act(async () => result.current(true));
   refocus();
   expect(invalidate).toHaveBeenCalledTimes(2);
-  expect(invalidate).toHaveBeenLastCalledWith({}, { cancelRefetch: false });
+  expect(invalidate).toHaveBeenLastCalledWith({ queryKey: ['entity', 1, 1], exact: true }, { cancelRefetch: false });
   unmount();
   refocus();
   expect(invalidate).toHaveBeenCalledTimes(2);
@@ -35,9 +36,10 @@ test('a missed block refreshes once, while a later gap still triggers recovery',
 });
 
 
-test('defers a hidden tab gap until it becomes visible without requiring window blur', () => {
+test('defers a hidden tab gap until it becomes visible without requiring window blur', async () => {
   const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
   const client = new QueryClient();
+  client.setQueryData(['entity', 1, 1], {});
   const invalidate = jest.spyOn(client, 'invalidateQueries').mockResolvedValue();
   const wrapper = ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { unmount } = renderHook(() => {
@@ -46,7 +48,7 @@ test('defers a hidden tab gap until it becomes visible without requiring window 
   }, { wrapper });
   expect(invalidate).not.toHaveBeenCalled();
   visibility.mockReturnValue('visible');
-  act(() => document.dispatchEvent(new Event('visibilitychange')));
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
   expect(invalidate).toHaveBeenCalledTimes(1);
   act(() => window.dispatchEvent(new Event('focus')));
   expect(invalidate).toHaveBeenCalledTimes(1);

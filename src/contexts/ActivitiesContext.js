@@ -6,6 +6,9 @@ import { Address, Entity } from '@influenceth/sdk';
 
 import useSession from '~/hooks/useSession';
 import useBlockSync from '~/hooks/useBlockSync';
+import useMissedBlockRecovery from '../hooks/useMissedBlockRecovery';
+import { recoverGameplayQueries } from '../lib/queryRecovery';
+import { searchAffectedByEntity } from '../lib/searchInvalidation';
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useStore from '~/hooks/useStore';
@@ -54,6 +57,7 @@ export function ActivitiesProvider({ children }) {
     gasTokens,
     setBlockNumber,
     setBlockTime,
+    isBlockMissing,
     setIsBlockMissing,
     token,
   } = useSession();
@@ -62,6 +66,7 @@ export function ActivitiesProvider({ children }) {
   useBlockSync(token && !simulation, blockNumber, setBlockNumber, setBlockTime);
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
+  useMissedBlockRecovery(!!token && !simulation, isBlockMissing, setIsBlockMissing);
   const {
     registerConnectionHandler,
     registerMessageHandler,
@@ -271,27 +276,9 @@ export function ActivitiesProvider({ children }) {
               }
             });
 
-            // invalidate searches potentially a part of
-            // TODO: would be nice to check against criteria similar to 'entities' above
-            let searchAssets = [];
-            if (label === Entity.IDS.ASTEROID)
-              searchAssets = ['asteroids'/*, 'asteroidsMapped'*/]; // asteroidsMapped uses asteroids
-            if (label === Entity.IDS.BUILDING)
-              searchAssets = ['buildings'];
-            if (label === Entity.IDS.CREW)
-              searchAssets = ['crews'];
-            if (label === Entity.IDS.CREWMATE)
-              searchAssets = ['crewmates'];
-            if (label === Entity.IDS.DEPOSIT)
-              searchAssets = ['coresamples'];
-            if (label === Entity.IDS.LOT)
-              searchAssets = ['lots'/*, 'lotsMapped'*/]; // lotsMapped uses packed data
-            if (label === Entity.IDS.SHIP)
-              searchAssets = ['ships'];
-
-            searchAssets.forEach((assetType) => {
-              activityInvalidations.push(['search', assetType])
-            });
+            queryClient.getQueryCache().findAll({
+              predicate: query => searchAffectedByEntity(query, invalidationConfig)
+            }).forEach(query => activityInvalidations.push(query.queryKey));
           }
 
           if (debugInvalidation) console.log('activity invalidate', invalidationConfig, activityInvalidations);
@@ -371,26 +358,19 @@ export function ActivitiesProvider({ children }) {
     }
   }, [handleActivities, queryClient]);
 
-  const [disconnected, setDisconnected] = useState();
-  const [stale, setStale] = useState();
+  const disconnectedAt = useRef(null);
   const onWSConnection = useCallback((isOpen) => {
-    if (isOpen && stale) {
-      queryClient.resetQueries();
-      setStale(false);
+    if (!isOpen) {
+      if (disconnectedAt.current === null) disconnectedAt.current = Date.now();
+      return;
     }
-    setDisconnected(!isOpen);
-  }, [stale, queryClient]);
+    if (disconnectedAt.current !== null && Date.now() - disconnectedAt.current >= 5000) {
+      recoverGameplayQueries(queryClient);
+    }
+    disconnectedAt.current = null;
+  }, [queryClient]);
 
-  useEffect(() => {
-    // if disconnected for more than X seconds, set state to `stale`. this will refetch
-    // everything once the connection is restored. any value of X is technically imperfect
-    // here, but it also seems excessive to reset state on any microsecond disconnection
-    if (disconnected) {
-      const to = setTimeout(() => setStale(true), 5e3);
-      // (if reconnects before timeout, do not set to stale)
-      return () => clearTimeout(to);
-    }
-  }, [disconnected]);
+  useEffect(() => { disconnectedAt.current = null; }, [token]);
 
   const onWSMessage = useCallback((message) => {
     if (areWebsocketLogsEnabled()) console.log('onWSMessage (activities)', message);

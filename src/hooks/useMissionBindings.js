@@ -7,6 +7,7 @@ import useSession from '~/hooks/useSession';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import { appConfig } from '~/appConfig';
 import api from '~/lib/api';
+import { recoverQueries } from '../lib/queryRecovery';
 import { starterMissionsQueryKey } from '~/lib/starterMissions';
 import { missionBindingKey, missionBindingRefetchInterval } from '~/lib/missionBindings';
 
@@ -59,7 +60,15 @@ const useMissionBindings = (requests) => {
       `Crew::${r.subject.id}`, `${Entity.TYPES[r.entity.label].label.toLowerCase().replace(/^./, c => c.toUpperCase())}::${r.entity.id}`
     ]));
     const subscriptions = [registerMessageHandler(onMessage), ...[...rooms].map(room => registerMessageHandler(onMessage, room))];
-    const connection = registerConnectionHandler(connected => { if (connected) refresh(); });
+    const connection = registerConnectionHandler(connected => {
+      if (connected) {
+        dirty = false;
+        clearTimeout(timer);
+        requests.forEach(request => recoverQueries(queryClient, {
+          queryKey: missionBindingKey(chainId, apiUrl, request), exact: true
+        }));
+      }
+    });
     return () => {
       clearTimeout(timer);
       subscriptions.forEach(unregisterMessageHandler);
