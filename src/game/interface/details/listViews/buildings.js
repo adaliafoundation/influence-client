@@ -138,7 +138,7 @@ const useColumns = () => {
           Object.keys(policyDetails).forEach((permId) => {
             const access = crewAuthorization(Number(permId), row);
             const policy = policyDetails[permId];
-            if (access.status === 'unresolved') lines[permId] = 'checking';
+            if (access.status === 'unresolved') return;
             else if (access.status === 'allowed') lines[permId] = ['controller', 'shared-delegate', 'exact-entity'].includes(access.reason) ? 'controller' : 'granted';
             else if (policy.policyType === Permission.POLICY_IDS.PREPAID) lines[permId] = `${policy.policyDetails.rate}_${policy.policyDetails.initialTerm}`;
             else lines[permId] = 'restricted';

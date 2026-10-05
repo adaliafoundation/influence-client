@@ -73,7 +73,7 @@ const RandomEventAssignment = () => {
   );
 
   const onAccept = useCallback((choice) => {
-    execute('ResolveRandomEvent', { choice, caller_crew: { id: crew?.id, label: crew?.label } });
+    return execute('ResolveRandomEvent', { choice, caller_crew: { id: crew?.id, label: crew?.label } });
   }, [crew, execute]);
 
   const onFinishAssignment = useCallback(() => {
@@ -91,11 +91,10 @@ const RandomEventAssignment = () => {
         onBack: () => setFinishing(false),
         onFinish: () => {
           // TODO: when there are more complex events, should obviously do this differently
-          onAccept(RandomEvent.TYPES[crew?._actionTypeTriggered?.pendingEvent]?.choices?.[0] || 1);
+          return onAccept(RandomEvent.TYPES[crew?._actionTypeTriggered?.pendingEvent]?.choices?.[0] || 1);
         },
         finishButtonLabel: 'Accept',
-        finishButtonProps: { isTransaction: true },
-        isLoading: isPending
+        finishButtonProps: { isTransaction: true, loading: !!isPending, disabled: !!isPending }
       }
     }
   }, [bookTokens, finishing, isPending, onAccept]);

@@ -572,7 +572,8 @@ const MarketplaceDepthChart = ({ lot, marketplace, marketplaceOwner, resource })
       mode,
       type,
       resourceId: resource?.i,
-      preselect: { limitPrice, quantity }
+      preselect: { limitPrice, quantity },
+      onSuccess: () => setQuantity(undefined)
     });
   }, [limitPrice, lot, mode, quantity, resource, type]);
 

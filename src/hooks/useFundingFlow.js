@@ -49,7 +49,7 @@ const useFundWrapper = () => {
         totalPrice
       });
     } else {
-      purchaseFn();
+      return purchaseFn();
     }
   }, [accountAddress, login, priceHelper, wallet?.combinedBalance, wallet?.tokenBalances]);
 

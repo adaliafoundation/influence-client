@@ -66,7 +66,7 @@ export const loadAuthorization = async ({ api, provider, method, args, entities 
     }
     while (true) {
       const result = evaluateAuthorization({ entities: [...records.values()], blockTime, policyResults: policies, method, args });
-      if (result.status !== 'unresolved') return { ...result, entities: [...records.values()] };
+      if (result.status !== 'unresolved') return { ...result, entities: [...records.values()], policyResults: policies };
       const request = result.requirements?.[0];
       if (request?.type === 'component' || request?.type === 'entity') {
         if (!request.entity?.id || loaded.has(entityKey(request.entity))) return result;

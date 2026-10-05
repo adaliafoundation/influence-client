@@ -378,7 +378,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
 
   const saveEdits = useCallback(() => {
     if (editing === 'allowlist') {
-      updateAllowlists(allowlist, accountAllowlist);
+      return updateAllowlists(allowlist, accountAllowlist);
     } else {
       const policyDirty = Number(policyType) !== Number(originalPolicyType)
         || !policyDetailsAreEqual(policyType, details, originalPolicyDetails);
@@ -388,12 +388,11 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
       );
 
       if (policyDirty && auctionDirty) {
-        updatePolicyAndAuctionSettings(policyType, details, auctionDetails);
-        return;
+        return updatePolicyAndAuctionSettings(policyType, details, auctionDetails);
       }
-      if (policyDirty) updatePolicy(policyType, details);
+      if (policyDirty) return updatePolicy(policyType, details);
       if (showAuctionSettings) {
-        if (auctionDirty) updateAuctionSettings(auctionDetails);
+        if (auctionDirty) return updateAuctionSettings(auctionDetails);
       }
     }
   }, [
@@ -430,7 +429,6 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
   );
 
   const jitStatus = useMemo(() => {
-    if (currentPolicy?.authorization?.status === 'unresolved') return 'checking access';
     if (currentPolicy?.crewStatus === 'granted' && (currentPolicy?.agreements || []).some((a) => matchesCrewPermissionSubject(a.permitted, crew) && a.noticeTime > 0)) return 'under notice';
     return null;
   }, [currentPolicy, crew?.id]);
@@ -443,7 +441,7 @@ const PolicyPanel = ({ editable = false, entity, permission }) => {
         description: `The permission is granted to individually listed crews or all crews of any listed wallets.`,
       };
     }
-    const crewStatus = jitStatus || currentPolicy?.crewStatus;
+    const crewStatus = currentPolicy?.authorization?.status === 'unresolved' ? null : jitStatus || currentPolicy?.crewStatus;
     return {
       ...Permission.POLICY_TYPES[policyType],
       crewStatus,

@@ -46,6 +46,19 @@ test('unresolved permissions block opening without hiding a potentially valid bu
   expect(props.reportBlocked).toHaveBeenCalledWith({ status: 'unresolved' });
 });
 
+test('a silently disabled button remains visible when access is still unresolved after refresh', async () => {
+  const pending = deferred();
+  const props = { disabled: false, onClick: jest.fn(), refresh: () => pending.promise, reportBlocked: jest.fn() };
+  const { result, rerender } = renderHook(useActionButtonClick, { initialProps: props });
+  let clicked;
+  act(() => { clicked = result.current.handleClick(); });
+  rerender({ ...props, disabled: true });
+  await act(async () => { pending.resolve({ status: 'allowed' }); await clicked; });
+  expect(result.current.hidden).toBe(false);
+  expect(props.onClick).not.toHaveBeenCalled();
+  expect(props.reportBlocked).toHaveBeenCalledWith({ status: 'unresolved' });
+});
+
 test('changing the selected target during a refresh does not open its replacement action', async () => {
   const pending = deferred();
   const props = { disabled: false, onClick: jest.fn(), refresh: () => pending.promise, reportBlocked: jest.fn() };

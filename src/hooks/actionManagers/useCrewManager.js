@@ -51,7 +51,7 @@ const useCrewManager = () => {
   const purchaseAndOrInitializeCrewmate = useCallback(
     ({ crewmate }) => {
       if (crewmate.Crewmate.coll !== Crewmate.COLLECTION_IDS.ADALIAN) {
-        execute('InitializeArvadian', {
+        return execute('InitializeArvadian', {
           crewmate: { id: crewmate.id, label: Entity.IDS.CREWMATE },
           impactful: crewmate.Crewmate.impactful,
           cosmetic: crewmate.Crewmate.cosmetic,
@@ -72,7 +72,7 @@ const useCrewManager = () => {
         });
 
         const appearance = Crewmate.unpackAppearance(crewmate.Crewmate.appearance);
-        execute(
+        return execute(
           'RecruitAdalian',
           {
             crewmate: { id: crewmate.id, label: Entity.IDS.CREWMATE },

@@ -39,7 +39,7 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
     if (!ready) return 'ship is not ready'; // in flight or stuck in port traffic
     if (asteroid?.Celestial?.scanStatus < Asteroid.SCAN_STATUSES.RESOURCE_SCANNED) return 'asteroid un-scanned';
     const control = authorize('controls', [crew, crewedShip], [crew, crewedShip]);
-    if (control.status !== 'allowed') return control.status === 'denied' ? 'access restricted' : 'checking permissions';
+    if (control.status !== 'allowed') return control.status === 'denied' ? 'access restricted' : true;
 
     // if no lot selected, can select from dialog
     if (lot) {
@@ -50,7 +50,7 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
         if (!lot?.building?.Dock) return 'building has no dock';
         if (lot.building.Dock.dockedShips >= Dock.TYPES[lot.building.Dock.dockType].cap) return 'dock is full';
         const access = authorize('spaceportProtection', [crew, crewedShip, lot.building], [crew, crewedShip, lot.building]);
-        if (access.status !== 'allowed') return access.status === 'denied' ? 'docking access restricted' : 'checking docking permission';
+        if (access.status !== 'allowed') return access.status === 'denied' ? 'docking access restricted' : true;
 
       // trying to land
       } else {

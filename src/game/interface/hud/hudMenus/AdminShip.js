@@ -1,4 +1,3 @@
-import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useMemo } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
@@ -35,8 +34,6 @@ const AdminShip = ({}) => {
     <>
       <Scrollable>
         <ShipTitleArea ship={ship} />
-
-        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
 
         {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={ship} />

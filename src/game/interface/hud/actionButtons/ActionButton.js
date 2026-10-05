@@ -1,4 +1,4 @@
-import LoadingBorder from '~/components/LoadingBorder';
+import ButtonLoadingBar from '~/components/ButtonLoadingBar';
 import useActionButtonClick from '~/hooks/useActionButtonClick';
 import ActionAuthorizationContext from './ActionAuthorizationContext';
 import useFailureReporter from '~/hooks/useFailureReporter';
@@ -389,7 +389,7 @@ const ActionButtonComponent = forwardRef(({
       onMouseLeave={handleHover}
       {...safeFlags}
       {...props}>
-      {(flags.loading || checking) && <LoadingBorder $cornerSize={cornerSize} $thickness={padding} />}
+      {(flags.loading || checking) && <ButtonLoadingBar top={0} />}
       {safeFlags.badge ? <BubbleBadge {...badgeProps}>{safeFlags.badge}</BubbleBadge> : null}
       <ActionButton {...safeFlags} overrideColor={props.overrideColor} overrideBgColor={props.overrideBgColor}>
         <ClipCorner dimension={cornerSize} />
@@ -428,7 +428,7 @@ isSequenceable = false,
   if (crew?._isSimulation && !isAllowedInSimulation) return 'simulation restricted';
   if (permission && permissionTarget) {
     const decision = crewAuthorization?.(permission, permissionTarget);
-    if (decision?.status !== 'allowed' && !prepaidLeaseConfig) return decision?.status === 'denied' ? 'access restricted' : 'checking permissions';
+    if (decision?.status !== 'allowed' && !prepaidLeaseConfig) return decision?.status === 'denied' ? 'access restricted' : true;
   }
   if (asteroid && requireAsteroid) {
     if (crew?._location?.asteroidId !== asteroid?.id) {

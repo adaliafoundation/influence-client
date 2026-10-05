@@ -289,7 +289,7 @@ const ForceLaunchShip = ({ asteroid, originLot, manager, ship, stage, onClose, .
           <FlexSectionInputBlock title="Destination" image={<AsteroidImage asteroid={asteroid} />} label={formatters.asteroidName(asteroid)} sublabel="Orbit" />
         </FlexSection>
         <p>The ship will be towed to orbit without using its propellant.</p>
-        {ejectionEligibility.reason && <p role="status">{ejectionEligibility.reason}</p>}
+        {ejectionEligibility.status === 'blocked' && ejectionEligibility.reason && <p role="status">{ejectionEligibility.reason}</p>}
       </ActionDialogBody>
       <ActionDialogFooter
         {...props}

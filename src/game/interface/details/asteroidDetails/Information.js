@@ -6,7 +6,6 @@ import AddressLink from '~/components/AddressLink';
 import AsteroidGraphic from './components/AsteroidGraphic';
 import Button from '~/components/ButtonAlt';
 import DataReadout from '~/components/DataReadout';
-import IconButton from '~/components/IconButton';
 import MarketplaceLink from '~/components/MarketplaceLink';
 import StaticForm from '~/components/StaticForm';
 import Text from '~/components/Text';
@@ -304,7 +303,7 @@ const AsteroidInformation = ({ abundances, asteroid, isManager, isOwner }) => {
 
   const attemptUpdateAsteroidName = useCallback(async () => {
     if (await isNameValid(newName, asteroid?.id)) {
-      changeName(newName);
+      return changeName(newName);
     }
   }, [changeName, isNameValid, newName, asteroid?.id]);
 
@@ -324,7 +323,7 @@ const AsteroidInformation = ({ abundances, asteroid, isManager, isOwner }) => {
     const limited = await checkForLimit();
     if (limited) return;
 
-    buyAsteroid();
+    const submission = buyAsteroid();
     fireTrackingEvent('purchase', {
       category: 'purchase',
       currency: 'USD',
@@ -334,11 +333,12 @@ const AsteroidInformation = ({ abundances, asteroid, isManager, isOwner }) => {
         item_name: 'asteroid'
       }]
     });
+    return submission;
   }, [accountAddress, buyAsteroid, checkForLimit, usdcPrice]);
 
   const attemptBuyAsteroid = useCallback(() => {
     if (!price || !priceConstants?.ASTEROID_PURCHASE_TOKEN) return;
-    onVerifyFunds(
+    return onVerifyFunds(
       priceHelper.from(price, priceConstants.ASTEROID_PURCHASE_TOKEN),
       onBuyAsteroid
     );
@@ -436,13 +436,17 @@ const AsteroidInformation = ({ abundances, asteroid, isManager, isOwner }) => {
                         maxlength={Name.TYPES[Entity.IDS.ASTEROID].max}
                         pattern={Name.getTypeRegex(Entity.IDS.ASTEROID)}
                         onChange={(v) => setNewName(v)} />
-                      <IconButton
+                      <Button
+                        isTransaction
+                        size="bigicon"
+                        aria-label="Submit name change"
+                        loading={changingName}
                         data-tooltip-content="Submit"
                         data-tooltip-id="globalTooltip"
                         disabled={nativeBool(changingName)}
                         onClick={attemptUpdateAsteroidName}>
                         <CheckCircleIcon />
-                      </IconButton>
+                      </Button>
                     </NameForm>
                   </StaticForm>
                   <Button

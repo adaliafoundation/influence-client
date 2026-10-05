@@ -1462,9 +1462,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   }, [crewmate?.Crewmate?.class, selectedTraits, traitTally]);
 
   const finalize = useCallback(() => {
-    setPurchaseAcknowledged(false);
-    setConfirming(false);
-    purchaseAndOrInitializeCrewmate({ crewmate });
+    return purchaseAndOrInitializeCrewmate({ crewmate });
   }, [crewmate, purchaseAndOrInitializeCrewmate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const confirmFinalize = useCallback(async () => {
@@ -1478,8 +1476,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     //  in from L1 since user cannot change them at this point anyway)
     if (!crewmate?._canRename || await isNameValid(name || crewmate?.Name?.name, crewmate?.id)) {
       if (crewmate?.id) {
-        finalize();
-        return;
+        return finalize();
       }
       setPurchaseAcknowledged(false);
       setConfirming(true);
@@ -1816,7 +1813,13 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     }
 
     return {
-      confirmButtonProps: { loading: promptingTransaction },
+      confirmButtonProps: {
+        loading: promptingTransaction,
+        onTransactionComplete: () => {
+          setPurchaseAcknowledged(false);
+          setConfirming(false);
+        }
+      },
       disabled: !purchaseAcknowledged || promptingTransaction,
       mode: 'crypto',
       onConfirm: finalize,

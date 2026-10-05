@@ -128,12 +128,12 @@ const MarketplaceSettings = ({ marketplace }) => {
   }, []);
 
   const saveChanges = useCallback(() => {
-    changeSettings({
+    setFocused();
+    return changeSettings({
       makerFee: makerFee * 100,
       takerFee: takerFee * 100,
       allowedProducts: products,
     });
-    setFocused();
   }, [makerFee, takerFee, products, changeSettings]);
 
   const updateProductList = useCallback((index, value) => {

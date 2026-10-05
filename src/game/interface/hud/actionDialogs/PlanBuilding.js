@@ -130,7 +130,7 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
         />
       </ActionDialogBody>
 
-      {planningEligibility.reason && <p role="status">{planningEligibility.reason}</p>}
+      {planningEligibility.status === 'blocked' && planningEligibility.reason && <p role="status">{planningEligibility.reason}</p>}
       <ActionDialogFooter
         {...props}
         crewAvailableTime={crewTimeRequirement}

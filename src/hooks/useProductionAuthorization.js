@@ -24,8 +24,9 @@ const useProductionAuthorization = ({ kind, crew, facility, origin, destination,
   const decision = authorize('production', [request], entities);
   const checks = productionChecks(request).map(([method, args]) => authorize(method, args, entities));
   const acquisitions = { lease, purchase };
-  const allowed = !lease && !purchase ? decision.status === 'allowed'
-    : checks.every((check, index) => check.status === 'allowed' || acquisitionMatches(check, index, request, acquisitions));
+  const hasSelections = !!(kind === 'extract' ? deposit : origin) && (kind === 'assemble' || !!destination);
+  const allowed = hasSelections && (!lease && !purchase ? decision.status === 'allowed'
+    : checks.every((check, index) => check.status === 'allowed' || acquisitionMatches(check, index, request, acquisitions)));
   const checkCurrent = async () => {
     if (!lease && !purchase) return recheckAuthorization('production', [{ ...request, duration }], entities);
     let finalRequest = request;
@@ -51,7 +52,10 @@ const useProductionAuthorization = ({ kind, crew, facility, origin, destination,
     }
     return result;
   };
-  return { allowed, recheck, completionTime, message: (allowed ? null : checks.some((check) => check.status === 'unresolved')
-    ? 'Checking production permissions…' : 'Access must cover this job through completion. Extend expiring leases or choose another facility or destination.'), decision };
+  const denied = hasSelections && !allowed && checks.some((check, index) =>
+    check.status === 'denied' && !acquisitionMatches(check, index, request, acquisitions));
+  const message = denied
+    ? 'Access must cover this job through completion. Extend expiring leases or choose another facility or destination.' : null;
+  return { allowed, recheck, completionTime, message, decision };
 };
 export default useProductionAuthorization;

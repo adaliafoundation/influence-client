@@ -1,4 +1,3 @@
-import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { Building, Entity } from '@influenceth/sdk';
 
 import useCrewContext from '~/hooks/useCrewContext';
@@ -23,8 +22,6 @@ const AdminBuilding = ({}) => {
     <>
       <Scrollable>
         <LotTitleArea lot={lot} />
-
-        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
 
         {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={lot?.building} />

@@ -113,7 +113,7 @@ const applyCrewMarkerTexture = async (crewMarker, crewmate, textureLoader, shoul
   material.needsUpdate = true;
 };
 
-const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotPosition, radius }) => {
+const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius }) => {
   const blockTime = useBlockTime();
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
@@ -253,7 +253,11 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     return crews;
   }, [accountAddress, activeCrewsDisplay, asteroidId, blockTime, crewMovementActivity, ongoing]);
   const activeCrewTravel = ongoingTravel[crew?.id];
-  const activeCrewIsMoving = !!activeCrewTravel?.curve;
+  const activeCrewStationPosition = useMemo(() => {
+    if (!accountAddress || crew?._location?.asteroidId !== asteroidId || !crew?._location?.lotIndex) return null;
+    return new Vector3(...getLotPosition(crew._location.lotIndex));
+  }, [accountAddress, asteroidId, crew?._location?.asteroidId, crew?._location?.lotIndex, getLotPosition]);
+  const activeCrewIsVisible = !!(activeCrewTravel?.curve || activeCrewStationPosition);
 
   // static stuffs
   const main = useRef(new Group());
@@ -334,13 +338,13 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     main.current.add(activeCrewArc.current);
     main.current.add(highlightedCrewArc.current);
 
-    // add 2x crew indicators
+    // Render crew indicators over terrain so surface-level endpoints cannot clip the portraits.
     [activeCrewMarker.current, highlightedCrewMarker.current] = [0, 1].map((i) => {
       const bgSprite = new Sprite(
         new SpriteMaterial({
           color: i === 0 ? activeCrewColor : spriteBorderColor,
           map: textureLoader.current.load(`${process.env.PUBLIC_URL}/textures/crew-marker.png`),
-          // depthTest: false,
+          depthTest: false,
           depthWrite: false,
           opacity: 0,
           transparent: true,
@@ -353,7 +357,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
         new SpriteMaterial({
           color: 0xffffff,
           map: null,
-          // depthTest: false,
+          depthTest: false,
           depthWrite: false,
           opacity: 0
         })
@@ -459,7 +463,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   // handle textures for active crew indicator
   useEffect(() => {
     let isCurrent = true;
-    if (activeCrewIsMoving && activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
+    if (activeCrewIsVisible && activeCrewMarker.current?.children?.[1]?.material && captain?.Crewmate) {
       applyCrewMarkerTexture(
         activeCrewMarker.current,
         captain,
@@ -471,16 +475,16 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       isCurrent = false;
       clearCrewMarkerTexture(activeCrewMarker.current);
     }
-  }, [activeCrewIsMoving, captain]);
+  }, [activeCrewIsVisible, captain]);
 
   useEffect(() => {
     [0, 1].forEach((i) => {
       if (activeCrewMarker.current?.children?.[i]?.material) {
-        activeCrewMarker.current.children[i].material.opacity = activeCrewIsMoving ? 1 : 0;
+        activeCrewMarker.current.children[i].material.opacity = activeCrewIsVisible ? 1 : 0;
         activeCrewMarker.current.children[i].material.needsUpdate = true;
       }
     });
-  }, [activeCrewIsMoving])
+  }, [activeCrewIsVisible])
 
   // add geometry for the active crew arc
   useEffect(() => {
@@ -577,10 +581,6 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
     }
   }, [cardHovered, hovered, selected]);
 
-  const crewMarkerScale = useMemo(() => (
-    Math.max(crewMarkerMinScale, Math.min(Math.sqrt(cameraAltitude / 10000), crewMarkerMaxScale))
-  ), [cameraAltitude]);
-  const hopperScale = useMemo(() => 0.3 * crewMarkerScale, [crewMarkerScale]);
   const shouldBeActiveCrewHopperIndex = useMemo(() =>
     Object.keys(ongoingTravel).filter((c) => !ongoingTravel[c].hideHopper).findIndex((c) => Number(c) === crew?.id),
     [crew, ongoingTravel]
@@ -599,8 +599,13 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
   //   console.log(`over ${timing.current.tally} iterations: ${(timing.current.total / timing.current.tally).toFixed(3)}ms`);
   // }, 1000);
   useFrame((state) => {
-    if (!Object.keys(ongoingTravel).length) return;
+    if (!Object.keys(ongoingTravel).length && !activeCrewStationPosition) return;
     if (!hoppersMesh.current) return;
+
+    // Read the live camera: React's terrain altitude pauses during automated zooms.
+    const cameraAltitude = Math.max(0, controls.object.position.length() - radius);
+    const crewMarkerScale = Math.max(crewMarkerMinScale, Math.min(Math.sqrt(cameraAltitude / 10000), crewMarkerMaxScale));
+    const hopperScale = 0.3 * crewMarkerScale;
 
     // if arcs present, animate them
     if (arcTime.current) {
@@ -625,6 +630,11 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, cameraAltitude, getLotP
       localUp.setLength(0.5 * crewMarkerHeight * crewMarkerScale),
       localOut.setLength(-Math.max(80, 150 * crewMarkerScale)) // towards camera (above surface)
     );
+
+    if (!activeCrewTravel?.curve && activeCrewStationPosition && activeCrewMarker.current) {
+      activeCrewMarker.current.scale.setScalar(crewMarkerScale);
+      activeCrewMarker.current.position.addVectors(activeCrewStationPosition, crewIndicatorOffset.current);
+    }
 
     // timing.current.total += performance.now() - s;
     // timing.current.tally++;

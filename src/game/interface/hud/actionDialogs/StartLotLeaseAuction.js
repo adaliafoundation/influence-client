@@ -123,7 +123,6 @@ const StartLotLeaseAuction = ({ asteroid, lot, actionManager, stage, ...props })
           </FlexSectionInputBlock>
         </FlexSection>
 
-        {(controlAccess.status === 'unresolved' || tenantAccess.status === 'unresolved') && <div role="status">Checking auction permissions…</div>}
         {tenantAccess.status === 'allowed' && <div role="status">The recorded tenant still has permission to use this lot.</div>}
 
         <ActionDialogStats
