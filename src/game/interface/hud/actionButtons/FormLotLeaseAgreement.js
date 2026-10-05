@@ -20,14 +20,14 @@ import theme from '~/theme';
 
 // TODO: arguably, it would be more consistent to show this button in a disabled state, at least in some conditions
 const isVisible = ({ asteroid, lot, blockTime, crew, authorize }) => {
-  if (getLotLeaseEligibility({ asteroid, lot, authorize }).status !== 'allowed') return false;
+  const policy = lot && Permission.getPolicyDetails(lot, undefined, blockTime)[Permission.IDS.USE_LOT];
+  if (getLotLeaseEligibility({ asteroid, lot, crew, policyType: policy?.policyType, authorize }).status !== 'allowed') return false;
   let visible = false;
 
   const auctionStatus = getLotLeaseAuctionStatus({ asteroid, lot, blockTime });
   const isExpiredAuctionLease = !!(lot?.building && auctionStatus.expiredAgreement && !lot?._activeUseLotAgreement);
 
   // Lease offers are presentation data, not evidence of current USE_LOT access.
-  const policy = lot && Permission.getPolicyDetails(lot, undefined, blockTime)[Permission.IDS.USE_LOT];
   visible = !!policy && [Permission.POLICY_IDS.PREPAID, Permission.POLICY_IDS.CONTRACT].includes(policy.policyType);
 
   if (!visible && isExpiredAuctionLease && auctionStatus.isAuctionAvailable) {
@@ -50,8 +50,8 @@ const isVisible = ({ asteroid, lot, blockTime, crew, authorize }) => {
 
 const FormLotLeaseAgreement = ({ asteroid, blockTime, crew, lot, simulation, simulationActions, _disabled }) => {
   const { authorize } = useCrewContext();
-  const leaseEligibility = getLotLeaseEligibility({ asteroid, lot, authorize });
   const { currentPolicy, pendingChange } = useAgreementManager(lot, Permission.IDS.USE_LOT);
+  const leaseEligibility = getLotLeaseEligibility({ asteroid, lot, crew, policyType: currentPolicy?.policyType, authorize });
   const setCoachmarkRef = useCoachmarkRefSetter();
 
   const onSetAction = useStore(s => s.dispatchActionDialog);

@@ -163,15 +163,18 @@ export function CrewProvider({ children }) {
   // null while any of those are true
   const crewsAndCrewmatesReady = useMemo(() => !!crewmateMap && TIME_ACCELERATION, [crewmateMap, TIME_ACCELERATION]);
 
-  // update crews' _ready value
+  const crewsWithCrewmates = useMemo(() => (rawCrews || []).map((crew) => ({
+    ...crew,
+    _crewmates: (crew.Crew.roster || []).map(id => crewmateMap?.[id]).filter(Boolean)
+  })), [rawCrews, crewmateMap]);
+
+  // Keep roster references stable across clock updates so editors retain unsaved changes.
   const crews = useMemo(() => {
     if (!crewsAndCrewmatesReady || !rawCrews) return [];
-    return rawCrews.map((rawCrew) => {
+    return crewsWithCrewmates.map((rawCrew) => {
       // Hydration must not mutate query data or reuse a previous crew snapshot.
       const c = { ...rawCrew, Crew: { ...rawCrew.Crew } };
       if (!!crewmateMap) {
-        c._crewmates = c.Crew.roster.map((i) => crewmateMap[i]).filter((c) => !!c);
-
         // TODO: should all `notFurtherModified` bonuses be calculated just once here (instead of everywhere else)
 
         const foodBonuses = getCrewAbilityBonuses([Crewmate.ABILITY_IDS.FOOD_CONSUMPTION_TIME, Crewmate.ABILITY_IDS.FOOD_RATIONING_PENALTY], c);
@@ -201,7 +204,7 @@ export function CrewProvider({ children }) {
 
       return c;
     })
-  }, [blockTime, crewmateMap, crewsAndCrewmatesReady, CREW_SCHEDULE_BUFFER, rawCrews]);
+  }, [blockTime, crewmateMap, crewsAndCrewmatesReady, CREW_SCHEDULE_BUFFER, crewsWithCrewmates, rawCrews]);
 
   const accountCrewIds = useMemo(() => (rawCrews || []).map((c) => c.id), [rawCrews]);
 

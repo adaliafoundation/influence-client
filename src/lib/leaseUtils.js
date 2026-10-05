@@ -3,11 +3,20 @@ import { Authorization, Building, Entity, Permission } from '@influenceth/sdk';
 import { prepaidPermissionEnd } from './lotUsageAuthorization';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import { safeBigInt } from '~/lib/utils';
+import { normalizeAuthorizationEntity } from './authorization';
 
 // A lot occupied by the asteroid controller's building cannot be leased.
 // SDK control checks include different crews delegated to the same account.
-export const getLotLeaseEligibility = ({ asteroid, lot, authorize }) => {
+export const getLotLeaseEligibility = ({ asteroid, lot, crew, policyType, authorize }) => {
   if (!lot) return { status: 'unresolved' };
+  const tenant = normalizeAuthorizationEntity(lot).UseLot;
+  if (tenant === undefined) return { status: 'unresolved' };
+  const canReplaceOwnLease = policyType === Permission.POLICY_IDS.PREPAID && Authorization.sameEntity(tenant, crew);
+  if (tenant && !canReplaceOwnLease) {
+    const access = authorize('can', [tenant, lot, Permission.IDS.USE_LOT], [tenant, lot]);
+    if (access.status === 'unresolved') return access;
+    if (access.status === 'allowed') return { status: 'denied', reason: 'Lot already leased' };
+  }
   if (!lot.building) return { status: 'allowed' };
   const controller = asteroid?.Control?.controller;
   if (!controller?.id) return { status: 'unresolved' };

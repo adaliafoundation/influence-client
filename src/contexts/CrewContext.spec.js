@@ -5,6 +5,7 @@ import CrewContext, { CrewProvider } from './CrewContext';
 import useWalletCrews from '~/hooks/useWalletCrews';
 import api from '~/lib/api';
 import useStore from '~/hooks/useStore';
+import useSession from '~/hooks/useSession';
 
 jest.mock('~/lib/actingCrewAuthorization', () => ({ recheckActingCrew: jest.fn() }), { virtual: true });
 jest.mock('@influenceth/sdk', () => ({
@@ -14,7 +15,7 @@ jest.mock('~/appConfig', () => ({ appConfig: { get: () => undefined } }), { virt
 jest.mock('~/hooks/useAuthorizationService', () => () => ({}), { virtual: true });
 jest.mock('~/hooks/useConstants', () => () => ({ data: { CREW_SCHEDULE_BUFFER: 10, TIME_ACCELERATION: 1 } }), { virtual: true });
 jest.mock('~/hooks/useEntity', () => () => ({}), { virtual: true });
-jest.mock('~/hooks/useSession', () => () => ({ accountAddress: 'owner', authenticated: true, blockTime: 100, token: 'token' }), { virtual: true });
+jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useSimulationState', () => () => null, { virtual: true });
 jest.mock('~/hooks/useOwnedCrews', () => () => ({}), { virtual: true });
 jest.mock('~/hooks/useWalletCrews', () => jest.fn(), { virtual: true });
@@ -42,6 +43,7 @@ const Probe = () => {
 const tree = () => <QueryClientProvider client={client}><CrewProvider><Probe /></CrewProvider></QueryClientProvider>;
 beforeEach(() => {
   jest.clearAllMocks();
+  useSession.mockReturnValue({ accountAddress: 'owner', authenticated: true, blockTime: 100, token: 'token' });
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   rawCrew = Object.freeze({ id: 1, Location: { location: { id: 2, label: 5 } }, Crew: Object.freeze({ roster: [10, 11], lastFed: 0, readyAt: 0 }) });
   client.setQueryData(crewKey, [rawCrew]);
@@ -60,11 +62,30 @@ test('publishes a new selected crew when crewmate details change without a roste
   });
   rerender(tree());
   expect(context.crew).not.toBe(previous);
+  expect(context.crew._crewmates).not.toBe(previous._crewmates);
   expect(minerCount).toBe(1);
   expect(useStore(s => s.dispatchCrewSelected)).not.toHaveBeenCalled();
   expect(previous._crewmates[1].Crewmate.class).toBe(0);
   expect(rawCrew._crewmates).toBeUndefined();
   expect(rawCrew.Crew.lastFed).toBe(0);
+});
+
+test('block updates preserve the editable roster while readiness continues to change', () => {
+  const busyCrew = { ...rawCrew, Crew: { ...rawCrew.Crew, readyAt: 200 } };
+  useWalletCrews.mockReturnValue({ data: [busyCrew], isLoading: false });
+  const { rerender } = render(tree());
+  const previous = context.crew;
+  expect(previous._ready).toBe(false);
+  expect(previous._readyToSequence).toBe(false);
+
+  for (const blockTime of [150, 195, 200]) {
+    useSession.mockReturnValue({ accountAddress: 'owner', authenticated: true, blockTime, token: 'token' });
+    rerender(tree());
+    expect(context.crew._crewmates).toBe(previous._crewmates);
+    expect(context.crew._ready).toBe(blockTime >= 200);
+    expect(context.crew._readyToSequence).toBe(blockTime >= 190);
+  }
+  expect(previous._ready).toBe(false);
 });
 
 test('refreshReadyAt replaces cached state without mutating the previous snapshot or roster', async () => {

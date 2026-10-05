@@ -173,7 +173,7 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
 
   const isLotLease = entity?.label === Entity.IDS.LOT && permission === Permission.IDS.USE_LOT;
   const lotLeaseCreationBlocked = isLotLease && !isExtension && !isTermination
-    && getLotLeaseEligibility({ asteroid, lot: entity, authorize }).status !== 'allowed';
+    && getLotLeaseEligibility({ asteroid, lot: entity, crew, policyType: currentPolicy?.policyType, authorize }).status !== 'allowed';
   const auctionStatus = useMemo(
     () => isLotLease ? getLotLeaseAuctionStatus({ asteroid, lot: entity, blockTime }) : null,
     [asteroid, blockTime, entity, isLotLease]

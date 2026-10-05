@@ -1716,13 +1716,14 @@ const SelectionTableToggle = styled.div`
 
 export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, onClose, onSelected, open }) => {
   const { accountCrewIds, crewCan } = useCrewContext();
-  const [selection, setSelection] = useState(initialSelection);
+  const [selectionId, setSelectionId] = useState(initialSelection?.id);
+  const selection = options.find(sample => sample.id === selectionId);
   const [showForSale, setShowForSale] = useState(true);
   const [showUsed, setShowUsed] = useState(true);
 
   useEffect(() => {
-    setSelection(initialSelection);
-  }, [initialSelection]);
+    setSelectionId(initialSelection?.id);
+  }, [initialSelection?.id, open]);
 
   const onComplete = useCallback(() => {
     onSelected(selection);
@@ -1789,7 +1790,7 @@ export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, on
             {samples.map((sample) => (
               <SelectionTableRow
                 key={sample.id}
-                onClick={() => setSelection(sample)}
+                onClick={() => setSelectionId(sample.id)}
                 selectedRow={selection?.id === sample.id}
                 style={{ height: 36 }}>
                 <td style={{ color: theme.colors.resources[keyify(Product.TYPES[sample.Deposit.resource]?.category)] }}>
@@ -2650,13 +2651,13 @@ const InventorySelectionDialogContent = ({
   }, []);
 
   useEffect(() => {
-    setFilterItemIds(
-      itemIds?.length
-      ? [...itemIds]
+    setFilterItemIds(previous => {
+      if (!itemIds?.length) return null;
+      if (previous && Object.keys(previous).length === itemIds.length && itemIds.every(id => id in previous)) return previous;
+      return [...itemIds]
         .sort((a, b) => Product.TYPES[a].name < Product.TYPES[b].name ? -1 : 1)
-        .reduce((acc, k) => ({ ...acc, [k]: true }), {})
-      : null
-    );
+        .reduce((acc, k) => ({ ...acc, [k]: true }), {});
+    });
   }, [itemIds]);
 
   const toggleFilterItem = useCallback((itemId) => {

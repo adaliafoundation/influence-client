@@ -18,7 +18,8 @@ const useActionCrew = (currentAction) => {
   const { data: accountCrews } = useOwnedCrews(_cachedData?.crew?.Crew?.delegatedTo);
   const accountCrewIds = useMemo(() => (accountCrews || []).map((c) => c.id), [accountCrews]);
 
-  return useMemo(() => {
+  const timeAcceleration = liveCrew?._timeAcceleration;
+  const cachedCrew = useMemo(() => {
     if (_cachedData) {
       // rebuild pseudo-crew from cached data
       const c = {
@@ -29,7 +30,7 @@ const useActionCrew = (currentAction) => {
         // pass in _now to be able to calculate food bonus at the time of action start
         // (_timeAcceleration is not actually part of crew anyway, so assume it is static)
         _now: startTime,
-        _timeAcceleration: liveCrew?._timeAcceleration,
+        _timeAcceleration: timeAcceleration,
 
         // (they must have been ready when action started)
         _actionTypeTriggered: false,
@@ -64,8 +65,9 @@ const useActionCrew = (currentAction) => {
 
       return c;
     }
-    return liveCrew;
-  }, [_cachedData, accountCrewIds, liveCrew, liveStation, startTime]);
+    return null;
+  }, [_cachedData, accountCrewIds, timeAcceleration, liveStation, startTime]);
+  return cachedCrew || liveCrew;
 };
 
 export default useActionCrew;

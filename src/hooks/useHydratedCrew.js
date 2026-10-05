@@ -17,13 +17,14 @@ const useHydratedCrew = (id) => {
   const blockTime = useBlockTime();
   
   const accountCrewIds = useMemo(() => (accountCrews || []).map((c) => c.id), [accountCrews]);
+  const hydratedCrewmates = useMemo(() => (crewmates || []).map(c => cloneDeep(c)), [crewmates]);
 
   return useMemo(() => {
     let data = null;
     let isLoading = true;
     if (crew && !crewLoading && !crewmatesLoading && !constantsLoading && !siblingsLoading) {
       data = cloneDeep(crew);
-      data._crewmates = (crewmates || []).map((c) => cloneDeep(c));
+      data._crewmates = hydratedCrewmates;
       data._location = locationsArrToObj(crew.Location?.locations || []);
       data._ready = blockTime >= data.Crew?.readyAt;
       data._readyToSequence = blockTime + CREW_SCHEDULE_BUFFER >= data.Crew?.readyAt;
@@ -46,7 +47,7 @@ const useHydratedCrew = (id) => {
       isLoading = false;
     }
     return { data, isLoading };
-  }, [accountCrewIds, blockTime, crew, crewmates, crewLoading, crewmatesLoading, dataUpdatedAt, siblingsLoading, CREW_SCHEDULE_BUFFER]);
+  }, [accountCrewIds, blockTime, crew, hydratedCrewmates, crewLoading, crewmatesLoading, constantsLoading, dataUpdatedAt, siblingsLoading, CREW_SCHEDULE_BUFFER]);
 };
 
 export default useHydratedCrew;
