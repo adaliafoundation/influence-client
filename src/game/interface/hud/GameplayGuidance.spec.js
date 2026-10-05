@@ -28,6 +28,7 @@ const useSession = require('~/hooks/useSession').default;
 const useSimulationEnabled = require('~/hooks/useSimulationEnabled').default;
 const useManager = require('~/hooks/actionManagers/useStarterMissionManager').default;
 const { default: useGuidance, useMissionScope } = require('~/hooks/useMissionGuidance');
+const { gameplayGuides } = require('~/lib/missionGuidance');
 const GameplayGuidance = require('./GameplayGuidance').default;
 let store, view, start;
 const renderGuide = () => render(<ThemeProvider theme={{}}><GameplayGuidance /></ThemeProvider>);
@@ -61,18 +62,19 @@ test('Show me how explicitly launches guidance after acceptance', () => {
 });
 
 test('guidance remains open during and after timers until explicitly closed', () => {
+  const { pages } = gameplayGuides.land;
   store.missionGuidance = { scope: 'campaign-scope', topic: 'land', missionId: 0, objectiveIndex: 0 };
   useCrewContext.mockReturnValue({ crew: { Crew: { readyAt: 200 } } });
   const rendered = renderGuide();
-  expect(screen.getByText(/Click the location pin/)).toBeVisible();
-  for (let page = 0; page < 4; page++) fireEvent.click(screen.getByText('Next'));
-  expect(screen.getByText(/Planning is enough/)).toBeVisible();
+  expect(screen.getByText(pages[0])).toBeVisible();
+  for (let page = 1; page < pages.length; page++) fireEvent.click(screen.getByText('Next'));
+  expect(screen.getByText(pages[pages.length - 1])).toBeVisible();
   fireEvent.click(screen.getByText('Next'));
   expect(screen.getByRole('status')).toHaveTextContent('work underway');
   useCrewContext.mockReturnValue({ crew: { Crew: { readyAt: 0 } } });
   rendered.rerender(<ThemeProvider theme={{}}><GameplayGuidance /></ThemeProvider>);
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  expect(screen.getByText(/Planning is enough/)).toBeVisible();
+  expect(screen.getByText(pages[pages.length - 1])).toBeVisible();
   expect(store.dispatchMissionGuidance).not.toHaveBeenCalled();
   expect(screen.queryByText('Next')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Close guidance' })).toBeVisible();
