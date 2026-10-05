@@ -45,12 +45,13 @@ test('subscribes to the crew and target, reconciles component updates through ca
   expect(socket.unregisterConnectionHandler).toHaveBeenCalledWith('connection');
 });
 
-test('polls unbound and unknown evidence without treating either as transaction failure', () => {
+test('polls only unresolved evidence, not settled unbound entities or failed requests', () => {
   renderHook(() => useMissionBindings([request]), { wrapper });
   const query = useQueries.mock.calls[0][0].queries[0];
   expect(query.queryKey).toEqual(['missionBindings', 'sepolia', 'api', '123', String(Entity.packEntity(request.subject)), 'Process', String(Entity.packEntity(request.entity)), 2]);
   expect(query.refetchInterval({ state: { data: { status: 'unknown' } } })).toBe(5000);
-  expect(query.refetchInterval({ state: { data: { status: 'unbound' } } })).toBe(5000);
+  expect(query.refetchInterval({ state: { data: { status: 'unbound' } } })).toBe(false);
+  expect(query.refetchInterval({ state: {} })).toBe(false);
   expect(query.refetchInterval({ state: { data: { status: 'matched' } } })).toBe(false);
   expect(query.refetchInterval({ state: { data: { status: 'mismatched' } } })).toBe(false);
 });

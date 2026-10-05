@@ -16,7 +16,7 @@ const RepoBuilding = ({ asteroid, crew, lot, onSetAction, _disabled }) => {
 
   const disabledReason = useMemo(() => {
     if (_disabled || !!currentRepo) return 'loading...';
-    if (authorization.status !== 'allowed') return authorization.status === 'unresolved' ? 'checking repossession rights' : 'repossession restricted';
+    if (authorization.status !== 'allowed') return authorization.status === 'unresolved' ? true : 'repossession restricted';
     if (!currentRepo) return getCrewDisabledReason({ asteroid, crew, requireSurface: false });
     return '';
   }, [_disabled, asteroid, crew, currentRepo, authorization]);

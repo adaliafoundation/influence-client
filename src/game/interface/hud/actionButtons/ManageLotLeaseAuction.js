@@ -39,7 +39,7 @@ const ManageLotLeaseAuction = ({ asteroid, crew, lot, blockTime, onSetAction, _d
   const disabledReason = useMemo(() => {
     if (_disabled || !!currentAuctionChange) return 'loading...';
     if (!auctionStatus.isAuctionActive && tenantAccess.status !== 'denied') {
-      return tenantAccess.status === 'allowed' ? 'tenant still has lot access' : 'checking tenant access';
+      return tenantAccess.status === 'allowed' ? 'tenant still has lot access' : true;
     }
     return getCrewDisabledReason({ asteroid, crew });
   }, [_disabled, asteroid, crew, currentAuctionChange, auctionStatus.isAuctionActive, tenantAccess]);

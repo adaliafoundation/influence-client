@@ -1,9 +1,9 @@
 import { useActionSubmission } from '../contexts/ActionSubmissionContext';
 import { useContext, useMemo } from 'react';
 import styled from 'styled-components';
-import LoadingBorder from './LoadingBorder';
+import ButtonLoadingBar from './ButtonLoadingBar';
+import useTransactionSubmission from '../hooks/useTransactionSubmission';
 import { Tooltip } from 'react-tooltip';
-import BarLoader from 'react-spinners/BarLoader';
 import { uniqueId } from 'lodash';
 
 import useStore from '~/hooks/useStore';
@@ -79,7 +79,7 @@ export const StyledButton = styled.button`
   font-family: 'Jura', sans-serif;
   font-size: ${p => p.sizeParams.font}px;
   min-width: ${p => p.width || p.sizeParams.width}px;
-  padding: 3px; /* must match loadingCss.top */
+  padding: 3px; /* Matches the top-line loader inset. */
   pointer-events: auto;
   position: relative;
   text-transform: ${p => p.textTransform || p.sizeParams.textTransform || 'uppercase'};
@@ -171,20 +171,14 @@ const DisabledTooltip = styled.span`
   padding-left; 6px;
 `;
 
-const loadingStyle = {
-  left: 0,
-  position: 'absolute',
-  right: 0,
-  top: 3,
-  width: '100%'
-};
-
 const StandardButton = (props) => {
   const {
     'data-tooltip-place': dataPlace,
     'data-tooltip-content': dataTip,
     loading,
     onClick,
+    onTransactionComplete,
+    submissionId,
     setRef,
     children,
     ...restProps } = props;
@@ -204,27 +198,21 @@ const StandardButton = (props) => {
     <>
       {props.badge ? <StyledBadge value={props.badge} {...nonStyleProps} sizeParams={sizeParams} /> : null}
       <StyledButton
-        aria-busy={props.loadingAnimation || undefined}
+        aria-busy={!!loading || undefined}
         onClick={_onClick}
         data-tooltip-content={dataTip}
         data-tooltip-place={dataPlace || "right"}
         sizeParams={sizeParams}
         background={sizeParams.background}
         {...restProps}>
-        {props.loadingAnimation && (
-          <LoadingBorder $rectangular $cornerSize={sizeParams.line} $thickness={3}
-            style={props.flip ? { transform: 'scaleX(-1)' } : undefined} />
-        )}
         <InnerContainer flip={restProps.flip} sizeParams={sizeParams}>
           {loading && (
-            <BarLoader
-              color={props.contrastColor || (
+            <ButtonLoadingBar
+              color={props.isTransaction ? theme.colors.txButton : props.contrastColor || (
                 props.color
                   ? getContrastText(props.color)
-                  : (props.isTransaction ? theme.colors.txButton : theme.colors.main)
-              )}
-              cssOverride={loadingStyle}
-              height={1} />
+                  : theme.colors.main
+              )} />
           )}
           {children}
         </InnerContainer>
@@ -249,15 +237,16 @@ const StandardButton = (props) => {
 const TransactionButton = (props) => {
   const { promptingTransaction } = useContext(ChainTransactionContext);
   const submission = useActionSubmission();
-  const busy = submission?.busy || promptingTransaction;
+  const standalone = useTransactionSubmission();
+  const busy = submission?.busy || standalone.busy || promptingTransaction || props.loading;
   const tooltipPlace = props['data-tooltip-place'];
   const activeButton = submission?.activeButton;
   const tooltipId = useMemo(() => uniqueId('alt_button_tooltip_'), []);
+  const buttonId = props.submissionId || tooltipId;
   const extraProps = useMemo(() => {
     if (busy) {
       return {
         disabled: true,
-        loadingAnimation: !activeButton || activeButton === tooltipId,
         disabledTooltip: {
           'data-tooltip-content': 'Waiting for action confirmation…',
           'data-tooltip-place': tooltipPlace || 'top',
@@ -266,12 +255,21 @@ const TransactionButton = (props) => {
       };
     }
     return {};
-  }, [busy, tooltipId, tooltipPlace, activeButton]);
+  }, [busy, tooltipId, tooltipPlace]);
+
+  const loading = props.loading || standalone.busy || (submission?.busy && (!activeButton || activeButton === buttonId));
+  const onClick = async event => {
+    const result = await (submission
+      ? submission.run(() => props.onClick?.(event), buttonId)
+      : standalone.run(() => props.onClick?.(event)));
+    if (result?.status === 'indexed') props.onTransactionComplete?.(result);
+    return result;
+  };
 
   return (
     <>
       <Tooltip id={tooltipId}></Tooltip>
-      <StandardButton {...props} {...extraProps} loading={submission ? false : props.loading} onClick={submission ? event => submission.run(() => props.onClick?.(event), tooltipId) : props.onClick} />
+      <StandardButton {...props} {...extraProps} loading={loading} onClick={onClick} />
     </>
   );
 };

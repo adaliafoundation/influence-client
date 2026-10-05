@@ -20,6 +20,7 @@ import {
   SettingsIcon,
   AssetPortalIcon,
   BugIcon,
+  DiscordIcon,
   DownloadIcon,
   InboxIcon
 } from '~/components/Icons';
@@ -496,8 +497,12 @@ const Launcher = (props) => {
     }
   }, [login, loginPrompt]);
 
-  const openHelpChannel = useCallback(() => {
-    window.open(appConfig.get('Url.help'), '_blank', 'noopener');
+  const openDiscord = useCallback(() => {
+    window.open(appConfig.get('Url.discord'), '_blank', 'noopener');
+  }, []);
+
+  const openBugReport = useCallback(() => {
+    window.open(appConfig.get('Url.bugReport'), '_blank', 'noopener');
   }, []);
 
   return (
@@ -544,14 +549,14 @@ const Launcher = (props) => {
 
             <NavItem isRule />
 
-            <NavItem
-              onClick={() => dispatchLauncherPage('bridge')}
-              selected={launcherPage === 'bridge'}>
-              <AssetPortalIcon /> Asset Portal
-            </NavItem>
+            {appConfig.get('Url.discord') && (
+              <NavItem onClick={openDiscord} isExternal>
+                <DiscordIcon /> Discord
+              </NavItem>
+            )}
 
             {appConfig.get('Url.bugReport') && (
-              <NavItem onClick={openHelpChannel} isExternal>
+              <NavItem onClick={openBugReport} isExternal>
                 <BugIcon /> Bug Report
               </NavItem>
             )}
@@ -561,6 +566,13 @@ const Launcher = (props) => {
                 <DownloadIcon /> Desktop App
               </NavItem>
             )}
+
+            <NavItem
+              onClick={() => dispatchLauncherPage('bridge')}
+              selected={launcherPage === 'bridge'}
+              isExternal>
+              <AssetPortalIcon /> Asset Portal
+            </NavItem>
 
           </Nav>
         )}

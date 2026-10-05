@@ -38,7 +38,7 @@ const EntityDescriptionForm = ({ buttonSize = 'small', buttonText = 'Update', en
 
   const saveDescChange = useCallback(async () => {
     if (isValidAnnotation(desc)) {
-      saveAnnotation(desc);
+      return saveAnnotation(desc);
     }
   }, [entity?.id, desc]);
 

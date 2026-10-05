@@ -306,6 +306,7 @@ const ActionDialog = ({ type, params }) => {
     if (useStore.getState().actionDialog === dialog) useStore.getState().dispatchActionDialog(...args);
   };
   const onSuccess = transactionKey => {
+    params?.onSuccess?.(transactionKey);
     const completion = actionDialogCompletion(type, transactionKey);
     if (completion === 'construct') {
       const state = useStore.getState();

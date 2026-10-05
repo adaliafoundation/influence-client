@@ -1515,7 +1515,7 @@ export const CrewSelectionDialog = ({ crews, disabler, onClose, onSelected, open
                   : ''
               )
           }
-          data-tooltip-content={disabled || null}
+          data-tooltip-content={typeof disabled === 'string' ? disabled : null}
           data-tooltip-id="selectionDialogTooltip"
           style={{ marginBottom: 8, opacity: disabled ? 0.5 : 1, width: '100%' }} />
       </div>
@@ -1808,7 +1808,7 @@ export const CoreSampleSelectionDialog = ({ lotId, options, initialSelection, on
                 <td>
                   {!crewCan(Permission.IDS.USE_DEPOSIT, sample) && sample.PrivateSale?.amount > 0
                     ? <><SwayIcon /> {formatFixed(sample.PrivateSale?.amount / 1e6, 0)}</>
-                    : <span style={{ opacity: 0.5 }}>{crewCan(Permission.IDS.USE_DEPOSIT, sample) ? 'Access granted' : 'Checking access'}</span>
+                    : <span style={{ opacity: 0.5 }}>—</span>
                   }
                 </td>
               </SelectionTableRow>
@@ -2087,7 +2087,7 @@ const LandingSelectionDialogContent = ({ asteroid, deliveryMode, initialSelectio
                     onClick={() => entity._authorization.status === 'allowed' && setSelection(entity._lotIndex)}
                     disabledRow={entity._authorization.status !== 'allowed'}
                     selectedRow={entity._lotIndex === selection}>
-                    <td>{formatters.buildingName(entity)}{entity._authorization.status !== 'allowed' ? ' — Checking access' : ''}</td>
+                    <td>{formatters.buildingName(entity)}</td>
                     <td>{Building.TYPES[entity.Building?.buildingType].name}</td>
                     <td><LocationIcon /> {formatters.lotName(entity._lotIndex)}</td>
                     <td>{formatTimer(Time.toRealDuration(entity?.Dock ? Dock.Entity.getGroundDelay(entity) : 0, crew?._timeAcceleration))}</td>
@@ -2713,11 +2713,10 @@ const InventorySelectionDialogContent = ({
       onClose={onClose}
       onComplete={onComplete}
       open={open}
-      style={{ width: 820, maxWidth: 820 }}
+      style={{ width: 820, maxWidth: 820, height: '80%' }}
       title={isSourcing && soloItem
         ? `Available ${Product.TYPES[soloItem].name}s`
         : 'Available Inventories'}>
-      {(inventoriesLoading || checking) && <div role="status">Checking additional inventories…</div>}
       <FilterRow>
         <div>
           <TextInput
@@ -5431,6 +5430,7 @@ export const ActionDialogFooter = ({
                   disabled={nativeBool(disabled || userIsLoading || missionBlocked)}
                   isTransaction
                   loading={reactBool(buttonsLoading)}
+                  submissionId="dialog-go"
                   onClick={onBeforeGo}>
                   {displayGoLabelPrice > 0
                     ? (
@@ -5461,6 +5461,7 @@ export const ActionDialogFooter = ({
                       disabled={nativeBool(disabled || missionBlocked)}
                       isTransaction
                       loading={reactBool(buttonsLoading)}
+                      submissionId={`dialog-finalize-${i}`}
                       onClick={a.onFinalize}>{a.finalizeLabel || 'Accept'}</Button>
                   ))}
                 </>

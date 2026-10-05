@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
-import { checkingAuthorization, entityKey, loadAuthorization, normalizeAuthorizationEntity } from '~/lib/authorization';
+import { checkingAuthorization, entityKey, evaluateAuthorization, loadAuthorization, normalizeAuthorizationEntity } from '~/lib/authorization';
 import { createAuthorizationLoader } from '~/lib/authorizationData';
 import api from '~/lib/api';
 
@@ -12,6 +12,16 @@ const serialize = (value, identityOnly = false) => JSON.stringify(value, (name, 
   }
   return typeof item === 'bigint' ? item.toString() : item;
 });
+
+// Amount edits change completion times, not the permission data needed to evaluate them.
+const timedSnapshotKey = (method, args, entities) => {
+  if (method === 'canUntil') return serialize([method, args.slice(0, 3), entities]);
+  if (method === 'production') {
+    const { completionTime, evaluationTime, duration, ...job } = args[0];
+    return serialize([method, job, entities]);
+  }
+  return null;
+};
 
 const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddress, selectedCrewId, queryClient, simulation }) => {
   const [revision, changed] = useReducer(n => n + 1, 0);
@@ -27,6 +37,7 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
   const hasBlockTime = blockTime != null;
   const scope = useMemo(() => new Map(), [provider, accountAddress, selectedCrewId, simulation, hasBlockTime]);
   const displayed = useMemo(() => new Map(), [scope]);
+  const timedSnapshots = useMemo(() => new Map(), [scope]);
   const currentScope = useRef(scope);
   currentScope.current = scope;
   const currentBlock = useRef();
@@ -40,6 +51,12 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
       .map(entity => [entityKey(entity), entity]));
     if (!updates.size) return;
     source.updateEntities?.([...updates.values()]);
+    for (const [key, snapshot] of timedSnapshots) {
+      if (snapshot.entities.some(entity => {
+        const update = updates.get(entityKey(entity));
+        return update && serialize({ ...entity, ...update }) !== serialize(entity);
+      })) timedSnapshots.delete(key);
+    }
     let updated = false;
     for (const request of scope.values()) {
       const records = request.entities;
@@ -52,7 +69,7 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
       updated = true;
     }
     if (updated) scheduleChange();
-  }, [scope, source, scheduleChange]);
+  }, [scope, source, timedSnapshots, scheduleChange]);
 
   useEffect(() => queryClient.getQueryCache().subscribe(event => {
     // React to actual component changes, never to invalidations or unrelated query traffic.
@@ -69,13 +86,21 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
     // Concurrent consumers may have different component projections of the same entity.
     // Keep both evaluations instead of replacing each other on every render.
     if (!scope.has(key)) {
-      scope.set(key, { method, args, entities, displayKey, version: 0, result: displayed.get(displayKey) || checkingAuthorization });
+      const snapshotKey = timedSnapshotKey(method, args, entities);
+      const snapshot = timedSnapshots.get(snapshotKey);
+      const local = snapshot && evaluateAuthorization({ ...snapshot, method, args, ...currentBlock.current });
+      const resolved = local && local.status !== 'unresolved';
+      scope.set(key, {
+        method, args, entities: snapshot?.entities || entities, displayKey, snapshotKey, version: 0,
+        started: !!resolved,
+        result: resolved ? { ...snapshot, ...local } : displayed.get(displayKey) || checkingAuthorization
+      });
       scheduleChange();
     }
     const request = scope.get(key);
     request.usedRevision = revision;
     return request.result;
-  }, [scope, displayed, revision, scheduleChange]);
+  }, [scope, displayed, timedSnapshots, revision, scheduleChange]);
 
   useEffect(() => {
     for (const [key, request] of scope) {
@@ -92,6 +117,7 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
       loadAuthorization({ ...request, api: source, provider, ...currentBlock.current }).then(result => {
         if (currentScope.current !== scope || scope.get(key) !== request || request.version !== version) return;
         displayed.set(request.displayKey, result);
+        if (request.snapshotKey && result.status !== 'unresolved') timedSnapshots.set(request.snapshotKey, result);
         request.result = result;
         request.entities = result.entities || request.entities;
         scheduleChange();
@@ -103,6 +129,7 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
     if (currentScope.current !== scope) return checkingAuthorization;
     const result = await loadAuthorization({ api: simulation ? source : api, provider, ...currentBlock.current, method, args, entities, fresh: !simulation });
     if (currentScope.current !== scope) return checkingAuthorization;
+    timedSnapshots.clear();
     updateEntities(result.entities || []);
     const displayKey = serialize([method, args], true);
     displayed.set(displayKey, result);
@@ -115,7 +142,7 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
     }
     changed();
     return result;
-  }, [scope, displayed, source, provider, simulation, updateEntities]);
+  }, [scope, displayed, timedSnapshots, source, provider, simulation, updateEntities]);
 
   const refreshAuthorization = useCallback(async (targets) => {
     const keys = new Set(targets.filter(Boolean).map(entityKey));
@@ -131,19 +158,24 @@ const useAuthorizationService = ({ provider, blockNumber, blockTime, accountAddr
       request.started = true;
       request.result = result;
       request.entities = result.entities || request.entities;
+      if (request.snapshotKey) {
+        timedSnapshots.delete(request.snapshotKey);
+        if (result.status !== 'unresolved') timedSnapshots.set(request.snapshotKey, result);
+      }
     }
     changed();
     // Each button decides from its own refreshed checks (including lease alternatives).
     return { status: 'allowed' };
-  }, [scope, displayed, source, provider, simulation]);
+  }, [scope, displayed, timedSnapshots, source, provider, simulation]);
 
   const retryAuthorization = useCallback(() => {
+    timedSnapshots.clear();
     for (const request of scope.values()) {
       request.started = false;
       request.version += 1;
     }
     changed();
-  }, [scope]);
+  }, [scope, timedSnapshots]);
   return { authorize, recheckAuthorization, refreshAuthorization, retryAuthorization };
 };
 export default useAuthorizationService;

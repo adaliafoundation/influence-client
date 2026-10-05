@@ -1,11 +1,13 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 
 import { BellIcon, EyeIcon, FinishAllIcon, LoggedEventsIcon } from '~/components/Icons';
 import CollapsibleSection from '~/components/CollapsibleSection';
+import Button from '~/components/ButtonAlt';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useActionItems from '~/hooks/useActionItems';
+import useActionItemTransitions from '~/hooks/useActionItemTransitions';
 import useCrewContext from '~/hooks/useCrewContext';
 import useGetActivityConfig from '~/hooks/useGetActivityConfig';
 import useSession from '~/hooks/useSession';
@@ -204,18 +206,9 @@ const AllAction = styled.div`
   pointer-events: all;
 `;
 
-const FinishAll = styled(AllAction)`
-  color: ${p => p.theme.colors.success};
-  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.3));
-  & > svg {
-    margin-left: 4px;
-    margin-right: 9px;
-    font-size: 150%;
-  }
-  &:hover {
-    color: white;
-    text-decoration: underline;
-  }
+const FinishAll = styled(Button)`
+  margin-top: 4px;
+  width: 100%;
 `;
 
 const UnhideAll = styled(AllAction)`
@@ -242,29 +235,7 @@ const ActionItems = () => {
   const openLauncher = useStore(s => s.dispatchLauncherPage);
   const missionRows = useMemo(() => simulationEnabled ? [] : getMissionObjectiveRows(view, manager.getPending),
     [simulationEnabled, view, manager.getPending]);
-  const [displayItems, setDisplayItems] = useState();
-
-  useEffect(() => {
-    if (displayItems) {
-      // TODO: maybe this should show new ones while transitioning out old ones?
-      // set to transition state
-      setDisplayItems((items) => {
-        items.forEach((item) => {
-          if (!allItems.find((i) => i.uniqueKey === item.uniqueKey)) {
-            item.transitionOut = true;
-          }
-        });
-        return items;
-      });
-
-      // after TRANSITION_TIME, update to post-transition
-      setTimeout(() => {
-        setDisplayItems(allItems);
-      }, TRANSITION_TIME);
-    } else {
-      setDisplayItems(allItems);
-    }
-  }, [allItems]);
+  const displayItems = useActionItemTransitions(allItems, TRANSITION_TIME);
 
   const selectedFilter = preferences?.filter || 'ready';
   const setSelectedFilter = useCallback(filter => setPreferences(scope, { filter }), [scope, setPreferences]);
@@ -303,7 +274,7 @@ const ActionItems = () => {
 
   const onFinishAll = useCallback(() => {
     if (isFinishingAll) return;
-    execute('FinishAllReady', { finishCalls: autoFinishCalls });
+    return execute('FinishAllReady', { finishCalls: autoFinishCalls });
   }, [autoFinishCalls, execute, isFinishingAll]);
 
   const tallies = useMemo(() => {
@@ -382,8 +353,8 @@ const ActionItems = () => {
                 </Filters>
               </TitleWrapper>
             )}>
-            {['all', 'ready'].includes(selectedFilter) && autoFinishCalls?.length > 1 && !isFinishingAll && (
-              <FinishAll onClick={onFinishAll}><FinishAllIcon /> Finish All Ready Items</FinishAll>
+            {['all', 'ready'].includes(selectedFilter) && (autoFinishCalls?.length > 1 || isFinishingAll) && (
+              <FinishAll isTransaction loading={isFinishingAll} onClick={onFinishAll}><FinishAllIcon /> Finish All Ready Items</FinishAll>
             )}
             {selectedFilter === 'hidden' && (
               <UnhideAll onClick={onUnhideAll}><EyeIcon /> Unhide All</UnhideAll>

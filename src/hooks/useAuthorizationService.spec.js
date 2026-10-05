@@ -203,3 +203,62 @@ test('inventory contents are never serialized into permission keys or compared o
   expect(serializeContents).not.toHaveBeenCalled();
   expect(api.getEntities).not.toHaveBeenCalled();
 });
+
+function TimedHarness({ until, provider, method = 'canUntil' }) {
+  service = useAuthorizationService({ provider, blockNumber: 1, blockTime: 100, accountAddress: '0x123', selectedCrewId: 1, queryClient });
+  const building = { label: target.label, id: target.id };
+  const args = method === 'production'
+    ? [{ kind: 'process', crew, origin: building, facility: building, destination: building, completionTime: until }]
+    : [crew, building, Permission.IDS.RUN_PROCESS, until];
+  return <p>{service.authorize(method, args, [crew, building]).status}</p>;
+}
+
+const leasedTarget = {
+  ...target,
+  PublicPolicies: [{ permission: Permission.IDS.REMOVE_PRODUCTS }, { permission: Permission.IDS.ADD_PRODUCTS }],
+  PrepaidAgreements: [{ permission: Permission.IDS.RUN_PROCESS, permitted: crew, endTime: 150, noticeTime: 0, noticePeriod: 0 }]
+};
+
+test.each(['canUntil', 'production'])('%s evaluates amount edits immediately from loaded data, including lease expiry', async (method) => {
+  api.getEntityById.mockResolvedValue(leasedTarget);
+  const view = render(<TimedHarness until={110} method={method} />);
+  await screen.findByText('allowed');
+  api.getEntities.mockClear();
+  for (const until of [120, 140, 150]) {
+    view.rerender(<TimedHarness until={until} method={method} />);
+    expect(screen.getByText('allowed')).toBeTruthy();
+  }
+  view.rerender(<TimedHarness until={151} method={method} />);
+  expect(screen.getByText('denied')).toBeTruthy();
+  view.rerender(<TimedHarness until={145} method={method} />);
+  expect(screen.getByText('allowed')).toBeTruthy();
+  expect(api.getEntities).not.toHaveBeenCalled();
+
+  act(() => queryClient.setQueryData(['entity', target.label, target.id], { ...leasedTarget, PrepaidAgreements: [] }));
+  await screen.findByText('denied');
+  view.rerender(<TimedHarness until={125} method={method} />);
+  await screen.findByText('denied');
+  expect(api.getEntities).not.toHaveBeenCalled();
+});
+
+test('amount edits reuse contract policy responses; submission still checks the contract again', async () => {
+  const provider = { callContract: jest.fn().mockResolvedValue(['0x1']) };
+  const contractTarget = { ...target, ContractAgreements: [{ permission: Permission.IDS.RUN_PROCESS, permitted: crew, address: '0x987' }] };
+  api.getEntityById.mockImplementation(async ({ label }) => label === Entity.IDS.CREW ? crew : contractTarget);
+  const view = render(<TimedHarness until={110} provider={provider} />);
+  await screen.findByText('allowed');
+  for (const until of [120, 140, 160]) {
+    view.rerender(<TimedHarness until={until} provider={provider} />);
+    expect(screen.getByText('allowed')).toBeTruthy();
+  }
+  expect(provider.callContract).toHaveBeenCalledTimes(1);
+  provider.callContract.mockResolvedValue(['0x0']);
+  let decision;
+  await act(async () => {
+    decision = await service.recheckAuthorization('canUntil', [crew, target, Permission.IDS.RUN_PROCESS, 160], [crew, target]);
+  });
+  expect(decision.status).toBe('denied');
+  expect(provider.callContract).toHaveBeenCalledTimes(2);
+  view.rerender(<TimedHarness until={170} provider={provider} />);
+  await screen.findByText('denied');
+});

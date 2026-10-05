@@ -133,52 +133,38 @@ const SwaySKU = () => {
 
   const onPurchase = useCallback(async () => {
     setIsProcessing(true);
-
-    const unscaledUSDC = (usdc || 0) * TOKEN_SCALE[TOKEN.USDC];
-    const multiswapCalls = await buildMultiswapFromSellAmount(unscaledUSDC, TOKEN.SWAY);
-    if (!(multiswapCalls?.length > 0)) {
-      setIsProcessing(false);
-      createAlert({
-        type: 'GenericAlert',
-        data: { content: 'Insufficient swap liquidity! Try again later.' },
-        level: 'warning',
-        duration: 5000
-      });
-
-    // else, run the transactions(s)
-    } else {
-      try {
-        fireTrackingEvent('purchase_sway', {
-          externalId: accountAddress, category: 'purchase', amount: Number(unscaledUSDC)
-        });
-
-        const tx = await executeCalls(
-          multiswapCalls,
-          {
-            usePaymaster: false,
-            requireExplicitSignature: true,
-            authorization: {
-              action: 'Purchase SWAY',
-              details: `Swap $${Number(usdc || 0).toFixed(2)} USDC through AVNU for SWAY.`
-            }
-          }
-        );
-
-        await provider.waitForTransaction(cleanseTxHash(tx), { retryInterval: 5e3 });
-
-        // refetch all wallet balances
-        queryClient.invalidateQueries({ queryKey: ['walletBalance'], refetchType: 'active' });
-
-        // alert user
+    try {
+      const unscaledUSDC = (usdc || 0) * TOKEN_SCALE[TOKEN.USDC];
+      const multiswapCalls = await buildMultiswapFromSellAmount(unscaledUSDC, TOKEN.SWAY);
+      if (!(multiswapCalls?.length > 0)) {
         createAlert({
-          type: 'WalletAlert',
-          data: { content: 'Sway swapped successfully.' },
+          type: 'GenericAlert',
+          data: { content: 'Insufficient swap liquidity! Try again later.' },
+          level: 'warning',
           duration: 5000
         });
-
-      } catch (e) {
-        console.error(e);
+        return;
       }
+
+      fireTrackingEvent('purchase_sway', {
+        externalId: accountAddress, category: 'purchase', amount: Number(unscaledUSDC)
+      });
+      const tx = await executeCalls(multiswapCalls, {
+        usePaymaster: false,
+        requireExplicitSignature: true,
+        authorization: {
+          action: 'Purchase SWAY',
+          details: `Swap $${Number(usdc || 0).toFixed(2)} USDC through AVNU for SWAY.`
+        }
+      });
+      await provider.waitForTransaction(cleanseTxHash(tx), { retryInterval: 5e3 });
+      await queryClient.invalidateQueries({ queryKey: ['walletBalance'], refetchType: 'active' });
+      createAlert({
+        type: 'WalletAlert',
+        data: { content: 'Sway swapped successfully.' },
+        duration: 5000
+      });
+    } finally {
       setIsProcessing(false);
     }
   }, [
@@ -191,7 +177,7 @@ const SwaySKU = () => {
   ]);
 
   const onClick = useCallback(() => {
-    onVerifyFunds(
+    return onVerifyFunds(
       priceHelper.from(usdc * TOKEN_SCALE[TOKEN.USDC], TOKEN.USDC),
       onPurchase
     )

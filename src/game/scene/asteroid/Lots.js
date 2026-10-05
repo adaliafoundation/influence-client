@@ -940,7 +940,6 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
       <Crews
         attachTo={attachTo}
         asteroidId={asteroidId}
-        cameraAltitude={cameraAltitude}
         getLotPosition={getLotPosition}
         radius={config?.radius} />
         

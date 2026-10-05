@@ -1,4 +1,3 @@
-import AuthorizationNotice from '~/components/AuthorizationNotice';
 import { useCallback, useState } from 'react';
 import styled from 'styled-components';
 import { Entity } from '@influenceth/sdk';
@@ -63,8 +62,6 @@ const AdminAsteroid = ({}) => {
     <>
       <Scrollable>
         <AsteroidTitleArea asteroid={asteroid} />
-
-        {authorization.status === 'unresolved' && <AuthorizationNotice authorization={authorization} />}
 
         {authorization.status === 'denied' && (
           <SwitchToAdministratingCrew entity={asteroid} />

@@ -20,7 +20,7 @@ const useActionButtonClick = ({ disabled, onClick, refresh, reportBlocked }) => 
       flushSync(() => { if (mounted.current) setChecking(false); });
       if (mounted.current && current.current.refresh !== refresh) return;
       if (result.status !== 'allowed' || !mounted.current || current.current.disabled) {
-        const unresolved = result.status === 'unresolved' || /checking|loading/i.test(current.current.disabled || '');
+        const unresolved = result.status === 'unresolved' || current.current.disabled === true || /checking|loading/i.test(current.current.disabled || '');
         if (mounted.current && current.current.disabled && !unresolved) setAccessLost(true);
         reportBlocked({ ...result, status: unresolved ? 'unresolved' : 'denied' });
         return;

@@ -32,7 +32,7 @@ const PlanBuilding = ({ asteroid, blockTime, crew, lot, onSetAction, simulation,
   const disabledReason = useMemo(() => {
     if (_disabled) return 'loading...';
     if (constructionStatus === 'READY_TO_PLAN') {
-      if (planningEligibility.status !== 'allowed') return planningEligibility.reason;
+      if (planningEligibility.status !== 'allowed') return planningEligibility.status === 'checking' || planningEligibility.reason;
       return getCrewDisabledReason({
         asteroid,
         crew,

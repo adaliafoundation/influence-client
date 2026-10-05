@@ -47,7 +47,6 @@ import actionStage from '~/lib/actionStages';
 import formatters from '~/lib/formatters';
 import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 import theme from '~/theme';
-import AuthorizationNotice from '~/components/AuthorizationNotice';
 
 const P2PSection = styled.div`
   align-self: flex-start;
@@ -604,10 +603,6 @@ const SurfaceTransfer = ({
               </FlexSection>
             )}
           </>
-        )}
-
-        {stage === actionStage.NOT_STARTED && checkingDestinationAccess && (
-          <AuthorizationNotice authorization={senderDestinationAuthorization} />
         )}
 
         <ActionDialogStats

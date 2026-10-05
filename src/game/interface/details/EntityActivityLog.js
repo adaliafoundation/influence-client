@@ -183,7 +183,7 @@ const AddAnnotationItem = ({ activity }) => {
 
   const saveNewAnnotation = useCallback(async () => {
     if (isValidAnnotation(annotation)) {
-      saveAnnotation(annotation);
+      return saveAnnotation(annotation);
     }
   }, [annotation]);
 

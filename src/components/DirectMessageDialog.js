@@ -1,5 +1,5 @@
 import { errorMessages } from '../lib/errorMessages';
-import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useMemo, useState } from 'react';
 import styled from 'styled-components';
 
 import AddressLink from '~/components/AddressLink';
@@ -12,6 +12,7 @@ import { LockIcon } from './Icons';
 import useDirectMessageManager from '~/hooks/actionManagers/useDirectMessageManager';
 import useStore from '~/hooks/useStore';
 import PageLoader from './PageLoader';
+import ActionSubmissionProvider from './ActionSubmissionProvider';
 
 const Wrapper = styled.div`
   border-bottom: 1px solid #222;
@@ -94,8 +95,11 @@ const DirectMessageDialog = ({ onClose, recipient }) => {
       setEncryptedMessage(btoa(JSON.stringify(encryptedData)));
       
       // send encrypted message
-      await sendEncryptedMessage(encryptedData);
-      setEncryptedMessage(null);
+      try {
+        return await sendEncryptedMessage(encryptedData);
+      } finally {
+        setEncryptedMessage(null);
+      }
       
     } else {
       createAlert({
@@ -107,24 +111,15 @@ const DirectMessageDialog = ({ onClose, recipient }) => {
     }
   }, [message]);
 
-  const wasSending = useRef();
-  useEffect(() => {
-    if (isSending) {
-      setMessage('');
-      wasSending.current = true;
-    } else if (wasSending.current) {
-      onClose();
-    }
-  }, [onClose, isSending]);
-
   return (
     <GenericDialog
-      onConfirm={isSending ? onClose : sendMessage}
-      onReject={isSending ? undefined : onClose}
+      isTransaction
+      onConfirm={sendMessage}
+      onReject={onClose}
       title="Direct Message"
-      confirmText={isSending ? 'Close' : 'Send'}
+      confirmText="Send"
       rejectText="Cancel"
-      confirmButtonProps={isHashing ? { disabled: true, loading: true } : {}}
+      confirmButtonProps={{ disabled: isHashing || isSending, loading: isHashing || isSending }}
       rejectButtonProps={isHashing ? { disabled: isHashing } : {}}>
       <Wrapper>
         <Recipient>
@@ -161,4 +156,10 @@ const DirectMessageDialog = ({ onClose, recipient }) => {
   );
 };
 
-export default DirectMessageDialog;
+const DirectMessageDialogWrapper = (props) => (
+  <ActionSubmissionProvider onClose={props.onClose} onSuccess={() => props.onClose()}>
+    <DirectMessageDialog {...props} />
+  </ActionSubmissionProvider>
+);
+
+export default DirectMessageDialogWrapper;

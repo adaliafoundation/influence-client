@@ -86,7 +86,7 @@ const GenericDialog = ({
         </Title>
       )}
       <Body>
-        {loading ? <Loader /> : children}
+        {loading && !isTransaction ? <Loader /> : children}
       </Body>
       <Buttons>
         {onReject
@@ -103,6 +103,7 @@ const GenericDialog = ({
         <Button
           disabled={nativeBool(disabled || loading)}
           isTransaction={isTransaction}
+          loading={loading}
           onClick={onConfirm}
           {...confirmButtonProps}>
           {props.confirmText || 'Ok'}

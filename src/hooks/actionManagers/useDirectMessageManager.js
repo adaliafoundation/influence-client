@@ -61,7 +61,7 @@ const useDirectMessageManager = (recipient) => {
       setHashing(false);
       if (!hash) return;
 
-      await execute(
+      return execute(
         'DirectMessage',
         {
           recipient,

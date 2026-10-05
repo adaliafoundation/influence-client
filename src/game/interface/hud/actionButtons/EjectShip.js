@@ -16,7 +16,7 @@ const EjectShip = ({ ship, onSetAction, _disabled }) => {
 
   const disabledReason = useMemo(() => {
     if (_disabled) return 'loading...';
-    return ejectionEligibility.status === 'allowed' ? null : ejectionEligibility.reason;
+    return ejectionEligibility.status === 'allowed' ? null : ejectionEligibility.status === 'checking' || ejectionEligibility.reason;
   }, [_disabled, ejectionEligibility]);
 
   return (

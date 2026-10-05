@@ -1,7 +1,7 @@
 import { ThemeProvider } from 'styled-components';
 import Button from './ButtonAlt';
 import { useContext, useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ActionSubmissionProvider from './ActionSubmissionProvider';
 import { useActionSubmission } from '../contexts/ActionSubmissionContext';
 import { notifyTransactionSettlement } from '../lib/transactionSettlement';
@@ -18,17 +18,18 @@ jest.mock('~/components/Badge', () => () => null, { virtual: true });
 jest.mock('~/components/PurchaseButtonInner', () => () => null, { virtual: true });
 jest.mock('~/theme', () => ({ colors: { main: '#00ffff', txButton: '#ff00ff' }, hexToRGB: () => '255, 255, 255' }), { virtual: true });
 jest.mock('react-tooltip', () => ({ Tooltip: () => null }));
+jest.mock('react-spinners/BarLoader', () => ({ color }) => <span role="progressbar" data-color={color} />);
 jest.mock('../lib/errorReporting', () => ({ reportFailure: jest.fn() }));
 
 let execute, onClose, onSuccess, onSetAction;
-function Controls({ before = async () => {}, fireAndForget = false }) {
+function Controls({ before = async () => {}, fireAndForget = false, loading = false, buttonKey = 0 }) {
   const submission = useActionSubmission();
   const chain = useContext(ChainTransactionContext);
   const [text, setText] = useState('my entered value');
   return <>
     <input aria-label="value" value={text} onChange={e => setText(e.target.value)} />
     <span>{submission.busy ? 'busy' : 'ready'}</span>
-    <Button isTransaction onClick={async () => {
+    <Button key={buttonKey} submissionId="dialog-go" isTransaction loading={loading} onClick={async () => {
       await before();
       if (fireAndForget) { chain.execute('Test'); return; }
       return chain.execute('Test');
@@ -63,6 +64,7 @@ test('preparation, wallet and indexer waits share one busy state and prevent dou
   expect(screen.getByText('busy')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Submit' }).getAttribute('aria-busy')).toBe('true');
   expect(screen.getByRole('button', { name: 'Submit' }).disabled).toBe(true);
+  expect(within(screen.getByRole('button', { name: 'Submit' })).getByRole('progressbar').getAttribute('data-color')).toBe('#ff00ff');
   expect(screen.getByRole('button', { name: 'X' }).disabled).toBe(false);
   fireEvent.click(screen.getByText('Submit'));
   expect(execute).not.toHaveBeenCalled();
@@ -76,7 +78,7 @@ test('preparation, wallet and indexer waits share one busy state and prevent dou
   expect(screen.getByText('ready')).toBeTruthy();
 });
 
-test.each([undefined, { status: 'denied' }])('no submitted transaction leaves the form open and retryable (%j)', async outcome => {
+test.each([undefined, { status: 'denied' }, { status: 'unknown' }, { status: 'failed' }])('no submitted transaction leaves the form open and retryable (%j)', async outcome => {
   execute.mockResolvedValue(outcome);
   render(<View />);
   await submit();
@@ -84,6 +86,74 @@ test.each([undefined, { status: 'denied' }])('no submitted transaction leaves th
   expect(onClose).not.toHaveBeenCalled();
   expect(onSuccess).not.toHaveBeenCalled();
   expect(screen.getByLabelText('value').value).toBe('my entered value');
+  expect(screen.getByRole('button', { name: 'Submit' }).disabled).toBe(false);
+  expect(screen.queryByRole('progressbar')).toBeNull();
+});
+
+test('pending activity supplied by a manager keeps the button disabled and loading', () => {
+  const view = render(<View loading />);
+  expect(screen.getByRole('button', { name: 'Submit' }).disabled).toBe(true);
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  view.rerender(<View loading={false} />);
+  expect(screen.getByRole('button', { name: 'Submit' }).disabled).toBe(false);
+  expect(screen.queryByRole('progressbar')).toBeNull();
+});
+
+function StandaloneView({ onClick, onTransactionComplete, loading = false, promptingTransaction = false }) {
+  return <ThemeProvider theme={{ colors: { main: '#00ffff', txButton: '#ff00ff' }, cursors: { active: 'pointer' } }}>
+    <ChainTransactionContext.Provider value={{ promptingTransaction }}>
+      <Button isTransaction loading={loading} color="#ffffff" onClick={onClick} onTransactionComplete={onTransactionComplete}>Submit</Button>
+      <Button isTransaction onClick={() => {}}>Another action</Button>
+    </ChainTransactionContext.Provider>
+  </ThemeProvider>;
+}
+
+test('standalone transaction buttons lock immediately and stay loading until indexing clears the activity', async () => {
+  let finishWallet;
+  const onClick = jest.fn(() => new Promise(resolve => { finishWallet = resolve; }));
+  const onTransactionComplete = jest.fn();
+  render(<StandaloneView onClick={onClick} onTransactionComplete={onTransactionComplete} />);
+  const button = screen.getByRole('button', { name: 'Submit' });
+  fireEvent.click(button);
+  expect(button.disabled).toBe(true);
+  expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(within(button).getByRole('progressbar').getAttribute('data-color')).toBe('#ff00ff');
+  const otherButton = screen.getByRole('button', { name: 'Another action' });
+  expect(within(otherButton).queryByRole('progressbar')).toBeNull();
+  fireEvent.click(button);
+  expect(onClick).toHaveBeenCalledTimes(1);
+  await act(async () => finishWallet({ status: 'submitted', txHash: '0x123' }));
+  expect(button.disabled).toBe(true);
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  expect(onTransactionComplete).not.toHaveBeenCalled();
+  await act(async () => notifyTransactionSettlement('0x123', 'indexed'));
+  expect(button.disabled).toBe(false);
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(onTransactionComplete).toHaveBeenCalledWith({ status: 'indexed', txHash: '0x123' });
+});
+
+test.each([undefined, { status: 'unknown' }, { status: 'failed' }, { status: 'denied' }])('standalone buttons unlock after an unsuccessful wallet attempt (%j)', async outcome => {
+  const onClick = jest.fn().mockResolvedValue(outcome);
+  render(<StandaloneView onClick={onClick} />);
+  const button = screen.getByRole('button', { name: 'Submit' });
+  fireEvent.click(button);
+  await waitFor(() => expect(button.disabled).toBe(false));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  fireEvent.click(button);
+  await waitFor(() => expect(onClick).toHaveBeenCalledTimes(2));
+});
+
+test('standalone buttons unlock after a reverted transaction or thrown wallet error', async () => {
+  const onClick = jest.fn().mockResolvedValueOnce({ status: 'submitted', txHash: '0x123' }).mockRejectedValueOnce(new Error('Wallet timeout'));
+  render(<StandaloneView onClick={onClick} />);
+  const button = screen.getByRole('button', { name: 'Submit' });
+  fireEvent.click(button);
+  await act(async () => notifyTransactionSettlement('0x123', 'failed'));
+  expect(button.disabled).toBe(false);
+  fireEvent.click(button);
+  await waitFor(() => expect(button.disabled).toBe(false));
+  expect(reportFailure).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('progressbar')).toBeNull();
 });
 
 test('a reverted transaction stops loading without closing or advancing', async () => {
@@ -174,4 +244,22 @@ test('dialogs with no success navigation remain open after indexed success', asy
   expect(onSetAction).not.toHaveBeenCalled();
   expect(reportFailure).not.toHaveBeenCalled();
   expect(screen.getByText('ready')).toBeTruthy();
+});
+
+test('the primary loader survives a button remount through wallet approval and indexing', async () => {
+  let finishWallet;
+  execute.mockImplementation(() => new Promise(resolve => { finishWallet = resolve; }));
+  const view = render(<View />);
+  await submit();
+  view.rerender(<View buttonKey={1} />);
+  const button = screen.getByRole('button', { name: 'Submit' });
+  expect(button.disabled).toBe(true);
+  expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(within(button).getByRole('progressbar').getAttribute('data-color')).toBe('#ff00ff');
+  await act(async () => finishWallet({ status: 'submitted', txHash: '0x123' }));
+  expect(within(button).getByRole('progressbar')).toBeTruthy();
+  expect(onSuccess).not.toHaveBeenCalled();
+  await act(async () => notifyTransactionSettlement('0x123', 'indexed'));
+  expect(within(button).queryByRole('progressbar')).toBeNull();
+  expect(onSuccess).toHaveBeenCalledWith('Test');
 });

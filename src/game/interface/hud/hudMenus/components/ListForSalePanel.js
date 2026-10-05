@@ -54,7 +54,7 @@ export const ListForSaleInner = ({ forSaleWarning, isSaving, onCancel, onSave, o
   }, [originalPrice]);
 
   const saveForSale = useCallback(() => {
-    onSave(forSale ? price : 0);
+    return onSave(forSale ? price : 0);
   }, [onSave, forSale, price]);
 
   return (

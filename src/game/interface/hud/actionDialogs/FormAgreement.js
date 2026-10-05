@@ -5,7 +5,7 @@ import styled from 'styled-components';
 import numeral from 'numeral';
 
 import { appConfig } from '~/appConfig';
-import { CheckIcon, CloseIcon, ExtendAgreementIcon, FormAgreementIcon, FormLotAgreementIcon, GiveNoticeIcon, LinkIcon, CancelAgreementIcon, LotControlIcon, PermissionIcon, RefreshIcon, SwayIcon, WarningIcon } from '~/components/Icons';
+import { CloseIcon, ExtendAgreementIcon, FormAgreementIcon, FormLotAgreementIcon, GiveNoticeIcon, LinkIcon, CancelAgreementIcon, LotControlIcon, PermissionIcon, RefreshIcon, SwayIcon, WarningIcon } from '~/components/Icons';
 import useCrewContext from '~/hooks/useCrewContext';
 import useStore from '~/hooks/useStore';
 import { daysToSeconds, reactBool, locationsArrToObj, formatFixed, monthsToSeconds, secondsToMonths, nativeBool, secondsToDays, safeBigInt, formatTimer } from '~/lib/utils';
@@ -678,8 +678,6 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
                     {currentPolicy?.policyType === Permission.POLICY_IDS.CONTRACT && (
                       <div style={{ marginTop: 3 }}>
                         <div style={{ fontSize: '85%' }}>
-                          {eligibilityLoading && `Checking eligibility...`}
-                          {!eligibilityLoading && eligible && <><CheckIcon /> Crew check succeeded.</>}
                           {!eligibilityLoading && !eligible && <><CloseIcon /> Crew check failed. Refresh to check again.</>}
                         </div>
                         <div>

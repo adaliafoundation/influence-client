@@ -3,11 +3,10 @@ import Button from '~/components/Button';
 
 const AuthorizationNotice = ({ authorization, deniedMessage = 'Access is restricted.' }) => {
   const { retryAuthorization } = useCrewContext();
-  if (authorization?.status === 'allowed') return null;
-  const unresolved = authorization?.status !== 'denied';
+  if (authorization?.status !== 'denied') return null;
   return (
     <div role="status" style={{ padding: '8px 16px' }}>
-      <span>{unresolved ? 'Checking access. If this persists, refresh the permission check.' : deniedMessage}</span>
+      <span>{deniedMessage}</span>
       <Button size="small" onClick={retryAuthorization} style={{ marginLeft: 12 }}>Refresh access</Button>
     </div>
   );

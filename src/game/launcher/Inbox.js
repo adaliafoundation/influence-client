@@ -395,8 +395,9 @@ const EnableInbox = () => {
     if (privateKey) {
       const publicKey = Encryption.getPublicKeyFromPrivateKey(privateKey);
       const messagingKeys = Encryption.publicKeyToMessagingKeys(publicKey);
-      await execute('RekeyInbox', messagingKeys);
+      const submission = await execute('RekeyInbox', messagingKeys);
       setPendingKeypair([publicKey, privateKey, seed]);
+      return submission;
     }
   }, [execute]);
 

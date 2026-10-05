@@ -95,7 +95,7 @@ const EjectCrew = ({ asteroid, origin, originLot, stationedCrews, manager, stage
   const crewHasPermission = useCallback((guest) => {
     const result = authorize('crewEviction', [crew, guest], [crew, guest, origin]);
     return result.status === 'allowed' ? false : result.status === 'denied'
-      ? 'Crew has permission to remain.' : 'Checking crew permissions.';
+      ? 'Crew has permission to remain.' : true;
   }, [authorize, crew, origin]);
   const targetCrewHasPermission = crewHasPermission(targetCrew);
 

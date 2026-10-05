@@ -4,7 +4,7 @@ import ClaimArrivalReward from './ClaimArrivalReward';
 jest.mock('@influenceth/sdk', () => ({ Asteroid: { SCAN_STATUSES: { SURFACE_SCANNED: 2 } } }));
 
 jest.mock('react-dom/server', () => ({}));
-jest.mock('~/components/LoadingBorder', () => () => null, { virtual: true });
+jest.mock('~/components/ButtonLoadingBar', () => () => null, { virtual: true });
 jest.mock('~/components/ClipCorner', () => () => null, { virtual: true });
 jest.mock('~/components/Icons', () => ({}), { virtual: true });
 jest.mock('~/hooks/useActionButtonClick', () => jest.fn(), { virtual: true });
@@ -33,6 +33,19 @@ test('preserves pending-event and readiness checks for an existing crew', () => 
   expect(getCrewDisabledReason({ crew: { _actionTypeTriggered: 1, _ready: true } })).toBe('crew event pending');
   expect(getCrewDisabledReason({ crew: { _ready: false } })).toBe('crew busy');
   expect(getCrewDisabledReason({ crew: { _ready: true } })).toBeNull();
+});
+
+test.each([
+  ['unresolved', true],
+  ['denied', 'access restricted'],
+  ['allowed', null]
+])('represents %s access without permission-checking text', (status, expected) => {
+  expect(getCrewDisabledReason({
+    crew: { _ready: true },
+    permission: 1,
+    permissionTarget: { id: 1 },
+    crewAuthorization: () => ({ status })
+  })).toBe(expected);
 });
 
 test('arrival rewards require a selected controller crew', () => {

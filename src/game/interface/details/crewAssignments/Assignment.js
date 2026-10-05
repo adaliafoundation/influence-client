@@ -148,8 +148,7 @@ const CrewAssignment = ({ crewId, crewmateId, crewmateMap, onFinish, overrides =
 
   const finish = useCallback(() => {
     if (overrides?.onFinish) {
-      overrides?.onFinish();
-      return;
+      return overrides.onFinish();
     }
     playSound('success');
     choosePath('x');

@@ -30,22 +30,24 @@ const useAnnotationManager = (activity, metaEntity) => {
     async (content) => {
       setSaving(true);
 
-      const annotation = { content, type: 'EventAnnotation', version: 1 };
-      const hash = await api.getAnnotationHash(annotation);
-      await execute(
-        'AnnotateEvent',
-        {
-          ...payload,
-          content_hash: hash.match(/.{1,31}/g) // chunk into shortstrings (max-length 31)
-        },
-        {
-          annotation,
-          entity: metaEntity,
-          entities: activity.entities || (metaEntity ? [metaEntity] : [])
-        }
-      );
-
-      setSaving(false);
+      try {
+        const annotation = { content, type: 'EventAnnotation', version: 1 };
+        const hash = await api.getAnnotationHash(annotation);
+        return await execute(
+          'AnnotateEvent',
+          {
+            ...payload,
+            content_hash: hash.match(/.{1,31}/g) // chunk into shortstrings (max-length 31)
+          },
+          {
+            annotation,
+            entity: metaEntity,
+            entities: activity.entities || (metaEntity ? [metaEntity] : [])
+          }
+        );
+      } finally {
+        setSaving(false);
+      }
     },
     [execute, metaEntity, payload]
   );

@@ -33,7 +33,7 @@ const EntityNameForm = ({ entity, label, originalName, skipCollisionCheck = fals
 
   const saveNameChange = useCallback(async () => {
     if (await isNameValid(name, entity?.id)) {
-      changeName(name);
+      return changeName(name);
 
       // TODO: building names only have to be unique per asteroid, not globally
     }

@@ -41,7 +41,7 @@ const EjectGuestCrew = ({ asteroid, blockTime, crew, lot, ship, onSetAction, dia
     const guests = dialogProps?.guestId ? allGuestCrews.filter((c) => c.id === dialogProps.guestId) : allGuestCrews;
     const decisions = guests.map((guest) => authorize('crewEviction', [crew, guest], [crew, guest, station]));
     if (!decisions.some((decision) => decision.status === 'allowed')) {
-      return decisions.some((decision) => decision.status === 'unresolved') ? 'checking guest permissions' : 'guests have permission to remain';
+      return decisions.some((decision) => decision.status === 'unresolved') ? true : 'guests have permission to remain';
     }
 
     return getCrewDisabledReason({ crew });
