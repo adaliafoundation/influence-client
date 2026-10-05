@@ -296,6 +296,11 @@ const RoutePlanner = () => {
     setEmode((e) => !e);
   }, []);
 
+  const inventoryBonuses = useMemo(() => ({
+    mass: crew?._inventoryBonuses?.mass,
+    volume: crew?._inventoryBonuses?.volume
+  }), [crew?._inventoryBonuses?.mass, crew?._inventoryBonuses?.volume]);
+
   const shipConfig = useMemo(() => {
     if (!ship) return null;
 
@@ -305,9 +310,9 @@ const RoutePlanner = () => {
 
     const config = {};
     config.emode = ship._simulated ? emode : ship?.Ship?.emergencyAt > 0;
-    config.maxCargoMass = config.emode ? 0 : (Inventory.getType(cargoInventory?.inventoryType, crew?._inventoryBonuses)?.massConstraint || 0);
+    config.maxCargoMass = config.emode ? 0 : (Inventory.getType(cargoInventory?.inventoryType, inventoryBonuses)?.massConstraint || 0);
     config.maxPropellantMass = (config.emode ? shipTypeConfig.emergencyPropellantCap : 1)
-      * (Inventory.getType(propellantInventory?.inventoryType, crew?._inventoryBonuses)?.massConstraint || 0);
+      * (Inventory.getType(propellantInventory?.inventoryType, inventoryBonuses)?.massConstraint || 0);
 
     if (ship._simulated) {
       config.initialCargoMass = config.maxCargoMass * 0.5;
@@ -318,7 +323,7 @@ const RoutePlanner = () => {
     }
 
     return config;
-  }, [crew?._inventoryBonuses, emode, ship]);
+  }, [inventoryBonuses, emode, ship]);
 
   useEffect(() => {
     if (!shipConfig) return;
@@ -358,13 +363,14 @@ const RoutePlanner = () => {
   }, [shipConfig]);
 
   const exhaustBonus = useMemo(() => getCrewAbilityBonuses(Crewmate.ABILITY_IDS.PROPELLANT_EXHAUST_VELOCITY, crew), [crew]);
+  const exhaustBonusMultiplier = exhaustBonus?.totalBonus;
   const shipParams = useMemo(() => {
     if (!ship) return 0;
     const variantMod = 1 + (Ship.Entity.getVariant(ship)?.exhaustVelocityModifier || 0);
-    const exhaustVelocity = (Ship.TYPES[ship.Ship.shipType]?.exhaustVelocity * exhaustBonus?.totalBonus) * variantMod || 0;
+    const exhaustVelocity = (Ship.TYPES[ship.Ship.shipType]?.exhaustVelocity * exhaustBonusMultiplier) * variantMod || 0;
     const hullMass = Ship.TYPES[ship.Ship.shipType]?.hullMass || 0;
     const wetMass = hullMass + cargoMass + propellantMass;
-    const maxDeltaV = Ship.propellantToDeltaV(ship.Ship.shipType, wetMass, propellantMass, exhaustBonus?.totalBonus);
+    const maxDeltaV = Ship.propellantToDeltaV(ship.Ship.shipType, wetMass, propellantMass, exhaustBonusMultiplier);
 
     return {
       ...ship,
@@ -374,7 +380,7 @@ const RoutePlanner = () => {
       hullMass,
       maxDeltaV
     };
-  }, [ship, cargoMass, propellantMass, exhaustBonus]);
+  }, [ship, cargoMass, propellantMass, exhaustBonusMultiplier]);
 
   useEffect(() => {
     dispatchReorientCamera(true);

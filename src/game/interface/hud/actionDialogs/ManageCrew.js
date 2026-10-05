@@ -203,6 +203,8 @@ const CrewDraggable = ({
   );
 };
 
+const emptyRoster = [];
+
 const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
@@ -230,7 +232,7 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
         Name: {
           name: '(New Crew)'
         },
-        _crewmates: [],
+        _crewmates: emptyRoster,
         _location: cloneDeep(crew._location),
       };
     }

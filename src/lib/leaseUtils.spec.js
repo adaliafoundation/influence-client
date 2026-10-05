@@ -128,7 +128,7 @@ describe('lot lease eligibility', () => {
     label: Entity.IDS.BUILDING, id: 201, Control: { controller }, Building: { status: Building.CONSTRUCTION_STATUSES.OPERATIONAL }
   } });
   const check = (lot, crews = [asteroidCrew, buildingCrew], targetAsteroid = asteroid) => getLotLeaseEligibility({
-    asteroid: targetAsteroid, lot,
+    asteroid: targetAsteroid, lot: { UseLot: null, ...lot },
     authorize: (method, args, entities) => evaluateAuthorization({ method, args, entities: [...entities, ...crews], blockTime: 1000 })
   });
 
@@ -145,5 +145,27 @@ describe('lot lease eligibility', () => {
   test('waits for missing controller and delegate data', () => {
     expect(check(occupiedLot(buildingCrew), [], {}).status).toBe('unresolved');
     expect(check(occupiedLot({ label: buildingCrew.label, id: buildingCrew.id }), []).status).toBe('unresolved');
+  });
+
+  test.each(['allowed', 'denied', 'unresolved'])('a recorded tenant with %s access determines lease availability', status => {
+    const authorize = jest.fn(() => ({ status }));
+    const leasedLot = { label: Entity.IDS.LOT, id: 1, UseLot: { tenant: buildingCrew } };
+    const result = getLotLeaseEligibility({ asteroid, lot: leasedLot, crew: asteroidCrew, authorize });
+    expect(result.status).toBe(status === 'allowed' ? 'denied' : status === 'denied' ? 'allowed' : 'unresolved');
+    expect(authorize).toHaveBeenCalledWith('can', [buildingCrew, leasedLot, Permission.IDS.USE_LOT], [buildingCrew, leasedLot]);
+  });
+
+  test('waits for tenancy data even on an empty lot', () => {
+    expect(getLotLeaseEligibility({ lot: {} }).status).toBe('unresolved');
+  });
+
+  test('only prepaid policies allow replacing the same crew’s active lease', () => {
+    const authorize = jest.fn(() => ({ status: 'allowed' }));
+    const leasedLot = { UseLot: { tenant: buildingCrew } };
+    const args = { lot: leasedLot, crew: buildingCrew, authorize };
+    expect(getLotLeaseEligibility({ ...args, policyType: Permission.POLICY_IDS.PREPAID }).status).toBe('allowed');
+    expect(authorize).not.toHaveBeenCalled();
+    expect(getLotLeaseEligibility({ ...args, policyType: Permission.POLICY_IDS.CONTRACT }).status).toBe('denied');
+    expect(getLotLeaseEligibility({ ...args, crew: asteroidCrew, policyType: Permission.POLICY_IDS.PREPAID }).status).toBe('denied');
   });
 });

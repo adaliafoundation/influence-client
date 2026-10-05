@@ -1,4 +1,5 @@
 import { Authorization, Entity, Lot, Permission } from '@influenceth/sdk';
+import { checkingAuthorization } from './authorization';
 
 const { IDS: P } = Permission;
 const permissionChecks = {
@@ -18,7 +19,7 @@ const permissionChecks = {
 const controlChecks = {
   ConstructionStart: 'building', ConstructionAbandon: 'building', ConstructionDeconstruct: 'building',
   ScanResourcesStart: 'asteroid', ScanResourcesFinish: 'asteroid', ScanSurfaceStart: 'asteroid', ScanSurfaceFinish: 'asteroid',
-  TransitBetweenStart: 'ship', TransitBetweenFinish: 'ship', ConfigureExchange: 'exchange',
+  ConfigureExchange: 'exchange',
   ListDepositForSale: 'deposit', UnlistDepositForSale: 'deposit', ChangeName: 'entity'
 };
 
@@ -37,6 +38,20 @@ export const recheckTransactionAuthorization = async (key, vars, recheck) => {
   // The new crew ID exists only during execution. Do not substitute the selected
   // crew's grants; new-crew creation remains subject to transaction validation.
   if (['RecruitAdalian', 'InitializeArvadian'].includes(key) && Number(crew?.id) === 0) return { status: 'allowed' };
+
+  if (['TransitBetweenStart', 'TransitBetweenFinish', 'InitializeAndStartTransit'].includes(key)) {
+    // Transit systems derive the ship from the caller's location, including escape modules.
+    const snapshot = await recheck('controls', [crew, crew], [crew].filter(Boolean));
+    if (snapshot.status !== 'allowed') return snapshot;
+    const currentCrew = snapshot.entities?.find(entity => Authorization.sameEntity(entity, crew));
+    const location = currentCrew?.Location?.location;
+    if (!location) return checkingAuthorization;
+    const ship = Number(location.label) === Entity.IDS.SHIP ? location : crew;
+    const result = await recheck('controls', [crew, ship], [crew, ship]);
+    const refreshedCrew = result.entities?.find(entity => Authorization.sameEntity(entity, crew));
+    if (result.status === 'allowed' && !Authorization.sameEntity(refreshedCrew?.Location?.location, location)) return checkingAuthorization;
+    return result;
+  }
 
   for (const [field, permission] of permissionChecks[key] || []) {
     const target = vars[field];

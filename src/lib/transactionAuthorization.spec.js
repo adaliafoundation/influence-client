@@ -6,6 +6,31 @@ const { recheckTransactionAuthorization } = require('./transactionAuthorization'
 const crew = { label: 1, id: 1 };
 const origin = { label: 5, id: 2 };
 const dest = { label: 5, id: 3 };
+
+describe.each(['TransitBetweenStart', 'TransitBetweenFinish', 'InitializeAndStartTransit'])('%s', system => {
+  const ship = { label: Entity.IDS.SHIP, id: 10 };
+  const asteroid = { label: Entity.IDS.ASTEROID, id: 1 };
+  test.each([ship, asteroid])('derives the ship or escape module from crew location %j', async location => {
+    const recheck = jest.fn(async () => ({ status: 'allowed', entities: [{ ...crew, Location: { location } }] }));
+    expect((await recheckTransactionAuthorization(system, { caller_crew: crew }, recheck)).status).toBe('allowed');
+    const target = location === ship ? ship : crew;
+    expect(recheck).toHaveBeenLastCalledWith('controls', [crew, target], [crew, target]);
+  });
+  test.each(['denied', 'unresolved'])('preserves %s ship controls', async status => {
+    const recheck = jest.fn().mockResolvedValueOnce({ status: 'allowed', entities: [{ ...crew, Location: { location: ship } }] })
+      .mockResolvedValueOnce({ status });
+    expect((await recheckTransactionAuthorization(system, { caller_crew: crew }, recheck)).status).toBe(status);
+  });
+  test('waits for missing location data', async () => {
+    const recheck = jest.fn(async () => ({ status: 'allowed', entities: [crew] }));
+    expect((await recheckTransactionAuthorization(system, { caller_crew: crew }, recheck)).status).toBe('unresolved');
+  });
+  test('rejects a location change during the check', async () => {
+    const recheck = jest.fn().mockResolvedValueOnce({ status: 'allowed', entities: [{ ...crew, Location: { location: ship } }] })
+      .mockResolvedValueOnce({ status: 'allowed', entities: [{ ...crew, Location: { location: asteroid } }] });
+    expect((await recheckTransactionAuthorization(system, { caller_crew: crew }, recheck)).status).toBe('unresolved');
+  });
+});
 test('delivery send rechecks both removal and addition', async () => {
   const recheck = jest.fn(async () => ({ status: 'allowed' }));
   await recheckTransactionAuthorization('SendDelivery', { caller_crew: crew, origin, dest }, recheck);

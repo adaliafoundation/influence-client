@@ -143,6 +143,7 @@ const Asteroids = () => {
     return buildAsteroidIndexById(mappedAsteroids);
   }, [mappedAsteroids]);
 
+  const crewAsteroidId = crew?._location?.asteroidId;
   const assetedAsteroids = useMemo(() => {
     const asseted = {};
     (controlledAsteroids || []).forEach((a) => {
@@ -150,11 +151,10 @@ const Asteroids = () => {
       asseted[a.id].owned = true;
     });
 
-    if (crew?._location.asteroidId) {
-      const crewAsteroidId = crew._location.asteroidId;
+    if (crewAsteroidId) {
       const inList = asteroids.find((a) => a.id === crewAsteroidId);
       if (!asseted[crewAsteroidId] && inList) asseted[crewAsteroidId] = { asteroid: inList };
-      if (asseted[crewAsteroidId]) asseted[crewAsteroidId].crew = crew;
+      if (asseted[crewAsteroidId]) asseted[crewAsteroidId].hasCrew = true;
     }
 
     (controlledShips || []).forEach((s) => {
@@ -169,7 +169,7 @@ const Asteroids = () => {
     });
 
     return asseted;
-  }, [asteroids, controlledAsteroids, crew, controlledShips]);
+  }, [asteroids, controlledAsteroids, crewAsteroidId, controlledShips]);
 
   useEffect(() => {
     if (!asteroidSearch?.hits) return;
@@ -628,7 +628,7 @@ const Asteroids = () => {
                   key={`billboard_${a.id}`}
                   position={p}
                   style={{ pointerEvents: 'none', transform: `translate(-45px, calc(-100% - ${name ? 15 : 5}px))` }}>
-                  <AsteroidTooltip hasActiveCrew={assetedAsteroids[a.id]?.crew}>
+                  <AsteroidTooltip hasActiveCrew={assetedAsteroids[a.id]?.hasCrew}>
                     <div><CaptainIcon /></div>
                     <div>
                       {assetedAsteroids[a.id] && (

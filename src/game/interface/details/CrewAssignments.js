@@ -341,7 +341,7 @@ const CrewAssignments = () => {
       return eligible;
     }
     return null;
-  }, [crew, crewmateMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [crew?._crewmates, crewmateMap]); // eslint-disable-line react-hooks/exhaustive-deps
   // ^^^
 
   const selectStory = useCallback((story) => () => {

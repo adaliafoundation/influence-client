@@ -121,29 +121,18 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
     ];
   }, [improvableSamples, sampleId]);
 
+  const defaultSampleId = prepop.sampleId
+    ? improvableSamples.find(s => s.id === prepop.sampleId)?.id
+    : (improvableSamples.length === 1 ? improvableSamples[0].id : undefined);
   useEffect(() => {
-    if (currentSamplingAction?.sampleId) {
-      setSampleId(currentSamplingAction.sampleId);
-    } else {
-      let defaultSelection;
-      if (prepop.sampleId) {
-        defaultSelection = (improvableSamples || []).find((s) => s.id === prepop.sampleId);
-      } else if (improvableSamples.length === 1) {
-        defaultSelection = improvableSamples[0];
-      }
-      if (defaultSelection) {
-        setSampleId(defaultSelection?.id);
-      }
-    }
+    setSampleId(selected => currentSamplingAction?.sampleId || selected || defaultSampleId);
+  }, [currentSamplingAction?.sampleId, defaultSampleId]);
 
-    if (originEntity) {
-      const { lotIndex } = locationsArrToObj(originEntity.Location.locations || []);
-      setDrillSource({
-        lotIndex,
-        slot: currentSamplingAction?.originSlot || null
-      });
-    }
-  }, [currentSamplingAction, originEntity, improvableSamples, prepop.sampleId]);
+  const initialDrillLotIndex = originEntity ? locationsArrToObj(originEntity.Location.locations || []).lotIndex : undefined;
+  const initialDrillSlot = currentSamplingAction?.originSlot || null;
+  useEffect(() => {
+    if (initialDrillLotIndex != null) setDrillSource({ lotIndex: initialDrillLotIndex, slot: initialDrillSlot });
+  }, [initialDrillLotIndex, initialDrillSlot]);
 
   const lotAbundance = useMemo(() => {
     if (!resourceId || !asteroid?.Celestial?.abundances || !lot?.id) return 0;
