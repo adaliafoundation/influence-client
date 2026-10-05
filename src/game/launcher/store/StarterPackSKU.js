@@ -21,6 +21,7 @@ import {
 } from '~/components/Icons';
 import { CheckboxButton } from '~/components/filters/components';
 import PageLoader from '~/components/PageLoader';
+import PurchaseTermsLinks from '~/components/PurchaseTermsLinks';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import {
   AboveFold,
@@ -249,7 +250,7 @@ const PackFlavor = styled.div`
   display: flex;
   filter: brightness(135%);
   font-size: 14px;
-  height: 85px;
+  min-height: 85px;
   padding: 0 5px 0 95px;
   text-align: left;
 `;
@@ -907,7 +908,8 @@ const PackSelectionStatus = ({ acknowledged, confirming, onAcknowledge, onCancel
             {acknowledged ? <CheckedIcon /> : <UncheckedIcon />}
           </CheckboxButton>
           <span>
-            I understand that by checking out for the <b>{product.name}</b>, fulfillment begins when I submit my starter crew customization, and once fulfillment begins I may lose any statutory withdrawal right for this digital content.
+            I agree to the <PurchaseTermsLinks />.{' '}
+            I understand after purchasing the <b>{product.name}</b>, fulfillment begins when I submit my crew customization, and once fulfillment begins I lose any statutory withdrawal right for this digital content.
           </span>
         </CheckoutAcknowledgement>
       </NoticeBody>

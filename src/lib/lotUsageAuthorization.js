@@ -5,7 +5,7 @@ export const PERMISSION_COMPONENTS = [...AUTHORIZATION_COMPONENTS, 'UseLot'];
 
 export const sameEntity = Authorization.sameEntity;
 export const sameAccount = (a, b) => !!a && !!b && Address.areEqual(a, b);
-export const checkingLotUsage = { status: 'checking', reason: 'Checking USE_LOT permission' };
+export const checkingLotUsage = { status: 'checking', reason: 'Checking Lot Usage permission' };
 
 export const prepaidPermissionEnd = (agreement) => Math.max(
   Number(agreement.endTime || 0), Number(agreement.noticeTime || 0) + Number(agreement.noticePeriod || 0)
@@ -22,8 +22,8 @@ export const resolveLotUsage = async ({ lot, asteroid, crew, blockTime, loadCrew
     }
   });
   return { status: result.status === 'unresolved' ? 'checking' : result.status === 'denied' ? 'blocked' : 'allowed',
-    reason: result.status === 'unresolved' ? 'Checking USE_LOT permission' : result.status === 'allowed' ? null
-      : result.reason === 'active-tenant-precedence' ? 'Another crew holds active tenancy' : 'USE_LOT permission required' };
+    reason: result.status === 'unresolved' ? 'Checking Lot Usage permission' : result.status === 'allowed' ? null
+      : result.reason === 'active-tenant-precedence' ? 'Another crew holds active tenancy' : 'Lot Usage permission required' };
 };
 
 export const checkContractPolicy = async (provider, agreement, target, permitted, permission, blockNumber) => {

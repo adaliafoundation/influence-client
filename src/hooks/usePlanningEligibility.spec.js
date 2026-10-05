@@ -12,7 +12,7 @@ jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useConstants', () => () => ({ data: 0 }), { virtual: true });
 jest.mock('~/lib/api', () => ({ getEntityById: jest.fn() } ), { virtual: true });
 jest.mock('~/lib/planningEligibility', () => ({
-  checkingPlanning: { status: 'checking', reason: 'Checking USE_LOT permission' },
+  checkingPlanning: { status: 'checking', reason: 'Checking Lot Usage permission' },
   loadPlanningEligibility: jest.fn()
 }), { virtual: true });
 
@@ -34,7 +34,7 @@ test('pending policy checks disable planning and refresh on invalidation while o
   expect(result.current.eligibility.status).toBe('checking');
   await act(async () => resolve({ status: 'allowed', reason: null }));
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
-  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
+  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'Lot Usage permission required' });
   let finishRefresh;
   loadPlanningEligibility.mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
   act(() => { client.invalidateQueries({ queryKey: ['planningEligibility'] }); });
@@ -47,7 +47,7 @@ test('pending policy checks disable planning and refresh on invalidation while o
 test('submission bypasses the displayed snapshot and catches revoked grants', async () => {
   const { result } = renderHook(() => usePlanningEligibility(lot), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
-  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
+  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'Lot Usage permission required' });
   const outcome = await result.current.recheck({ lotId: 1, crewId: 1 });
   expect(outcome.status).toBe('blocked');
   expect(loadPlanningEligibility.mock.calls.at(-1)[0]).not.toHaveProperty('snapshot');
@@ -69,7 +69,7 @@ test('crew changes during submission cannot authorize the old payload', async ()
 test('block updates preserve display and defer expiry checks until submission', async () => {
   const { result, rerender } = renderHook(() => usePlanningEligibility(lot), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
-  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
+  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'Lot Usage permission required' });
   useSession.mockReturnValue({ blockTime: 101, accountAddress: '0x123' });
   rerender();
   expect(result.current.eligibility.status).toBe('allowed');
@@ -82,7 +82,7 @@ test('block updates preserve display and defer expiry checks until submission', 
 test('asteroid permission changes recompute the open dialog', async () => {
   const { result, rerender } = renderHook(() => usePlanningEligibility(lot), { wrapper });
   await waitFor(() => expect(result.current.eligibility.status).toBe('allowed'));
-  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'USE_LOT permission required' });
+  loadPlanningEligibility.mockResolvedValue({ status: 'blocked', reason: 'Lot Usage permission required' });
   lot = { ...lot, _permissionTargets: { ...lot._permissionTargets, asteroid: { PublicPolicies: [] } } };
   rerender();
   await waitFor(() => expect(result.current.eligibility.status).toBe('blocked'));
