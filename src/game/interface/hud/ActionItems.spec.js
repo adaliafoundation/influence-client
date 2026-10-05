@@ -18,6 +18,7 @@ jest.mock('~/components/CollapsibleSection', () => ({ __esModule: true, default:
 } }), { virtual: true });
 jest.mock('~/contexts/ChainTransactionContext', () => ({ __esModule: true, default: require('react').createContext() }), { virtual: true });
 jest.mock('~/hooks/useActionItems', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
+jest.mock('~/hooks/useActionItemTransitions', () => jest.requireActual('../../../hooks/useActionItemTransitions'), { virtual: true });
 jest.mock('~/hooks/useCrewContext', () => ({ __esModule: true, default: () => ({ crew: { id: 1, label: 1, Crew: { readyAt: 0 } } }) }), { virtual: true });
 jest.mock('~/hooks/useGetActivityConfig', () => ({ __esModule: true, default: () => item => ({ getActionItemFinishCall: () => ({ activity: item.uniqueKey }) }) }), { virtual: true });
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: () => ({ authenticated: true, blockTime: 100 }) }), { virtual: true });
