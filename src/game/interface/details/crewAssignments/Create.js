@@ -24,6 +24,7 @@ import { CheckedIcon, CheckIcon, CloseIcon, HelpIcon, UncheckedIcon } from '~/co
 import { CheckboxButton } from '~/components/filters/components';
 import IconButton from '~/components/IconButton';
 import MouseoverInfoPane from '~/components/MouseoverInfoPane';
+import PurchaseTermsLinks from '~/components/PurchaseTermsLinks';
 import TextInput from '~/components/TextInput';
 import TriangleTip from '~/components/TriangleTip';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
@@ -2240,6 +2241,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
                   {purchaseAcknowledged ? <CheckedIcon /> : <UncheckedIcon />}
                 </CheckboxButton>
                 <span>
+                  I agree to the <PurchaseTermsLinks />.{' '}
                   I understand that fulfillment begins when I submit this crewmate recruitment, and once
                   fulfillment begins I may lose any statutory withdrawal right for this digital content.
                 </span>

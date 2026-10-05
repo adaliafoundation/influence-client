@@ -17,7 +17,7 @@ beforeEach(() => {
 const eligibility = () => getPlanningEligibility(params);
 
 test('no grant and a lease offer alone both block planning', async () => {
-  expect(await eligibility()).toEqual({ status: 'blocked', reason: 'USE_LOT permission required' });
+  expect(await eligibility()).toEqual({ status: 'blocked', reason: 'Lot Usage permission required' });
   asteroid.PrepaidPolicies = [grant()];
   expect((await eligibility()).status).toBe('blocked');
 });
@@ -179,7 +179,7 @@ describe('fresh submission reads', () => {
   test.each([
     [Entity.IDS.BUILDING, { Building: { status: 1 } }, 'Crew station not operational'],
     [Entity.IDS.SHIP, { Ship: { emergencyAt: 1 } }, 'Crew ship in emergency mode'],
-    [Entity.IDS.BUILDING, {}, 'Checking USE_LOT permission']
+    [Entity.IDS.BUILDING, {}, 'Checking Lot Usage permission']
   ])('checks station restrictions for label %s', async (label, station, reason) => {
     selected.Location.locations.push({ label, id: 9 });
     const original = api.getEntityById.getMockImplementation();
