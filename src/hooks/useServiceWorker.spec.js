@@ -18,6 +18,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   window.location = originalLocation;
   delete navigator.serviceWorker;
 });
@@ -56,10 +57,40 @@ test('does not prompt until installation finishes', async () => {
   expect(window.location.reload).not.toHaveBeenCalled();
 });
 
-test('does not reload when the waiting worker is no longer available', async () => {
+test('reloads when the waiting worker is no longer available', async () => {
   const { result } = renderHook(() => useServiceWorker());
   await act(async () => result.current.onUpdateVersion());
-  expect(window.location.reload).not.toHaveBeenCalled();
-  expect(result.current.isUpdating).toBe(false);
+  expect(window.location.reload).toHaveBeenCalledTimes(1);
+  expect(result.current.isUpdating).toBe(true);
   expect(result.current.updateNeeded).toBe(false);
+});
+
+test('reloads after a stalled activation and ignores a late controller change', async () => {
+  jest.useFakeTimers();
+  registration.waiting = { postMessage: jest.fn() };
+  const { result } = renderHook(() => useServiceWorker());
+  await act(async () => result.current.onUpdateVersion());
+  act(() => jest.advanceTimersByTime(9999));
+  expect(window.location.reload).not.toHaveBeenCalled();
+  act(() => jest.advanceTimersByTime(1));
+  expect(window.location.reload).toHaveBeenCalledTimes(1);
+  act(() => serviceWorker.dispatchEvent(new Event('controllerchange')));
+  expect(window.location.reload).toHaveBeenCalledTimes(1);
+});
+
+test('cancels the pending reload on unmount', async () => {
+  jest.useFakeTimers();
+  registration.waiting = { postMessage: jest.fn() };
+  const { result, unmount } = renderHook(() => useServiceWorker());
+  await act(async () => result.current.onUpdateVersion());
+  unmount();
+  act(() => jest.runOnlyPendingTimers());
+  expect(window.location.reload).not.toHaveBeenCalled();
+});
+
+test('reloads if registration lookup fails', async () => {
+  serviceWorker.getRegistration.mockRejectedValue(new Error('Lookup failed'));
+  const { result } = renderHook(() => useServiceWorker());
+  await act(async () => result.current.onUpdateVersion());
+  expect(window.location.reload).toHaveBeenCalledTimes(1);
 });

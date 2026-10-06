@@ -5,6 +5,16 @@ const useServiceWorker = () => {
   const [updateNeeded, setUpdateNeeded] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const refreshing = useRef(false);
+  const reloadTimeout = useRef();
+
+  const reload = useCallback(() => {
+    clearTimeout(reloadTimeout.current);
+    if (refreshing.current) return;
+    refreshing.current = true;
+    window.location.reload();
+  }, []);
+
+  useEffect(() => () => clearTimeout(reloadTimeout.current), []);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -19,11 +29,7 @@ const useServiceWorker = () => {
       cleanups.push(() => target.removeEventListener(event, handler));
     };
 
-    listen(navigator.serviceWorker, 'controllerchange', () => {
-      if (refreshing.current) return;
-      refreshing.current = true;
-      window.location.reload();
-    });
+    listen(navigator.serviceWorker, 'controllerchange', reload);
 
     navigator.serviceWorker.getRegistration().then((registration) => {
       if (disposed) return;
@@ -58,27 +64,29 @@ const useServiceWorker = () => {
       disposed = true;
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, []);
+  }, [reload]);
 
   const onUpdateVersion = useCallback(async () => {
+    if (refreshing.current || reloadTimeout.current) return;
+    setIsUpdating(true);
+    // A stalled activation must not leave the explicit reload action pending forever.
+    reloadTimeout.current = setTimeout(reload, 10000);
     if (!('serviceWorker' in navigator)) {
-      window.location.reload();
+      reload();
       return;
     }
-    setIsUpdating(true);
     try {
       const registration = await navigator.serviceWorker.getRegistration();
+      if (refreshing.current) return;
       if (registration?.waiting) {
-        // Activation is asynchronous. Only controllerchange may reload the page.
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       } else {
-        setUpdateNeeded(false);
-        setIsUpdating(false);
+        reload();
       }
     } catch (error) {
-      setIsUpdating(false);
+      reload();
     }
-  }, []);
+  }, [reload]);
 
   return { isInstalling, updateNeeded, isUpdating, onUpdateVersion };
 };

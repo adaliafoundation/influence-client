@@ -2,9 +2,8 @@ import { useCallback, useContext, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 
-import { BellIcon, EyeIcon, FinishAllIcon, LoggedEventsIcon } from '~/components/Icons';
+import { EyeIcon, LoggedEventsIcon } from '~/components/Icons';
 import CollapsibleSection from '~/components/CollapsibleSection';
-import Button from '~/components/ButtonAlt';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useActionItems from '~/hooks/useActionItems';
 import useActionItemTransitions from '~/hooks/useActionItemTransitions';
@@ -19,6 +18,7 @@ import useStarterMissionManager from '~/hooks/actionManagers/useStarterMissionMa
 import { useMissionScope } from '~/hooks/useMissionGuidance';
 import { getMissionObjectiveRows } from '~/lib/missionObjectives';
 import MissionObjective from './MissionObjective';
+import FinishAllReadyButton from './FinishAllReadyButton';
 
 
 export const SECTION_WIDTH = ITEM_WIDTH + 30;
@@ -124,7 +124,7 @@ const IconFilter = styled(Filter)`
   }
 `;
 
-const AllFilter = styled(IconFilter)`
+const AllFilter = styled(Filter)`
   padding-left: 5px;
   padding-right: 2px;
   color: white;
@@ -206,11 +206,6 @@ const AllAction = styled.div`
   pointer-events: all;
 `;
 
-const FinishAll = styled(Button)`
-  margin-top: 4px;
-  width: 100%;
-`;
-
 const UnhideAll = styled(AllAction)`
   & > svg {
     font-size: 22px;
@@ -237,8 +232,12 @@ const ActionItems = () => {
     [simulationEnabled, view, manager.getPending]);
   const displayItems = useActionItemTransitions(allItems, TRANSITION_TIME);
 
-  const selectedFilter = preferences?.filter || 'ready';
-  const setSelectedFilter = useCallback(filter => setPreferences(scope, { filter }), [scope, setPreferences]);
+  const [filterSelection, setFilterSelection] = useState({ scope, filter: 'all' });
+  if (filterSelection.scope !== scope) {
+    setFilterSelection({ scope, filter: 'all' });
+  }
+  const selectedFilter = filterSelection.scope === scope ? filterSelection.filter : 'all';
+  const setSelectedFilter = useCallback(filter => setFilterSelection({ scope, filter }), [scope]);
   const [lastClick, setLastClick] = useState();
 
   const onClickFilter = useCallback((filter) => (e) => {
@@ -344,9 +343,9 @@ const ActionItems = () => {
             title={(
               <TitleWrapper>
                 <Filters>
+                  <AllFilter title="All objectives" onClick={onClickFilter('all')} selected={selectedFilter === 'all'}>All</AllFilter>
                   <ReadyFilter onClick={onClickFilter('ready')} selected={selectedFilter === 'ready'}><b>{(tallies.ready || 0).toLocaleString()}</b> Ready</ReadyFilter>
                   <InProgressFilter onClick={onClickFilter('progress')} selected={selectedFilter === 'progress'}><b>{(tallies.progress || 0).toLocaleString()}</b> In Progress</InProgressFilter>
-                  <AllFilter title="All objectives" onClick={onClickFilter('all')} selected={selectedFilter === 'all'}><BellIcon /> <b>{(tallies.all || 0).toLocaleString()}</b></AllFilter>
                   {tallies.hidden > 0 && <HiddenFilter onClick={onClickFilter('hidden')} selected={selectedFilter === 'hidden'}><EyeIcon /> <b>{(tallies.hidden || 0).toLocaleString()}</b></HiddenFilter>}
                   <div style={{ flex: 1 }} />
                   <Link to="/listview/eventlog" onClick={(e) => e.stopPropagation()} style={{ paddingRight: 0 }}><LoggedEventsIcon /></Link>
@@ -354,7 +353,7 @@ const ActionItems = () => {
               </TitleWrapper>
             )}>
             {['all', 'ready'].includes(selectedFilter) && (autoFinishCalls?.length > 1 || isFinishingAll) && (
-              <FinishAll isTransaction loading={isFinishingAll} onClick={onFinishAll}><FinishAllIcon /> Finish All Ready Items</FinishAll>
+              <FinishAllReadyButton loading={isFinishingAll} onClick={onFinishAll} />
             )}
             {selectedFilter === 'hidden' && (
               <UnhideAll onClick={onUnhideAll}><EyeIcon /> Unhide All</UnhideAll>

@@ -11,7 +11,6 @@ import { FailedIcon, RandomEventIcon, ReadyIcon } from '~/components/AnimatedIco
 import LiveTimer from '~/components/LiveTimer';
 import { useLotLink } from '~/components/LotLink';
 import useAsteroid from '~/hooks/useAsteroid';
-import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
 import { formatActionItem, itemColors, backgroundColors, statuses } from '~/lib/actionItem';
 import formatters from '~/lib/formatters';
@@ -223,7 +222,6 @@ const ActionItem = ({ data, getActivityConfig }) => {
   }, [data, getActivityConfig]);
 
   const { data: asteroid } = useAsteroid(item.asteroidId);
-  const { data: lot } = useLot(item.lotId);
 
   const goToAction = useLotLink({
     asteroidId: item.asteroidId,
@@ -242,9 +240,7 @@ const ActionItem = ({ data, getActivityConfig }) => {
         item.onClick({
           openDialog: (dialog, vars) => dispatchActionDialog(dialog, { asteroidId: item.asteroidId, lotId: item.lotId, ...vars }),
           openLauncher: (launcherPage) => dispatchLauncherPage(launcherPage),
-          history,
-          asteroid,
-          lot
+          history
         });
       }, 0)
     }
