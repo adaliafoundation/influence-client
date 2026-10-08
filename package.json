@@ -85,6 +85,7 @@
     "zustand": "^3.5.7"
   },
   "scripts": {
+    "audit:security": "npm audit --omit=dev --audit-level=critical",
     "analyze": "source-map-explorer 'build/static/js/*.js'",
     "start": "react-app-rewired start",
     "build": "react-app-rewired build && npm run build-server",
@@ -142,7 +143,7 @@
     "jsdom": {
       "form-data": "3.0.5"
     },
-    "shell-quote": "1.10.0",
+    "shell-quote": "1.12.0",
     "webpack": "5.110.3",
     "websocket-driver": "0.7.5"
   },

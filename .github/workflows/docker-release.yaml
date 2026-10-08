@@ -76,6 +76,12 @@ jobs:
           echo "candidate=$IMAGE:candidate-$COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
           echo "release=$IMAGE:$RELEASE_PREFIX-$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Check critical npm vulnerabilities before building
+        run: >-
+          docker run --rm -v "$PWD:/app:ro" -w /app
+          node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
+          npm run audit:security -- --package-lock-only
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -91,7 +97,7 @@ jobs:
         run: docker run --rm influence-client:test
 
       - name: Block critical npm dependency vulnerabilities
-        run: docker run --rm influence-client:test npm audit --omit=dev --audit-level=critical
+        run: docker run --rm influence-client:test npm run audit:security
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
