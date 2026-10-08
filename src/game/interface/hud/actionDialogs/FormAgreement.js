@@ -194,7 +194,8 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
     !isExpiredLeaseRenewal
   ), [auctionStatus?.isAuctionRequired, currentPolicy?.policyType, isExpiredLeaseRenewal, isLotLease]);
   const isManualAuctionBlocked = isAuctionPurchase && auctionStatus.isManualAuctionBlocked;
-  const extensionAllowed = canExtendAgreement({ agreement: currentAgreementRaw, blockTime, isExpiredLeaseRenewal });
+  const paymentAgreement = isExpiredLeaseRenewal ? auctionStatus?.expiredAgreement : currentAgreementRaw;
+  const extensionAllowed = canExtendAgreement({ agreement: paymentAgreement, blockTime, isExpiredLeaseRenewal });
   const isLeaseExtension = (isExtension && extensionAllowed) || isExpiredLeaseRenewal;
   const isExpiredExtension = isExtension && !extensionAllowed;
   const starterLotLeaseCandidate = useMemo(() => (
@@ -204,7 +205,6 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
     && daysToSeconds(currentPolicy?.policyDetails?.initialTerm || 0) <= STARTER_LOT_LEASE_TERM
     && isStarterLotLeaseCandidate({ asteroid, crew, lot: entity, permission })
   ), [asteroid, crew, currentPolicy, entity, isAuctionPurchase, isLeaseExtension, permission]);
-  const paymentAgreement = isExpiredLeaseRenewal ? auctionStatus?.expiredAgreement : currentAgreementRaw;
   const auctionDetails = useMemo(() => {
     if (!isAuctionPurchase) return null;
 
@@ -491,14 +491,14 @@ const FormAgreement = ({ agreementManager, entity, isExtension, isTermination, p
 
   const disableGo = useMemo(() => {
     if (lotLeaseCreationBlocked) return true;
-    if (isExpiredExtension) return true;
+    if ((isExtension || isExpiredLeaseRenewal) && !extensionAllowed) return true;
     if (insufficientAssets) return true;
     if (isAuctionPurchase && !auctionStatus?.isAuctionAvailable) return true;
     if (auctionRecipientsLoading) return true;
     if (isTermination && currentAgreement?._canGiveNoticeStart > blockTime) return true;
     if (!starterLotLeaseCandidate && (initialPeriod === '' || initialPeriod <= 0)) return true;
     return false;
-  }, [lotLeaseCreationBlocked, isExpiredExtension, auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
+  }, [lotLeaseCreationBlocked, isExtension, isExpiredLeaseRenewal, extensionAllowed, auctionRecipientsLoading, auctionStatus?.isAuctionAvailable, blockTime, initialPeriod, insufficientAssets, isAuctionPurchase, isTermination, currentAgreement, starterLotLeaseCandidate]);
   const leasePeriodInvalid = !starterLotLeaseCandidate && !isTermination && (isLeaseExtension || currentPolicy?.policyType === Permission.POLICY_IDS.PREPAID) && (initialPeriod === '' || initialPeriod <= 0);
   return (
     <>
