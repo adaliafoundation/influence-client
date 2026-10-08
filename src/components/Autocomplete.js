@@ -25,7 +25,7 @@ const Options = styled.div`
   max-height: 200px;
   min-width: ${p => p.width ? `${p.width}px` : 'auto'};
   overflow: auto;
-  position: absolute;
+  position: relative;
   ${p => p.dropUp && `
     bottom: ${p.inputHeight}px;
   `}
@@ -174,7 +174,14 @@ const AutocompleteComponent = ({
             width={width}
             {...dropdownProps}>
             {options.map((o, i) => (
-              <Option key={o[valueKey]} isHighlighted={i === highlighted} onClick={() => handleSelection(o)}>
+              <Option
+                key={o[valueKey]}
+                isHighlighted={i === highlighted}
+                onMouseDown={(e) => {
+                  // Keep the input and dropdown anchor focused until selection completes.
+                  if (e.button === 0) e.preventDefault();
+                }}
+                onClick={() => handleSelection(o)}>
                 <label>{formatLabel(o)}</label>
                 {formatFootnote && <Footnote>{formatFootnote(o)}</Footnote>}
               </Option>
