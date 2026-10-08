@@ -2,6 +2,8 @@
 
 Keep code clean, readable, reusable, testable, and performant. Reuse existing code where appropriate. Add comments only when they clarify non-obvious behavior. Avoid unnecessary fallbacks or non-standard handling; discuss a cleaner approach when needed.
 
+Prioritize code readability and appropriate code reuse. Keep shared behavior in one clearly named implementation instead of duplicating it across callers, and prefer straightforward control flow over unnecessary abstraction.
+
 ## Before committing
 
 Run `npm run audit:security` before every commit, even when dependencies did not change. New advisories can affect an unchanged lockfile. This uses the release pipeline's `npm audit --omit=dev --audit-level=critical` gate.

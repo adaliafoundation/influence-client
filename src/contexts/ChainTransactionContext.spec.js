@@ -1,3 +1,4 @@
+import { appConfig } from '~/appConfig';
 import { flushSync } from 'react-dom';
 import React, { useContext } from 'react';
 import { act, render } from '@testing-library/react';
@@ -17,7 +18,7 @@ jest.mock('@tanstack/react-query', () => {
   const client = { invalidateQueries: jest.fn() };
   return { useQueryClient: () => client };
 });
-jest.mock('~/appConfig', () => ({ appConfig: { get: () => undefined } }), { virtual: true });
+jest.mock('~/appConfig', () => ({ appConfig: { get: jest.fn() } }), { virtual: true });
 jest.mock('~/components/TransactionFeePrompt', () => () => null, { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useStore', () => jest.fn(), { virtual: true });
@@ -36,7 +37,7 @@ jest.mock('~/hooks/useWalletTokenBalance', () => ({ useSwayBalance: () => ({ dat
 jest.mock('~/lib/api', () => ({}), { virtual: true });
 jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn() }), { virtual: true });
 jest.mock('~/lib/escrow', () => ({}), { virtual: true });
-jest.mock('~/lib/paymaster', () => ({}), { virtual: true });
+jest.mock('~/lib/paymaster', () => ({ isPaymasterUnavailable: () => false, isSponsorshipUnavailable: () => false }), { virtual: true });
 jest.mock('~/lib/deliveryAuthorization', () => ({}), { virtual: true });
 jest.mock('~/lib/missionBindings', () => ({}), { virtual: true });
 jest.mock('~/lib/transactionAuthorization', () => ({ recheckTransactionAuthorization: async () => ({ status: 'allowed' }) }), { virtual: true });
@@ -52,6 +53,7 @@ const tree = () => <ChainTransactionProvider><Probe /></ChainTransactionProvider
 const account = { address: '0x123' };
 beforeEach(() => {
   jest.clearAllMocks();
+  appConfig.get.mockReset();
   session = {
     accountAddress: '0x123', authenticated: true, walletReadyForTransactions: true, walletCapabilities: {}, walletId: 'argentX',
     login: jest.fn().mockResolvedValue(),
@@ -245,4 +247,89 @@ test('reports a wallet acknowledgement timeout as unknown without recording a fa
     data: expect.objectContaining({ content: expect.stringContaining('Open your wallet to check it') }),
   }));
   expect(chain.promptingTransaction).toBe(false);
+});
+
+
+describe('automatic sponsored account deployment', () => {
+  const calls = [{ contractAddress: '0x1', entrypoint: 'transfer', calldata: [] }];
+  beforeEach(() => {
+    appConfig.get.mockImplementation(key => key === 'Starknet.paymasterProxy' ? 'https://paymaster.example' : undefined);
+    session.chainId = 'chain-1';
+    session.isDeployed = false;
+    session.walletCapabilities = { requiresSponsoredTransactions: true };
+    session.accountDeploymentData = { address: '0x123' };
+    session.walletAccount = { ...account, executePaymasterTransaction: jest.fn()
+      .mockResolvedValueOnce({ transaction_hash: '0xdeploy' })
+      .mockResolvedValue({ transaction_hash: '0xinvoke' }) };
+    session.provider = {
+      getClassAt: jest.fn().mockRejectedValue(new Error('Contract not found')),
+      waitForTransaction: jest.fn().mockResolvedValue({ execution_status: 'SUCCEEDED' })
+    };
+    session.upgradeInsecureSession = jest.fn().mockResolvedValue(true);
+  });
+
+  test('deploys and upgrades before gameplay without a checkout or provisioning dependency', async () => {
+    render(tree());
+    await act(async () => { await chain.executeCalls(calls); });
+    const execute = session.walletAccount.executePaymasterTransaction;
+    expect(execute.mock.calls).toEqual([
+      [[], { feeMode: { mode: 'sponsored' }, deploymentData: session.accountDeploymentData }],
+      [calls, { feeMode: { mode: 'sponsored' } }]
+    ]);
+    expect(session.upgradeInsecureSession.mock.invocationCallOrder[0]).toBeLessThan(execute.mock.invocationCallOrder[1]);
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+  });
+
+  test('checkout and gameplay share an in-flight deployment', async () => {
+    let confirm, notifyWaiting;
+    const waiting = new Promise(resolve => { notifyWaiting = resolve; });
+    session.provider.waitForTransaction.mockImplementationOnce(() => new Promise(resolve => {
+      confirm = resolve;
+      notifyWaiting();
+    }));
+    render(tree());
+    await act(async () => {
+      const checkout = chain.deployAccount();
+      const gameplay = chain.executeCalls(calls);
+      await waiting;
+      confirm({ execution_status: 'SUCCEEDED' });
+      await Promise.all([checkout, gameplay]);
+    });
+    expect(session.walletAccount.executePaymasterTransaction.mock.calls.filter(([submitted]) => submitted.length === 0)).toHaveLength(1);
+  });
+
+  test('deployment failure stops gameplay and permits retry', async () => {
+    session.walletAccount.executePaymasterTransaction.mockReset()
+      .mockRejectedValueOnce(new Error('Sponsorship unavailable'))
+      .mockResolvedValue({ transaction_hash: '0xretry' });
+    render(tree());
+    await act(async () => { await expect(chain.executeCalls(calls)).rejects.toThrow('Sponsorship unavailable'); });
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+    await act(async () => { await chain.executeCalls(calls); });
+    expect(session.walletAccount.executePaymasterTransaction.mock.calls.map(([submitted]) => submitted)).toEqual([[], [], calls]);
+  });
+
+  test('does not continue gameplay when the session upgrade fails', async () => {
+    session.upgradeInsecureSession.mockResolvedValue(false);
+    render(tree());
+    await act(async () => { await expect(chain.executeCalls(calls)).rejects.toThrow('Unable to upgrade account session'); });
+    expect(session.walletAccount.executePaymasterTransaction).toHaveBeenCalledTimes(1);
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+  });
+
+  test('respects an explicit paymaster opt-out', async () => {
+    render(tree());
+    await act(async () => { await chain.executeCalls(calls, { usePaymaster: false }); });
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ usePaymaster: false }));
+  });
+
+  test('an already deployed account goes straight to sponsored gameplay', async () => {
+    session.isDeployed = true;
+    session.provider.getNonceForAddress = jest.fn().mockResolvedValue(1);
+    render(tree());
+    await act(async () => { await chain.executeCalls(calls); });
+    expect(session.walletAccount.executePaymasterTransaction).toHaveBeenCalledWith(calls, { feeMode: { mode: 'sponsored' } });
+    expect(session.provider.getClassAt).not.toHaveBeenCalled();
+  });
 });

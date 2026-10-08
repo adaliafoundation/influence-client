@@ -1,3 +1,4 @@
+import { createAccountDeployment } from '../lib/accountDeployment';
 import { errorMessages } from '../lib/errorMessages';
 import { createFundingError, isUserCancellation, reportFailure } from '../lib/errorReporting';
 import { deliveryPaymentTransfers } from '~/lib/deliveryAuthorization';
@@ -639,6 +640,11 @@ export function ChainTransactionProvider({ children }) {
   const usdcRef = useRef();
   usdcRef.current = usdcBalanceSource;
 
+  const deploymentManager = useRef();
+  if (!deploymentManager.current) deploymentManager.current = createAccountDeployment();
+  const deploymentIdentity = useRef();
+  deploymentIdentity.current = { accountAddress, chainId, authenticated };
+
   const executionRef = useRef();
   const walletAccountRef = useRef();
   // Account discovery precedes login/session approval; signing must wait for both.
@@ -716,6 +722,33 @@ export function ChainTransactionProvider({ children }) {
     }
   }, [upgradeInsecureSession]);
 
+  const ensureAccountDeployed = useCallback(async () => {
+    if (isDeployed) return { deployed: true, transaction: null };
+    const account = walletAccountRef.current;
+    if (!account) throw new Error('Account is disconnected');
+    if (!walletCapabilities.requiresSponsoredTransactions) {
+      const error = new Error('Wallet account deployment is not sponsored for this wallet.');
+      error.userMessage = errorMessages.setupRequired;
+      throw error;
+    }
+    if (!appConfig.get('Starknet.paymasterProxy')) {
+      const error = new Error('Privy sponsorship requires the Influence paymaster proxy.');
+      error.userMessage = errorMessages.serviceUnavailable;
+      throw error;
+    }
+    return deploymentManager.current({
+      chainId, address: accountAddress, account, provider, deploymentData: accountDeploymentData,
+      refreshSession: requireSessionUpgrade,
+      assertCurrent: () => {
+        const current = deploymentIdentity.current;
+        if (!current.authenticated || current.accountAddress !== accountAddress || current.chainId !== chainId) {
+          throw new Error('Account or network changed during deployment. Please retry.');
+        }
+      }
+    });
+  }, [accountAddress, accountDeploymentData, chainId, isDeployed, provider, requireSessionUpgrade,
+    walletCapabilities.requiresSponsoredTransactions]);
+
   const requireExplicitAuthorization = useCallback(async (account, options = {}) => {
     if (!options.requireExplicitSignature || !walletCapabilities.usesClientRawSigning) return;
 
@@ -751,7 +784,13 @@ export function ChainTransactionProvider({ children }) {
   const executeWithAccount = useCallback(async (calls, options = {}) => {
     const walletAccount = walletAccountRef.current;
     if (!walletAccount) throw new Error('Account is disconnected');
-    const account = await getTransactionAccount(walletAccount, calls, options);
+    // Deployment is shared with checkout and must complete before preparing the gameplay call.
+    let accountIsDeployed = isDeployed;
+    if (options.usePaymaster !== false && walletCapabilities.requiresSponsoredTransactions && !accountIsDeployed) {
+      await ensureAccountDeployed();
+      accountIsDeployed = true;
+    }
+    const account = await getTransactionAccount(walletAccountRef.current, calls, options);
     const paymasterConfigured = walletCapabilities.requiresSponsoredTransactions
       ? appConfig.get('Starknet.paymasterProxy')
       : appConfig.get('Starknet.paymaster');
@@ -775,21 +814,9 @@ export function ChainTransactionProvider({ children }) {
         throw error;
       }
 
-      let deploymentData;
-      if (!isDeployed) {
-        try {
-          await provider.getClassAt(accountAddress);
-          await requireSessionUpgrade();
-        } catch (error) {
-          if (!error.message?.includes('Contract not found')) throw error;
-          if (accountDeploymentData) deploymentData = accountDeploymentData;
-        }
-      }
-
       try {
         return await account.executePaymasterTransaction(formattedCalls, {
-          feeMode: { mode: 'sponsored' },
-          ...(deploymentData ? { deploymentData } : {})
+          feeMode: { mode: 'sponsored' }
         });
       } catch (error) {
         if (isUserCancellation(error)) throw error;
@@ -811,7 +838,7 @@ export function ChainTransactionProvider({ children }) {
     return executePaidTransaction({
       account,
       calls: formattedCalls,
-      usePaymaster: paymasterAvailable && isDeployed,
+      usePaymaster: paymasterAvailable && accountIsDeployed,
       feeTokens: PAYMASTER_FEE_TOKENS.map((gasToken) => ({
         address: gasToken,
         name: Address.areEqual(gasToken, TOKEN.USDC) ? 'USDC' : 'SWAY',
@@ -826,18 +853,16 @@ export function ChainTransactionProvider({ children }) {
     });
   }, [
     accountAddress,
-    accountDeploymentData,
     dispatchFeeTokenEnabled,
     dispatchLauncherPage,
     dispatchPaidFeesAcknowledged,
     gameplay.feeTokens,
     getTransactionAccount,
+    ensureAccountDeployed,
     isDeployed,
     paymasterTokens,
     paidFeesAcknowledged,
-    provider,
     requestFeePermission,
-    requireSessionUpgrade,
     walletCapabilities.requiresSponsoredTransactions
   ]);
 
@@ -1303,66 +1328,16 @@ export function ChainTransactionProvider({ children }) {
       throw new Error(notifyWalletDisconnected());
     }
 
-    if (!walletCapabilities.requiresSponsoredTransactions) {
-      const error = new Error('Wallet account deployment is not sponsored for this wallet.');
-      error.userMessage = errorMessages.setupRequired;
-      throw error;
-    }
-
-    if (!accountDeploymentData) {
-      const error = new Error('Missing account deployment data.');
-      error.userMessage = errorMessages.setupRequired;
-      throw error;
-    }
-
-    if (!appConfig.get('Starknet.paymasterProxy')) {
-      const error = new Error('Privy sponsorship requires the Influence paymaster proxy.');
-      error.userMessage = errorMessages.serviceUnavailable;
-      throw error;
-    }
-
-    try {
-      await provider.getClassAt(accountAddress);
-      await requireSessionUpgrade();
-      return { deployed: true, transaction: null };
-    } catch (error) {
-      if (!error.message?.includes('Contract not found')) throw error;
-    }
-
     setPromptingTransaction(true);
     try {
-      const tx = await activeWalletAccount.executePaymasterTransaction([], {
-        feeMode: { mode: 'sponsored' },
-        deploymentData: accountDeploymentData
-      });
-      const txHash = cleanseTxHash(tx);
-
-      if (txHash) {
-        const receipt = await provider.waitForTransaction(txHash, { retryInterval: RETRY_INTERVAL });
-        if (receipt) {
-          await requireSessionUpgrade();
-        }
-      }
-
-      return { deployed: true, transaction: tx };
+      return await ensureAccountDeployed();
     } catch (e) {
       handleExecutionExeption(e, null, null);
       throw e;
     } finally {
       setPromptingTransaction(false);
     }
-  }, [
-    accountAddress,
-    accountDeploymentData,
-    createAlert,
-    handleExecutionExeption,
-    isDeployed,
-    provider,
-    requireSessionUpgrade,
-    notifyWalletDisconnected,
-    refreshWalletConnection,
-    walletCapabilities.requiresSponsoredTransactions
-  ]);
+  }, [ensureAccountDeployed, handleExecutionExeption, isDeployed, notifyWalletDisconnected, refreshWalletConnection]);
 
   // Allows for multiple explicit / manual calls to be executed in a single transaction
   const executeCalls = useCallback(async (calls, options = {}) => {

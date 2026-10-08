@@ -16,7 +16,7 @@ const chainId = '0x534e5f5345504f4c4941';
 const calls = [{ contractAddress: '0x123', entrypoint: 'transfer', calldata: ['0x456', '0x7', '0x0'] }];
 const rawSignature = `0x${'1'.padStart(64, '0')}${'2'.padStart(64, '0')}`;
 
-function setupPaymaster({ deploy = false, paid = false, alterTypedData } = {}) {
+function setupPaymaster({ deploy = false, deployOnly = false, paid = false, alterTypedData } = {}) {
   const provider = new RpcProvider({
     nodeUrl: 'https://rpc.example',
     chainId,
@@ -45,7 +45,7 @@ function setupPaymaster({ deploy = false, paid = false, alterTypedData } = {}) {
   if (alterTypedData) alterTypedData(message);
   const parameters = { version: '0x1', fee_mode: paid ? { mode: 'default', gas_token: gasToken } : { mode: 'sponsored' } };
   const prepared = {
-    type: deploy ? 'deploy_and_invoke' : 'invoke',
+    type: deployOnly ? 'deploy' : deploy ? 'deploy_and_invoke' : 'invoke',
     ...(deploy ? { deployment: details.deploymentData } : {}),
     typed_data: message,
     parameters,
@@ -130,5 +130,16 @@ test('connects Ready with the configured RPC and preserves its execute request',
     } });
   } finally {
     info.mockRestore();
+  }
+});
+
+
+test('standalone sponsored deployment uses deploy requests without a gameplay invoke', async () => {
+  const { account, deploymentData, paymasterDetails } = setupPaymaster({ deploy: true, deployOnly: true });
+  await expect(account.executePaymasterTransaction([], paymasterDetails)).resolves.toEqual({ transaction_hash: '0xabc' });
+  const requests = global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body));
+  expect(requests.map(request => request.method)).toEqual(['paymaster_buildTransaction', 'paymaster_executeTransaction']);
+  for (const request of requests) {
+    expect(request.params.transaction).toEqual({ type: 'deploy', deployment: deploymentData });
   }
 });
