@@ -28,6 +28,7 @@ import { sameBridgeAddress } from '~/bridge/transfers';
 import { MAX_BRIDGE_ASSETS, getBridgeBatchError } from '~/bridge/limits';
 import BridgeAssetAction from '~/game/launcher/components/BridgeAssetAction';
 import BridgeCrewDelegationDialog from '~/game/launcher/components/BridgeCrewDelegationDialog';
+import BridgeAssetTransferDialog from '~/game/launcher/components/BridgeAssetTransferDialog';
 import LauncherDialog from '~/game/launcher/components/LauncherDialog';
 import useBridgeActions from '~/hooks/useBridgeActions';
 import useBridgeAssets, { useBridgeSway } from '~/hooks/useBridgeAssets';
@@ -794,6 +795,7 @@ const AssetPane = ({ assetType }) => {
   const [finalizedProgressKeys, setFinalizedProgressKeys] = useState([]);
   const [processingProgressKeys, setProcessingProgressKeys] = useState([]);
   const [delegation, setDelegation] = useState(null);
+  const [transfer, setTransfer] = useState(null);
 
   const configured = isBridgeAssetConfigured(assetType);
   const ethereumAssetIds = useMemo(() => (
@@ -861,6 +863,12 @@ const AssetPane = ({ assetType }) => {
     queryClient.invalidateQueries({ queryKey });
   }, [queryClient, starknetAddress]);
 
+  const onTransferred = useCallback((assetId) => {
+    const queryKey = ['bridgeAssets', assetType, 'starknet', starknetAddress, bridgeNetwork];
+    queryClient.setQueryData(queryKey, (assets) => assets?.filter((asset) => Number(asset.id) !== Number(assetId)));
+    queryClient.invalidateQueries({ queryKey: ['bridgeAssets', assetType] });
+  }, [assetType, queryClient, starknetAddress]);
+
   const renderAssetAction = (chain) => (asset) => {
     if (assetType === 'asteroids' && claimedAsteroidIds.includes(Number(asset.id))) return null;
     return (
@@ -869,8 +877,9 @@ const AssetPane = ({ assetType }) => {
         assetType={assetType}
         chain={chain}
         accountAddress={starknetAddress}
-        disabled={!!busyKey || !!delegation}
+        disabled={!!busyKey || !!delegation || !!transfer}
         onMint={mintCrewFromAsteroid}
+        onTransfer={setTransfer}
         onDelegate={(crew, revoke) => setDelegation({ crew, revoke })} />
     );
   };
@@ -896,7 +905,7 @@ const AssetPane = ({ assetType }) => {
             address={ethereumAddress}
             assets={ethereumAssets.data || []}
             assetType={assetType}
-            canAct={!busyKey}
+            canAct={!busyKey && !delegation && !transfer}
             chain="ethereum"
             renderAssetAction={renderAssetAction('ethereum')}
             icon={<EthIcon />}
@@ -911,7 +920,7 @@ const AssetPane = ({ assetType }) => {
             address={starknetAddress}
             assets={starknetAssets.data || []}
             assetType={assetType}
-            canAct={!!starknetAddress && !busyKey}
+            canAct={!!starknetAddress && !busyKey && !delegation && !transfer}
             chain="starknet"
             renderAssetAction={renderAssetAction('starknet')}
             icon={<ChainImageIcon alt="" src={StarknetIconImage} />}
@@ -927,6 +936,14 @@ const AssetPane = ({ assetType }) => {
           </ColumnFooter>
         )}
       </PaneContent>
+      {transfer && (
+        <BridgeAssetTransferDialog
+          asset={transfer}
+          assetType={assetType}
+          ownerAddress={starknetAddress}
+          onTransferred={onTransferred}
+          onClose={() => setTransfer(null)} />
+      )}
       {delegation && (
         <BridgeCrewDelegationDialog
           crew={delegation.crew}

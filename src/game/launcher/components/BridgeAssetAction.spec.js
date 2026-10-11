@@ -4,7 +4,7 @@ import BridgeAssetAction from './BridgeAssetAction';
 jest.mock('~/components/IconButton', () => ({ children, onClick, disabled, dataTip, ...props }) => (
   <button aria-label={props['aria-label']} title={dataTip} disabled={disabled} onClick={onClick}>{children}</button>
 ), { virtual: true });
-jest.mock('~/components/Icons', () => ({ CrewIcon: () => null, UserIcon: () => null }), { virtual: true });
+jest.mock('~/components/Icons', () => ({ GoIcon: () => null, CrewIcon: () => null, UserIcon: () => null }), { virtual: true });
 jest.mock('~/bridge/transfers', () => jest.requireActual('../../../bridge/transfers'), { virtual: true });
 
 test('mints only the clicked asteroid without toggling bridge selection', () => {
@@ -51,4 +51,17 @@ test('cannot delegate another wallet’s crew or a crew on Ethereum', () => {
   expect(screen.queryByRole('button')).toBeNull();
   rerender(<BridgeAssetAction asset={crew} assetType="crews" chain="ethereum" accountAddress="0xb" />);
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+test.each(['crews', 'crewmates'])('transfers owned %s without selecting the bridge row', (assetType) => {
+  const onTransfer = jest.fn();
+  const select = jest.fn();
+  const asset = { id: 12, Nft: { owners: { starknet: '0xa' } } };
+  render(<div onClick={select}><BridgeAssetAction asset={asset} assetType={assetType}
+    chain="starknet" accountAddress="0xa" onTransfer={onTransfer} /></div>);
+  const button = screen.getByRole('button', { name: /Transfer .* Ownership/ });
+  expect(button.title).toMatch(/Transfer .* Ownership/);
+  fireEvent.click(button);
+  expect(onTransfer).toHaveBeenCalledWith(asset);
+  expect(select).not.toHaveBeenCalled();
 });

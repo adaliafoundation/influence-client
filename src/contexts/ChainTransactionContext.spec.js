@@ -10,7 +10,7 @@ import { isWalletAccountLocked } from '~/lib/walletLock';
 
 jest.mock('@influenceth/sdk', () => ({
   Address: { areEqual: (a, b) => a === b }, Entity: { IDS: {} },
-  System: { Systems: { ChangeName: {} }, getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
+  System: { getFormattedCall: jest.fn(), Systems: { ChangeName: {} }, getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
 }));
 jest.mock('starknet', () => ({ num: { toHex: value => value } }));
 jest.mock('@avnu/avnu-sdk', () => ({}));
@@ -332,4 +332,19 @@ describe('automatic sponsored account deployment', () => {
     expect(session.walletAccount.executePaymasterTransaction).toHaveBeenCalledWith(calls, { feeMode: { mode: 'sponsored' } });
     expect(session.provider.getClassAt).not.toHaveBeenCalled();
   });
+});
+
+test('NFT transfers call the token contract directly and register a pending transaction', async () => {
+  require('@influenceth/sdk').System.getFormattedCall.mockImplementation((contractAddress, entrypoint, fields) => ({ contractAddress, entrypoint, calldata: [] }));
+  session.walletAccount = account;
+  render(tree());
+  const vars = { tokenAddress: '0xc', tokenId: 12, from: '0x123', to: '0xb' };
+  let result;
+  await act(async () => { result = await chain.execute('TransferNft', vars, {}, { requireExplicitSignature: true }); });
+  expect(require('@influenceth/sdk').System.getFormattedCall).toHaveBeenCalledWith('0xc', 'transfer_from', [
+    { value: '0x123', type: 'felt' }, { value: '0xb', type: 'felt' }, { value: 12, type: 'u256' }
+  ]);
+  expect(session.getTransactionAccount).toHaveBeenCalledWith(account, [expect.objectContaining({ entrypoint: 'transfer_from' })], expect.objectContaining({ requireExplicitSignature: true }));
+  expect(result).toEqual({ status: 'submitted', txHash: '0xabc' });
+  expect(state.dispatchPendingTransaction).toHaveBeenCalledWith(expect.objectContaining({ key: 'TransferNft', vars, txHash: '0xabc' }));
 });
