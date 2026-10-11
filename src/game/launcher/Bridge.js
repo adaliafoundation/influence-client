@@ -870,7 +870,7 @@ const AssetPane = ({ assetType }) => {
   }, [assetType, queryClient, starknetAddress]);
 
   const renderAssetAction = (chain) => (asset) => {
-    if (assetType === 'asteroids' && claimedAsteroidIds.includes(Number(asset.id))) return null;
+    if (chain === 'ethereum' && assetType === 'asteroids' && claimedAsteroidIds.includes(Number(asset.id))) return null;
     return (
       <BridgeAssetAction
         asset={asset}

@@ -31,8 +31,8 @@ jest.mock('~/hooks/useStore', () => ({ getState: () => ({ dispatchAlertLogged: j
 jest.mock('../../../lib/errorReporting', () => ({ reportFailure: jest.fn() }));
 
 jest.mock('~/bridge/assets', () => ({ getBridgeAssetConfig: (type) => ({
-  starknetAssetAddress: type === 'crews' ? '0xc' : '0xd',
-  starknetName: type === 'crews' ? 'Crew' : 'Crewmate'
+  starknetAssetAddress: { crews: '0xc', crewmates: '0xd', asteroids: '0xe', ships: '0xf' }[type],
+  starknetName: { crews: 'Crew', crewmates: 'Crewmate', asteroids: 'Asteroid', ships: 'Ship' }[type]
 }) }), { virtual: true });
 
 let execute, onTransferred;
@@ -49,9 +49,9 @@ beforeEach(() => {
   onTransferred = jest.fn();
 });
 
-test.each(['crews', 'crewmates'])('transfers %s through explicit wallet approval and waits for indexing', async (type) => {
+test.each(['crews', 'crewmates', 'asteroids', 'ships'])('transfers %s through explicit wallet approval and waits for indexing', async (type) => {
   render(view(type));
-  const name = type === 'crews' ? 'Crew' : 'Crewmate';
+  const name = { crews: 'Crew', crewmates: 'Crewmate', asteroids: 'Asteroid', ships: 'Ship' }[type];
   expect(screen.getByRole('dialog', { name: `Transfer ${name}` })).toBeTruthy();
   expect(screen.getByText(/You will no longer own it/)).toBeTruthy();
   for (const address of ['', 'invalid', '0x0', '0x' + 'f'.repeat(64), '0x000a']) {
@@ -62,7 +62,7 @@ test.each(['crews', 'crewmates'])('transfers %s through explicit wallet approval
   fireEvent.click(screen.getByRole('button', { name: `Transfer ${name}` }));
   await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
   expect(execute).toHaveBeenCalledWith('TransferNft', {
-    tokenAddress: type === 'crews' ? '0xc' : '0xd', tokenId: 12, from: '0xa', to: expect.any(String)
+    tokenAddress: { crews: '0xc', crewmates: '0xd', asteroids: '0xe', ships: '0xf' }[type], tokenId: 12, from: '0xa', to: expect.any(String)
   }, {}, { requireExplicitSignature: true });
   expect(BigInt(execute.mock.calls[0][1].to)).toBe(11n);
   expect(onTransferred).not.toHaveBeenCalled();

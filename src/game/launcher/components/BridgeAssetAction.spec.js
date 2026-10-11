@@ -5,6 +5,9 @@ jest.mock('~/components/IconButton', () => ({ children, onClick, disabled, dataT
   <button aria-label={props['aria-label']} title={dataTip} disabled={disabled} onClick={onClick}>{children}</button>
 ), { virtual: true });
 jest.mock('~/components/Icons', () => ({ GoIcon: () => null, CrewIcon: () => null, UserIcon: () => null }), { virtual: true });
+jest.mock('~/bridge/assets', () => ({ getBridgeAssetConfig: (type) => ({ starknetAssetAddress: '0xc',
+  starknetName: { crews: 'Crew', crewmates: 'Crewmate', asteroids: 'Asteroid', ships: 'Ship' }[type]
+}) }), { virtual: true });
 jest.mock('~/bridge/transfers', () => jest.requireActual('../../../bridge/transfers'), { virtual: true });
 
 test('mints only the clicked asteroid without toggling bridge selection', () => {
@@ -53,7 +56,7 @@ test('cannot delegate another wallet’s crew or a crew on Ethereum', () => {
   expect(screen.queryByRole('button')).toBeNull();
 });
 
-test.each(['crews', 'crewmates'])('transfers owned %s without selecting the bridge row', (assetType) => {
+test.each(['crews', 'crewmates', 'asteroids', 'ships'])('transfers owned %s without selecting the bridge row', (assetType) => {
   const onTransfer = jest.fn();
   const select = jest.fn();
   const asset = { id: 12, Nft: { owners: { starknet: '0xa' } } };

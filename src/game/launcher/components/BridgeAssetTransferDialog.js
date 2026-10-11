@@ -12,8 +12,7 @@ const TransferForm = ({ asset, assetType, ownerAddress, onClose, onTransferred }
     ownerAddress={ownerAddress}
     currentAddress={ownerAddress}
     title={`Transfer ${config.starknetName}`}
-    description={<>Enter the Starknet account that will receive ownership of this {config.starknetName.toLowerCase()} NFT. You will no longer own it and cannot revoke this transfer.
-      {assetType === 'crews' && ' Crewmate NFTs and crew delegation are unchanged; transfer crewmates separately and update delegation if needed.'}</>}
+    description={`Enter the Starknet account that will receive ownership of this ${config.starknetName.toLowerCase()} NFT. You will no longer own it and cannot revoke this transfer.`}
     successMessage={`${config.starknetName} transferred successfully.`}
     actionName="Transfer"
     onSubmit={(to) => execute('TransferNft', getVars(to), {}, { requireExplicitSignature: true })}
