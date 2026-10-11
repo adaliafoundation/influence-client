@@ -1,5 +1,7 @@
+import styled from 'styled-components';
 import IconButton from '~/components/IconButton';
-import { CrewIcon, UserIcon } from '~/components/Icons';
+import { CrewIcon, UserIcon, GoIcon } from '~/components/Icons';
+import { getBridgeAssetConfig } from '~/bridge/assets';
 import { sameBridgeAddress } from '~/bridge/transfers';
 
 export const hasCrewDelegation = (crew, ownerAddress) => (
@@ -8,41 +10,44 @@ export const hasCrewDelegation = (crew, ownerAddress) => (
   && !sameBridgeAddress(crew.Crew.delegatedTo, ownerAddress)
 );
 
-const BridgeAssetAction = ({ asset, assetType, chain, accountAddress, disabled, onMint, onDelegate }) => {
-  let label;
-  let onClick;
-  let icon;
-  let revoke = false;
-  if (assetType === 'asteroids' && chain === 'ethereum' && asset.AsteroidReward?.hasMintableCrewmate) {
-    label = 'Mint Crewmate';
-    onClick = () => onMint(asset.id);
-    icon = <UserIcon />;
-  } else if (assetType === 'crews' && chain === 'starknet'
-    && sameBridgeAddress(asset.Nft?.owners?.starknet || asset.Nft?.owner, accountAddress)) {
-    revoke = hasCrewDelegation(asset, accountAddress);
-    label = revoke ? 'Revoke Delegation' : 'Delegate Crew';
-    onClick = () => onDelegate(asset, revoke);
-    icon = <CrewIcon />;
-  } else {
-    return null;
-  }
+const AssetActions = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+`;
 
-  return (
-    <IconButton
-      active={revoke}
-      aria-label={label}
-      dataTip={label}
-      dataFor="launcherTooltip"
-      dataPlace="left"
-      disabled={disabled}
-      marginless
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}>
-      {icon}
-    </IconButton>
-  );
+const AssetButton = ({ label, active, disabled, onClick, children }) => (
+  <IconButton
+    active={active}
+    aria-label={label}
+    dataTip={label}
+    dataFor="launcherTooltip"
+    dataPlace="left"
+    disabled={disabled}
+    marginless
+    onClick={(event) => { event.stopPropagation(); onClick(); }}>
+    {children}
+  </IconButton>
+);
+
+const BridgeAssetAction = ({ asset, assetType, chain, accountAddress, disabled, onMint, onDelegate, onTransfer }) => {
+  if (assetType === 'asteroids' && chain === 'ethereum' && asset.AsteroidReward?.hasMintableCrewmate) {
+    return <AssetButton label="Mint Crewmate" disabled={disabled} onClick={() => onMint(asset.id)}><UserIcon /></AssetButton>;
+  }
+  const config = getBridgeAssetConfig(assetType);
+  if (chain !== 'starknet' || !config?.starknetAssetAddress
+    || !sameBridgeAddress(asset.Nft?.owners?.starknet || asset.Nft?.owner, accountAddress)) return null;
+
+  const revoke = hasCrewDelegation(asset, accountAddress);
+  return <AssetActions>
+    {assetType === 'crews' && (
+      <AssetButton label={revoke ? 'Revoke Delegation' : 'Delegate Crew'} active={revoke}
+        disabled={disabled} onClick={() => onDelegate(asset, revoke)}><CrewIcon /></AssetButton>
+    )}
+    <AssetButton label={`Transfer ${config.starknetName} Ownership`}
+      disabled={disabled} onClick={() => onTransfer(asset)}><GoIcon /></AssetButton>
+  </AssetActions>;
 };
 
 export default BridgeAssetAction;

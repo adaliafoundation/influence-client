@@ -503,6 +503,18 @@ const customConfigs = {
     equalityTest: ['target.label', 'target.id', 'permission'],
     isVirtual: true
   },
+  TransferNft: {
+    getNonsystemCalls: ({ tokenAddress, tokenId, from, to }) => [
+      System.getFormattedCall(tokenAddress, 'transfer_from', [
+        { value: from, type: 'felt' },
+        { value: to, type: 'felt' },
+        { value: tokenId, type: 'u256' }
+      ])
+    ],
+    equalityTest: ['tokenAddress', 'tokenId'],
+    noSystemCalls: true,
+    isVirtual: true,
+  },
   SetNftSellOrder: {
     getNonsystemCalls: ({ tokenAddress, tokenId, price }) => [
       System.getFormattedCall(
