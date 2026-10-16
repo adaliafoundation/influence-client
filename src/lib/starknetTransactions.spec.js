@@ -16,12 +16,15 @@ const chainId = '0x534e5f5345504f4c4941';
 const calls = [{ contractAddress: '0x123', entrypoint: 'transfer', calldata: ['0x456', '0x7', '0x0'] }];
 const rawSignature = `0x${'1'.padStart(64, '0')}${'2'.padStart(64, '0')}`;
 
-function setupPaymaster({ deploy = false, deployOnly = false, paid = false, alterTypedData } = {}) {
+async function setupPaymaster({ legacy = false, deploy = false, deployOnly = false, paid = false, alterTypedData } = {}) {
   const provider = new RpcProvider({
     nodeUrl: 'https://rpc.example',
     chainId,
     baseFetch: jest.fn().mockResolvedValue({ json: async () => ({ result: ['0x1'] }) })
   });
+  provider.getClassHashAt = legacy
+    ? jest.fn().mockResolvedValue('0x73414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2')
+    : jest.fn().mockRejectedValue({ code: 20 });
   let token = 'initial-token';
   const paymaster = createAuthenticatedPaymasterRpc({
     nodeUrl: 'https://paymaster.example',
@@ -31,7 +34,7 @@ function setupPaymaster({ deploy = false, deployOnly = false, paid = false, alte
     token = 'refreshed-token';
     return rawSignature;
   });
-  const details = createPrivyReadyAccount({
+  const details = await createPrivyReadyAccount({
     provider, paymaster, signRawHash,
     wallet: { address: '0xabc', chainType: 'starknet', publicKey: '0x123' }
   });
@@ -67,8 +70,8 @@ function setupPaymaster({ deploy = false, deployOnly = false, paid = false, alte
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 
-test.each([false, true])('signs and submits sponsored Privy transactions (deployment: %s)', async (deploy) => {
-  const { account, signRawHash, message, parameters, deploymentData, paymasterDetails } = setupPaymaster({ deploy });
+test.each([{ deploy: false }, { deploy: true }, { legacy: true }])('signs and submits sponsored Privy transactions (%j)', async ({ deploy = false, legacy = false }) => {
+  const { account, signRawHash, message, parameters, deploymentData, paymasterDetails } = await setupPaymaster({ deploy, legacy });
 
   await expect(account.executePaymasterTransaction(calls, paymasterDetails)).resolves.toEqual({ transaction_hash: '0xabc' });
   expect(signRawHash).toHaveBeenCalledWith(typedData.getMessageHash(message, account.address));
@@ -88,7 +91,7 @@ test.each([false, true])('signs and submits sponsored Privy transactions (deploy
 });
 
 test('estimates and submits a gas-token payment within the approved fee cap', async () => {
-  const { account, paymasterDetails } = setupPaymaster({ paid: true });
+  const { account, paymasterDetails } = await setupPaymaster({ paid: true });
   const fee = await account.estimatePaymasterTransactionFee(calls, paymasterDetails);
   expect(fee.suggested_max_fee_in_gas_token).toBe(10n);
   await expect(account.executePaymasterTransaction(calls, paymasterDetails, 10n))
@@ -99,14 +102,14 @@ test.each([
   ['wrong chain', (message) => { message.domain.chainId = '0x534e5f4d41494e'; }, /chainId/],
   ['altered call', (message) => { message.message.Calls[0].Calldata = ['0x999', '0x7', '0x0']; }, /Calldata value mismatch/]
 ])('rejects a paymaster response with %s before signing', async (_name, alterTypedData, error) => {
-  const { account, paymasterDetails, signRawHash } = setupPaymaster({ alterTypedData });
+  const { account, paymasterDetails, signRawHash } = await setupPaymaster({ alterTypedData });
   await expect(account.executePaymasterTransaction(calls, paymasterDetails)).rejects.toThrow(error);
   expect(signRawHash).not.toHaveBeenCalled();
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 
 test('rejects a gas-token fee above the approved cap before signing', async () => {
-  const { account, paymasterDetails, signRawHash } = setupPaymaster({ paid: true });
+  const { account, paymasterDetails, signRawHash } = await setupPaymaster({ paid: true });
   await expect(account.executePaymasterTransaction(calls, paymasterDetails, 9n)).rejects.toThrow('Gas token price is too high');
   expect(signRawHash).not.toHaveBeenCalled();
 });
@@ -135,7 +138,7 @@ test('connects Ready with the configured RPC and preserves its execute request',
 
 
 test('standalone sponsored deployment uses deploy requests without a gameplay invoke', async () => {
-  const { account, deploymentData, paymasterDetails } = setupPaymaster({ deploy: true, deployOnly: true });
+  const { account, deploymentData, paymasterDetails } = await setupPaymaster({ deploy: true, deployOnly: true });
   await expect(account.executePaymasterTransaction([], paymasterDetails)).resolves.toEqual({ transaction_hash: '0xabc' });
   const requests = global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body));
   expect(requests.map(request => request.method)).toEqual(['paymaster_buildTransaction', 'paymaster_executeTransaction']);

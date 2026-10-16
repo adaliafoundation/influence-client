@@ -10,6 +10,7 @@ import {
 } from 'starknet';
 
 export const PRIVY_STARKNET_CHAIN_TYPE = 'starknet';
+export const READY_V040_ACCOUNT_CLASS_HASH = '0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f';
 export const READY_V050_ACCOUNT_CLASS_HASH = '0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2';
 
 const stripHexPrefix = (value) => value.startsWith('0x') ? value.slice(2) : value;
@@ -72,20 +73,20 @@ export class PrivyStarknetSigner extends Signer {
   }
 }
 
-export const getReadyV050ConstructorCalldata = (publicKey) => {
+export const getReadyConstructorCalldata = (publicKey) => {
   const owner = new CairoCustomEnum({ Starknet: { pubkey: num.toHex(publicKey) } });
   const guardian = new CairoOption(CairoOptionVariant.None);
 
   return CallData.compile({ owner, guardian });
 };
 
-export const getPrivyReadyAccountDetails = (wallet) => {
+export const getPrivyReadyAccountDetails = (wallet, classHash = READY_V040_ACCOUNT_CLASS_HASH) => {
   const normalizedWallet = normalizePrivyStarknetWallet(wallet);
-  const constructorCalldata = getReadyV050ConstructorCalldata(normalizedWallet.publicKey);
+  const constructorCalldata = getReadyConstructorCalldata(normalizedWallet.publicKey);
   const salt = normalizedWallet.publicKey;
   const address = hash.calculateContractAddressFromHash(
     salt,
-    READY_V050_ACCOUNT_CLASS_HASH,
+    classHash,
     constructorCalldata,
     0
   );
@@ -96,7 +97,7 @@ export const getPrivyReadyAccountDetails = (wallet) => {
     deploymentData: {
       address,
       calldata: constructorCalldata.map(num.toHex),
-      class_hash: READY_V050_ACCOUNT_CLASS_HASH,
+      class_hash: classHash,
       salt,
       version: 1
     },
@@ -104,8 +105,17 @@ export const getPrivyReadyAccountDetails = (wallet) => {
   };
 };
 
-export const createPrivyReadyAccount = ({ provider, paymaster, signRawHash, wallet }) => {
-  const details = getPrivyReadyAccountDetails(wallet);
+export const createPrivyReadyAccount = async ({ provider, paymaster, signRawHash, wallet }) => {
+  const legacyDetails = getPrivyReadyAccountDetails(wallet, READY_V050_ACCOUNT_CLASS_HASH);
+  let details;
+  try {
+    // Preserve the original address, including accounts upgraded after deployment.
+    await provider.getClassHashAt(legacyDetails.address);
+    details = legacyDetails;
+  } catch (error) {
+    if (Number(error?.code) !== 20 && !/Contract not found/i.test(error?.message || '')) throw error;
+    details = getPrivyReadyAccountDetails(wallet);
+  }
   const signer = new PrivyStarknetSigner({
     publicKey: details.wallet.publicKey,
     signRawHash
