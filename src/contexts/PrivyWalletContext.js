@@ -116,7 +116,7 @@ const PrivyWalletBridge = ({ children }) => {
       wallet = normalizePrivyStarknetWallet(created.wallet);
     }
 
-    const accountDetails = createPrivyReadyAccount({
+    const accountDetails = await createPrivyReadyAccount({
       paymaster,
       provider,
       wallet,

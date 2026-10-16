@@ -54,3 +54,25 @@ test('refuses export after Privy authentication expires', async () => {
   await waitFor(() => expect(onError).toHaveBeenCalled());
   expect(useExportWallet.mock.results.at(-1).value.exportWallet).not.toHaveBeenCalled();
 });
+
+const ConnectConsumer = ({ provider, onConnect }) => {
+  const { connector } = usePrivyWallet();
+  return <button onClick={async () => onConnect(await connector.connect({ provider }))}>Connect</button>;
+};
+
+test.each([true, false])('connects the resolved Privy account (legacy deployed: %s)', async (legacy) => {
+  const { getPrivyReadyAccountDetails, READY_V050_ACCOUNT_CLASS_HASH } = require('../lib/privyWallet');
+  const wallet = { address: '0x123', chainType: 'starknet', publicKey: '0x456' };
+  const expected = getPrivyReadyAccountDetails(wallet, legacy ? READY_V050_ACCOUNT_CLASS_HASH : undefined);
+  const provider = { getClassHashAt: legacy
+    ? jest.fn().mockResolvedValue(READY_V050_ACCOUNT_CLASS_HASH)
+    : jest.fn().mockRejectedValue({ code: 20 }) };
+  const onConnect = jest.fn();
+  render(<PrivyWalletProvider><ConnectConsumer provider={provider} onConnect={onConnect} /></PrivyWalletProvider>);
+  fireEvent.click(screen.getByText('Connect'));
+  await waitFor(() => expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({
+    account: expected.address,
+    deploymentData: expected.deploymentData,
+    walletAccount: expect.objectContaining({ address: expected.address })
+  })));
+});
