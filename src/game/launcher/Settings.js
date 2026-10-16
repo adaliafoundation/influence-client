@@ -17,6 +17,7 @@ import useStore from '~/hooks/useStore';
 import constants from '~/lib/constants';
 import { TOKEN } from '~/lib/priceUtils';
 import LauncherDialog from './components/LauncherDialog';
+import Account from './Account';
 
 
 const { ENABLE_SHADOWS, MIN_FOV, MAX_FOV } = constants;
@@ -562,6 +563,10 @@ const panes = [
   {
     label: 'Keyboard Shortcuts',
     pane: <ShortcutsPane />
+  },
+  {
+    label: 'Account',
+    pane: <Account />
   }
 ];
 

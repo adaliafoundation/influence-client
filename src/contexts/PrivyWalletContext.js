@@ -1,7 +1,7 @@
 import { errorMessages } from '../lib/errorMessages';
 import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
-import { PrivyProvider, useLogin, usePrivy } from '@privy-io/react-auth';
-import { useCreateWallet, useSignRawHash } from '@privy-io/react-auth/extended-chains';
+import { PrivyProvider, useLogin, useModalStatus, usePrivy } from '@privy-io/react-auth';
+import { useCreateWallet, useExportWallet, useSignRawHash } from '@privy-io/react-auth/extended-chains';
 
 import { appConfig } from '~/appConfig';
 import {
@@ -60,6 +60,8 @@ const PrivyWalletBridge = ({ children }) => {
   const { authenticated, logout, ready, user } = usePrivy();
   const { createWallet } = useCreateWallet();
   const { signRawHash } = useSignRawHash();
+  const { exportWallet } = useExportWallet();
+  const { isOpen: modalOpen } = useModalStatus();
   const loginRequestRef = useRef();
   const privyStateRef = useRef({ authenticated, ready, user });
   const signRawHashRef = useRef(signRawHash);
@@ -137,6 +139,15 @@ const PrivyWalletBridge = ({ children }) => {
     };
   }, [authenticate, createWallet, signRawHash]);
 
+  const exportPrivateKey = useCallback(async () => {
+    const privyState = await waitForPrivyReady(privyStateRef);
+    const wallet = findPrivyStarknetWallet(privyState.user);
+    if (!privyState.authenticated || !wallet) {
+      throw new Error('Sign in to your Influence Account before exporting its private key.');
+    }
+    await exportWallet({ address: wallet.address });
+  }, [exportWallet]);
+
   const connector = useMemo(() => ({
     id: WALLET_IDS.PRIVY,
     connect,
@@ -145,7 +156,7 @@ const PrivyWalletBridge = ({ children }) => {
   }), [connect, logout]);
 
   return (
-    <PrivyWalletContext.Provider value={{ configured: true, connector }}>
+    <PrivyWalletContext.Provider value={{ configured: true, connector, exportPrivateKey, modalOpen, ready: ready && authenticated }}>
       {children}
     </PrivyWalletContext.Provider>
   );

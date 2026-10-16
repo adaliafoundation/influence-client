@@ -2,7 +2,8 @@ import { features } from '~/appConfig/features';
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 
-import { ArgentXIcon, BraavosIcon, ChevronRightIcon, UserIcon } from '~/components/Icons';
+import { ChevronRightIcon } from '~/components/Icons';
+import WalletIcon from '~/components/WalletIcon';
 import { hexToRGB } from '~/theme';
 
 const Panel = styled.div`
@@ -175,30 +176,24 @@ const ButtonText = styled.span`
 const configs = {
   privy: {
     id: 'privy',
-    icon: <UserIcon />,
+    icon: <WalletIcon walletId="privy" />,
     label: 'Influence Account',
     sublabel: 'Continue with Google or email'
   },
   argentX: {
     id: 'argentX',
-    icon: <ArgentXIcon />,
+    icon: <WalletIcon walletId="argentX" />,
     label: 'Ready Wallet',
     sublabel: 'Formerly Argent X'
   },
   braavos: {
     id: 'braavos',
-    icon: <BraavosIcon />,
+    icon: <WalletIcon walletId="braavos" />,
     label: 'Braavos'
   },
   controller: {
     id: 'controller',
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="32" height="32" rx="8" fill="#191a1a"></rect>
-        <path d="M11.6 10.2H20.4V14.8H11.6V10.2Z" fill="#FBCB4A"></path>
-        <path d="M8 18.1H24V22.7H8V18.1Z" fill="#FBCB4A"></path>
-      </svg>
-    ),
+    icon: <WalletIcon walletId="controller" />,
     label: 'Cartridge Controller',
     sublabel: 'Embedded account'
   },

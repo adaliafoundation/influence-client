@@ -31,6 +31,7 @@ import { areWebsocketLogsEnabled } from '~/lib/debugFlags';
 import { WorkerQueuePriority } from '~/lib/workerQueue';
 import useConstants from '~/hooks/useConstants';
 import { getLotGeometryHeightMaps, getLotGeometryHeightMapResolution } from './helpers/LotGeometry';
+import { disposeLotMeshes } from './helpers/disposeLotMeshes';
 import Crews from './Crews';
 import Deliveries from './Deliveries';
 
@@ -405,13 +406,13 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
       transparent: true,
     });
 
-    mouseableMesh.current = new InstancedMesh(mouseableGeometry, mouseableMaterial, visibleLotTally);
-    mouseableMesh.current.renderOrder = 999;
-    attachTo.add(mouseableMesh.current);
+    const mesh = new InstancedMesh(mouseableGeometry, mouseableMaterial, visibleLotTally);
+    mouseableMesh.current = mesh;
+    mesh.renderOrder = 999;
+    attachTo.add(mesh);
     return () => {
-      if (mouseableMesh.current) {
-        attachTo.remove(mouseableMesh.current);
-      }
+      disposeLotMeshes([mesh]);
+      mouseableMesh.current = null;
     };
 
   }, [attachTo, visibleLotTally]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -451,9 +452,8 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
     setMeshesInitialized(true);
 
     return () => {
-      Object.values(lotMeshes.current).forEach((mesh) => {
-        attachTo.remove(mesh);
-      });
+      disposeLotMeshes(Object.values(meshes));
+      lotMeshes.current = {};
     };
   }, [attachTo, visibleResultTally, texturesLoaded, lotUseTallies]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -471,21 +471,21 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
       transparent: true,
   });
 
-    lotLeasesMesh.current = new InstancedMesh(leasedLotGeometry, leasedLotMaterial, visibleLeasedTally);
-    lotLeasesMesh.current.renderOrder = 998;
-    lotLeasesMesh.current.layers.enable(BLOOM_LAYER);
-    attachTo.add(lotLeasesMesh.current);
+    const mesh = new InstancedMesh(leasedLotGeometry, leasedLotMaterial, visibleLeasedTally);
+    lotLeasesMesh.current = mesh;
+    mesh.renderOrder = 998;
+    mesh.layers.enable(BLOOM_LAYER);
+    attachTo.add(mesh);
 
     return () => {
-      if (lotLeasesMesh.current) {
-        attachTo.remove(lotLeasesMesh.current);
-      }
+      disposeLotMeshes([mesh]);
+      lotLeasesMesh.current = null;
     };
   }, [attachTo, visibleLeasedTally, PLOT_WIDTH]);
 
   // instantiate mouse mesh
   useEffect(() => {
-    mouseHoverMesh.current = new Mesh(
+    const mesh = new Mesh(
       new PlaneGeometry(RETICULE_WIDTH, RETICULE_WIDTH),
       new MeshBasicMaterial({
         color: WHITE_COLOR,
@@ -496,19 +496,19 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
         transparent: true
       })
     );
-    mouseHoverMesh.current.renderOrder = 999;
-    mouseHoverMesh.current.layers.enable(BLOOM_LAYER);
-    attachTo.add(mouseHoverMesh.current);
+    mouseHoverMesh.current = mesh;
+    mesh.renderOrder = 999;
+    mesh.layers.enable(BLOOM_LAYER);
+    attachTo.add(mesh);
     return () => {
-      if (mouseHoverMesh.current) {
-        attachTo.remove(mouseHoverMesh.current);
-      }
+      disposeLotMeshes([mesh], [mesh.material.map]);
+      mouseHoverMesh.current = null;
     };
   }, [attachTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Instantiate selection mesh
   useEffect(() => {
-    selectionMesh.current = new Mesh(
+    const mesh = new Mesh(
       new PlaneGeometry(RETICULE_WIDTH, RETICULE_WIDTH),
       new MeshBasicMaterial({
         color: WHITE_COLOR,
@@ -518,13 +518,13 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
         transparent: true
       })
     );
-    selectionMesh.current.renderOrder = 999;
-    selectionMesh.current.layers.enable(BLOOM_LAYER);
-    attachTo.add(selectionMesh.current);
+    selectionMesh.current = mesh;
+    mesh.renderOrder = 999;
+    mesh.layers.enable(BLOOM_LAYER);
+    attachTo.add(mesh);
     return () => {
-      if (selectionMesh.current) {
-        attachTo.remove(selectionMesh.current);
-      }
+      disposeLotMeshes([mesh], [mesh.material.map]);
+      selectionMesh.current = null;
     };
   }, [attachTo]); // eslint-disable-line react-hooks/exhaustive-deps
 

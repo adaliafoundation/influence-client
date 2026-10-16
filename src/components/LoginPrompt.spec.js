@@ -5,6 +5,8 @@ import { features } from '~/appConfig/features';
 
 jest.mock('~/appConfig/features', () => ({ features: { privy: false } }), { virtual: true });
 jest.mock('~/components/Icons', () => ({ ArgentXIcon: () => null, BraavosIcon: () => null, ChevronRightIcon: () => null, UserIcon: () => null }), { virtual: true });
+jest.mock('~/components/WalletIcon', () => require('./WalletIcon').default, { virtual: true });
+jest.mock('~/lib/walletIds', () => require('../lib/walletIds'), { virtual: true });
 jest.mock('~/theme', () => ({ hexToRGB: () => '255,255,255' }), { virtual: true });
 
 const theme = { colors: { main: '#fff' }, cursors: {}, breakpoints: { mobile: 600 } };
