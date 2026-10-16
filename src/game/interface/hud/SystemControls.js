@@ -9,6 +9,7 @@ import {
   SwayIcon,
   UpdateIcon
 } from '~/components/Icons';
+import useCopyWalletAddress from '~/hooks/useCopyWalletAddress';
 import useSession from '~/hooks/useSession';
 import useCrewContext from '~/hooks/useCrewContext';
 import usePendingCrewmatePurchases from '~/hooks/usePendingCrewmatePurchases';
@@ -215,7 +216,6 @@ const SystemControls = () => {
   const { data: swayBalance, refetch: refetchSwayBalance } = useSwayBalance();
 
   const launcherPage = useStore(s => s.launcherPage);
-  const createAlert = useStore(s => s.dispatchAlertLogged);
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
 
   const [showAuthedButton, setShowAuthedButton] = useState(!(authenticated && launcherPage));
@@ -235,18 +235,7 @@ const SystemControls = () => {
     setTimeout(() => { setShowAuthedButton(authenticated && launcherPage); }, 0);
   }, [authenticated, !launcherPage]);
 
-  const onCopyWalletAddress = useCallback(() => {
-    try {
-      navigator.clipboard.writeText(`${accountAddress}`);
-      createAlert({
-        type: 'ClipboardAlert',
-        data: { content: 'Wallet address copied to clipboard.' },
-        duration: 3000
-      });
-    } catch (e) {
-      console.warn(e);
-    }
-  }, [accountAddress]);
+  const onCopyWalletAddress = useCopyWalletAddress(accountAddress);
 
   const onRefreshSwayBalance = useCallback(() => {
     refetchSwayBalance();
