@@ -85,6 +85,9 @@ test('creates, serializes and restores a Ready session without another prompt', 
   expect(first.wallet.request).toHaveBeenCalledTimes(1);
   expect(first.wallet.request.mock.calls[0][0].params.message['Allowed Methods']).toEqual(allowedMethods);
   const saved = JSON.parse(JSON.stringify(first.onChange.mock.calls[0][0]));
+  expect(JSON.parse(saved.metadata).txFees).toEqual([
+    { tokenAddress: '0x999', maxAmount: '10000000000000000000' }
+  ]);
   const restored = setup({ storedSession: saved });
   expect(restored.session.ready).toBe(true);
   await restored.session.prepare();

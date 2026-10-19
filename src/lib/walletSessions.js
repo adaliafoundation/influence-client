@@ -94,7 +94,7 @@ class ReadyWalletSession {
         expiry: BigInt(Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS),
         metaData: {
           projectID: 'influence',
-          txFees: [{ tokenAddress: this.strkToken, maxAmount: '1000000000000000000' }]
+          txFees: [{ tokenAddress: this.strkToken, maxAmount: '10000000000000000000' }]
         }
       }
     });

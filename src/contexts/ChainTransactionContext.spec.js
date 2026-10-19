@@ -5,11 +5,13 @@ import { act, render } from '@testing-library/react';
 import ChainTransactionContext, { ChainTransactionProvider } from './ChainTransactionContext';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
+import useWalletCrews from '~/hooks/useWalletCrews';
+import TransactionFeePrompt from '~/components/TransactionFeePrompt';
 import { executePaidTransaction } from '~/lib/transactionFees';
 import { isWalletAccountLocked } from '~/lib/walletLock';
 
 jest.mock('@influenceth/sdk', () => ({
-  Address: { areEqual: (a, b) => a === b }, Entity: { IDS: {} },
+  Address: { areEqual: (a, b) => a === b, toStandard: value => value }, Entity: { IDS: {} },
   System: { getFormattedCall: jest.fn(), Systems: { ChangeName: {} }, getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
 }));
 jest.mock('starknet', () => ({ num: { toHex: value => value } }));
@@ -19,7 +21,7 @@ jest.mock('@tanstack/react-query', () => {
   return { useQueryClient: () => client };
 });
 jest.mock('~/appConfig', () => ({ appConfig: { get: jest.fn() } }), { virtual: true });
-jest.mock('~/components/TransactionFeePrompt', () => () => null, { virtual: true });
+jest.mock('~/components/TransactionFeePrompt', () => jest.fn(() => null), { virtual: true });
 jest.mock('~/hooks/useSession', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useStore', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useSimulationEnabled', () => () => false, { virtual: true });
@@ -32,12 +34,13 @@ jest.mock('~/hooks/useCrewContext', () => {
   return () => crew;
 }, { virtual: true });
 jest.mock('~/hooks/useSwapQuote', () => ({ useUsdcPerEth: () => ({ data: 1 }) }), { virtual: true });
+jest.mock('~/hooks/useWalletCrews', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useWalletPurchasableBalances', () => () => ({ data: {} }), { virtual: true });
 jest.mock('~/hooks/useWalletTokenBalance', () => ({ useSwayBalance: () => ({ data: 0n }), useUSDCBalance: () => ({ data: 0n }) }), { virtual: true });
 jest.mock('~/lib/api', () => ({}), { virtual: true });
 jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn() }), { virtual: true });
 jest.mock('~/lib/escrow', () => ({}), { virtual: true });
-jest.mock('~/lib/paymaster', () => ({ isPaymasterUnavailable: () => false, isSponsorshipUnavailable: () => false }), { virtual: true });
+jest.mock('~/lib/paymaster', () => ({ isPaymasterUnavailable: () => false, isSponsorshipUnavailable: error => error?.code === 'SPONSORSHIP_NOT_ELIGIBLE' }), { virtual: true });
 jest.mock('~/lib/deliveryAuthorization', () => ({}), { virtual: true });
 jest.mock('~/lib/missionBindings', () => ({}), { virtual: true });
 jest.mock('~/lib/transactionAuthorization', () => ({ recheckTransactionAuthorization: async () => ({ status: 'allowed' }) }), { virtual: true });
@@ -53,6 +56,7 @@ const tree = () => <ChainTransactionProvider><Probe /></ChainTransactionProvider
 const account = { address: '0x123' };
 beforeEach(() => {
   jest.clearAllMocks();
+  useWalletCrews.mockReturnValue({ data: [] });
   appConfig.get.mockReset();
   session = {
     accountAddress: '0x123', authenticated: true, walletReadyForTransactions: true, walletCapabilities: {}, walletId: 'argentX',
@@ -63,6 +67,10 @@ beforeEach(() => {
   state = { gameplay: {}, pendingTransactions: [], dispatchAlertLogged: jest.fn(), dispatchPendingTransaction: jest.fn(), dispatchFailedTransaction: jest.fn() };
   useSession.mockImplementation(() => session);
   useStore.mockImplementation(selector => selector(state));
+  useStore.getState = () => state;
+  state.dispatchPaidFeesAcknowledged = jest.fn(address => {
+    state.paidFeeAcknowledgements = { ...state.paidFeeAcknowledgements, [address]: true };
+  });
   executePaidTransaction.mockResolvedValue({ transaction_hash: '0xabc' });
   isWalletAccountLocked.mockResolvedValue(false);
 });
@@ -347,4 +355,56 @@ test('NFT transfers call the token contract directly and register a pending tran
   expect(session.getTransactionAccount).toHaveBeenCalledWith(account, [expect.objectContaining({ entrypoint: 'transfer_from' })], expect.objectContaining({ requireExplicitSignature: true }));
   expect(result).toEqual({ status: 'submitted', txHash: '0xabc' });
   expect(state.dispatchPendingTransaction).toHaveBeenCalledWith(expect.objectContaining({ key: 'TransferNft', vars, txHash: '0xabc' }));
+});
+
+test('recognizes existing starter-pack crews when applying account defaults', () => {
+  useWalletCrews.mockReturnValue({ data: [{ StarterPack: { valid: true } }] });
+  state.dispatchStarterPackFeeDefaults = jest.fn();
+  render(tree());
+  expect(state.dispatchStarterPackFeeDefaults).toHaveBeenCalledWith('0x123');
+});
+
+test.each([true, false])('shows the sponsorship expiry notice until acknowledged (accept: %s)', async accepted => {
+  appConfig.get.mockImplementation(key => key === 'Starknet.paymasterProxy' ? 'https://paymaster.example' : undefined);
+  session.walletAccount = {
+    ...account,
+    executePaymasterTransaction: jest.fn().mockRejectedValue(Object.assign(new Error('Sponsorship expired'), { code: 'SPONSORSHIP_NOT_ELIGIBLE' }))
+  };
+  session.walletCapabilities = { requiresSponsoredTransactions: true };
+  session.isDeployed = true;
+  session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0) };
+  state.gameplay.feeTokens = ['0x1', '0x2'];
+  render(tree());
+  const calls = [{ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }];
+  let pending;
+  await act(async () => { pending = chain.executeCalls(calls); });
+  expect(executePaidTransaction).not.toHaveBeenCalled();
+  const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+  expect(prompt.type).toBe('TRANSITION');
+  const outcome = pending.then(() => ({ ok: true }), error => ({ error }));
+  await act(async () => { accepted ? prompt.onConfirm() : prompt.onReject(); });
+  expect(await outcome).toEqual(accepted
+    ? { ok: true }
+    : { error: expect.objectContaining({ suppressTransactionFailure: true }) });
+  expect(state.dispatchPaidFeesAcknowledged).toHaveBeenCalledTimes(accepted ? 1 : 0);
+  expect(executePaidTransaction).toHaveBeenCalledTimes(accepted ? 1 : 0);
+  TransactionFeePrompt.mockClear();
+  await act(async () => { pending = chain.executeCalls(calls); });
+  expect(TransactionFeePrompt).toHaveBeenCalledTimes(accepted ? 0 : 1);
+  if (!accepted) {
+    await act(async () => { TransactionFeePrompt.mock.calls.at(-1)[0].onConfirm(); });
+  }
+  await pending;
+  expect(state.dispatchPaidFeesAcknowledged).toHaveBeenCalledWith('0x123');
+  TransactionFeePrompt.mockClear();
+  await act(async () => { await chain.executeCalls(calls); });
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  expect(session.walletAccount.executePaymasterTransaction).toHaveBeenCalledTimes(1);
+  expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({
+    usePaymaster: true,
+    feeTokens: expect.arrayContaining([
+      expect.objectContaining({ name: 'USDC', enabled: true }),
+      expect.objectContaining({ name: 'SWAY', enabled: true })
+    ])
+  }));
 });

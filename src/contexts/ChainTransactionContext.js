@@ -1,3 +1,4 @@
+import { FALLBACK_FEE_TOKENS, getFallbackFeeTokens } from '../lib/feePreferences';
 import { createAccountDeployment } from '../lib/accountDeployment';
 import { errorMessages } from '../lib/errorMessages';
 import { createFundingError, isUserCancellation, reportFailure } from '../lib/errorReporting';
@@ -19,6 +20,7 @@ import useSession from '~/hooks/useSession';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useStore from '~/hooks/useStore';
 import { useUsdcPerEth } from '~/hooks/useSwapQuote';
+import useWalletCrews from '~/hooks/useWalletCrews';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import { useSwayBalance, useUSDCBalance } from '~/hooks/useWalletTokenBalance';
 import api from '~/lib/api';
@@ -39,7 +41,6 @@ import { getWalletLabel } from '~/lib/wallets';
 const RETRY_INTERVAL = 5e3; // 5 seconds
 const ChainTransactionContext = createContext();
 const EXPLICIT_AUTHORIZATION_PRIMARY_TYPE = 'InfluenceTransactionAuthorization';
-const PAYMASTER_FEE_TOKENS = [TOKEN.USDC, TOKEN.SWAY];
 
 // TODO: equalityTest default of 'i' doesn't make sense anymore
 
@@ -635,6 +636,13 @@ export function ChainTransactionProvider({ children }) {
   const missionSubmissions = useRef(new Set());
   const activities = useActivitiesContext();
   const { crew, recheckAuthorization } = useCrewContext();
+  const { data: ownedCrews } = useWalletCrews();
+  const dispatchStarterPackFeeDefaults = useStore(s => s.dispatchStarterPackFeeDefaults);
+  useEffect(() => {
+    if (ownedCrews?.some((ownedCrew) => ownedCrew.StarterPack?.valid)) {
+      dispatchStarterPackFeeDefaults(accountAddress);
+    }
+  }, [accountAddress, ownedCrews, dispatchStarterPackFeeDefaults]);
   const { data: walletSource } = useWalletPurchasableBalances();
   const { data: swayBalanceSource } = useSwayBalance();
   const { data: usdcBalanceSource } = useUSDCBalance();
@@ -672,7 +680,6 @@ export function ChainTransactionProvider({ children }) {
   const dispatchFeeTokenEnabled = useStore(s => s.dispatchFeeTokenEnabled);
   const dispatchPaidFeesAcknowledged = useStore(s => s.dispatchPaidFeesAcknowledged);
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
-  const paidFeesAcknowledged = useStore(s => !!s.paidFeeAcknowledgements?.[accountAddress]);
 
   const [promptingTransaction, setPromptingTransaction] = useState(false);
   const [feePrompt, setFeePrompt] = useState();
@@ -835,27 +842,33 @@ export function ChainTransactionProvider({ children }) {
         paymasterAvailable = !isPaymasterUnavailable(error);
         if (paymasterAvailable && !isSponsorshipUnavailable(error)) throw error;
         if (paymasterAvailable) sponsorshipUnavailableRef.current = true;
-
-        if (!paidFeesAcknowledged) {
-          if (!(await requestFeePermission(paymasterAvailable ? 'TRANSITION' : 'PAYMASTER_UNAVAILABLE'))) {
-            const cancellation = new Error('Paid network fees were not acknowledged.');
-            cancellation.suppressTransactionFailure = true;
-            throw cancellation;
-          }
-          dispatchPaidFeesAcknowledged(accountAddress);
-        }
       }
+    }
+
+    if (sponsorshipUnavailableRef.current && !useStore.getState().paidFeeAcknowledgements?.[accountAddress]) {
+      if (!(await requestFeePermission('TRANSITION'))) {
+        const error = new Error('Paid network fees were not acknowledged.');
+        error.suppressTransactionFailure = true;
+        throw error;
+      }
+      dispatchPaidFeesAcknowledged(accountAddress);
     }
 
     return executePaidTransaction({
       account,
       calls: formattedCalls,
+      getStrkBalance: async () => {
+        const [low, high] = await provider.callContract({
+          contractAddress: TOKEN.STRK, entrypoint: 'balanceOf', calldata: [accountAddress]
+        });
+        return uint256.uint256ToBN({ low, high });
+      },
       usePaymaster: paymasterAvailable && accountIsDeployed,
-      feeTokens: PAYMASTER_FEE_TOKENS.map((gasToken) => ({
+      feeTokens: FALLBACK_FEE_TOKENS.map((gasToken) => ({
         address: gasToken,
         name: Address.areEqual(gasToken, TOKEN.USDC) ? 'USDC' : 'SWAY',
         balance: Address.areEqual(gasToken, TOKEN.USDC) ? (usdcRef.current || 0n) : (swayRef.current || 0n),
-        enabled: gameplay.feeTokens?.some((token) => Address.areEqual(token, gasToken)),
+        enabled: getFallbackFeeTokens(gameplay, accountAddress).some((token) => Address.areEqual(token, gasToken)),
         supported: !(paymasterTokens?.length > 0)
           || paymasterTokens.some((token) => Address.areEqual(token.token_address, gasToken))
       })),
@@ -866,14 +879,14 @@ export function ChainTransactionProvider({ children }) {
   }, [
     accountAddress,
     dispatchFeeTokenEnabled,
-    dispatchLauncherPage,
     dispatchPaidFeesAcknowledged,
-    gameplay.feeTokens,
+    dispatchLauncherPage,
+    gameplay,
+    provider,
     getTransactionAccount,
     ensureAccountDeployed,
     isDeployed,
     paymasterTokens,
-    paidFeesAcknowledged,
     requestFeePermission,
     walletCapabilities.requiresSponsoredTransactions
   ]);

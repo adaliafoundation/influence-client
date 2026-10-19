@@ -57,7 +57,7 @@ export const errorMessages = {
     copy: 'Copy error report', refresh: 'Refresh page', reset: 'Reload state'
   },
   feePrompts: {
-    TRANSITION: { title: 'Starter Provisions Complete', confirmText: 'Continue', body: ['Starter pack provisions have been exhausted. Future actions require a small processing fee. Continue using your available funds?'] },
+    TRANSITION: { title: 'Gas-Free Period Complete', confirmText: 'Got it, continue', body: ['Your gas-free period has ended. You are now responsible for the network fees on your actions.', 'STRK is used first. If your STRK balance is insufficient, enabled fallback tokens can cover the fee: USDC first, then SWAY. You can change these choices under Fallback fee tokens in Settings.'] },
     USDC: { title: 'Choose How to Pay', confirmText: 'Use USDC', body: ['Allow Influence to use your USDC balance for the small processing fees on your actions?'] },
     SWAY: { title: 'Choose How to Pay', confirmText: 'Use SWAY', body: ['Allow Influence to use your SWAY balance for the small processing fees on your actions?'] },
     PAYMASTER_UNAVAILABLE: { title: 'Another Payment Option', confirmText: 'Use STRK', body: ['The usual payment service is unavailable. Continue using your STRK balance to cover the processing fee?'] },

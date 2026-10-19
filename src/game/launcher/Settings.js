@@ -1,4 +1,6 @@
-import { errorMessages } from '../../lib/errorMessages';
+import { getFallbackFeeTokens } from '~/lib/feePreferences';
+import { reportFailure } from '../../lib/errorReporting';
+import { isWalletRequestTimeout } from '../../lib/walletErrors';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import screenfull from 'screenfull';
@@ -372,12 +374,13 @@ const NotificationsPane = () => {
 };
 
 const GameplayPane = () => {
-  const { prepareGameplaySession, shouldUseSessionKeys } = useSession();
+  const { accountAddress, prepareGameplaySession, shouldUseSessionKeys } = useSession();
   const gameplay = useStore(s => s.gameplay);
   const createAlert = useStore(s => s.dispatchAlertLogged);
   
   const dispatchActiveCrewsDisplaySet = useStore(s => s.dispatchActiveCrewsDisplaySet);
   const dispatchUseSessionsSet = useStore(s => s.dispatchUseSessionsSet);
+  const feeTokens = getFallbackFeeTokens(gameplay, accountAddress);
   const dispatchFeeTokenToggle = useStore(s => s.dispatchFeeTokenToggle);
 
   const toggleSessionKeys = useCallback(async (which) => {
@@ -387,13 +390,8 @@ const GameplayPane = () => {
         if (await shouldUseSessionKeys(true)) await prepareGameplaySession(true);
       } catch (e) {
         console.warn(e);
-        dispatchUseSessionsSet(false);
-        createAlert({
-          type: 'GenericAlert',
-          level: 'warning',
-          data: { content: errorMessages.loginFailed },
-          duration: 5000
-        });
+        if (!isWalletRequestTimeout(e)) dispatchUseSessionsSet(false);
+        reportFailure(createAlert, e, { message: 'loginFailed' });
       }
     }
   }, [createAlert, dispatchUseSessionsSet, prepareGameplaySession, shouldUseSessionKeys]);
@@ -463,21 +461,21 @@ const GameplayPane = () => {
             <HelperText>Never use sessions</HelperText>
           )}
 
-          <StyledDataReadout label="Use for Gas Fees">
+          <StyledDataReadout label="Fallback fee tokens">
             <ControlGroup>
               <Button
-                active={gameplay.feeTokens.includes(TOKEN.USDC)}
+                active={feeTokens.includes(TOKEN.USDC)}
                 onClick={() => dispatchFeeTokenToggle(TOKEN.USDC)}>
                 USDC
               </Button>
               <Button
-                active={gameplay.feeTokens.includes(TOKEN.SWAY)}
+                active={feeTokens.includes(TOKEN.SWAY)}
                 onClick={() => dispatchFeeTokenToggle(TOKEN.SWAY)}>
                 SWAY
               </Button>
             </ControlGroup>
           </StyledDataReadout>
-          <HelperText>Selected AVNU fee tokens are used first, with STRK as a fallback.</HelperText>
+          <HelperText>STRK is used first. Selected tokens can pay fees when your STRK balance is insufficient (USDC before SWAY).</HelperText>
         </div>
       </Section>
     </StyledSettings>

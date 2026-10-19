@@ -1,3 +1,4 @@
+import { getFallbackFeeTokens, migrateFeePreferences } from '../lib/feePreferences';
 import { notifyTransactionSettlement } from '../lib/transactionSettlement';
 import create from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
@@ -187,7 +188,7 @@ const useStore = create(
 
         gameplay: {
           activeCrewsDisplay: 'all', // selected, delegated, all
-          feeTokens: [TOKEN.USDC],
+          feeTokens: null, // Follow account defaults; an empty array explicitly disables fallbacks.
           useSessions: null
         },
 
@@ -970,6 +971,7 @@ const useStore = create(
         })),
 
         dispatchFeeTokenToggle: (which) => set(produce(state => {
+          state.gameplay.feeTokens = [...getFallbackFeeTokens(state.gameplay, state.currentSession?.accountAddress)];
           if (state.gameplay.feeTokens.includes(which)) {
             state.gameplay.feeTokens = state.gameplay.feeTokens.filter((token) => token !== which);
           } else {
@@ -978,7 +980,14 @@ const useStore = create(
         })),
 
         dispatchFeeTokenEnabled: (which) => set(produce(state => {
+          state.gameplay.feeTokens = [...getFallbackFeeTokens(state.gameplay, state.currentSession?.accountAddress)];
           if (!state.gameplay.feeTokens.includes(which)) state.gameplay.feeTokens.push(which);
+        })),
+
+        dispatchStarterPackFeeDefaults: (accountAddress) => set(produce(state => {
+          if (!accountAddress) return;
+          if (!state.gameplay.starterPackFeeAccounts) state.gameplay.starterPackFeeAccounts = {};
+          state.gameplay.starterPackFeeAccounts[Address.toStandard(accountAddress)] = true;
         })),
 
         dispatchPaidFeesAcknowledged: (accountAddress) => set(produce(state => {
@@ -1034,7 +1043,7 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 10,
+      version: 11,
       partialize: selectPersistedState,
       // Filter on read too: older saves include navigation and other transient state.
       merge: (persistedState, currentState) => ({
@@ -1060,10 +1069,8 @@ const useStore = create(
           },
           (state, version) => {
             if (version >= 8) return state;
-            state.gameplay.feeTokens = [TOKEN.USDC, TOKEN.ETH, TOKEN.STRK];
-            if (state.gameplay.feeToken !== 'ETH') {
-              state.gameplay.feeTokens.unshift(TOKEN.SWAY);
-            }
+            state.gameplay.feeTokens = state.gameplay.feeToken === 'SWAY' ? [TOKEN.SWAY]
+              : state.gameplay.feeToken === 'ETH' ? [] : null;
             return state;
           },
           (state, version) => {
@@ -1076,6 +1083,12 @@ const useStore = create(
           (state, version) => {
             if (version >= 10) return state;
             state.bridgeTransfers = pruneBridgeTransfers(state.bridgeTransfers);
+            return state;
+          },
+          (state, version) => {
+            if (version >= 11) return state;
+            state.gameplay = migrateFeePreferences(state.gameplay);
+            delete state.gameplay.feeToken;
             return state;
           },
         ];
