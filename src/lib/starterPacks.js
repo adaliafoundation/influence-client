@@ -72,6 +72,11 @@ export const hasStarterBuildingEntitlement = (crew, buildingType) => (
   ))
 );
 
+export const hasRemainingStarterPackBenefits = (crew) => (
+  ['lotAllowance', 'foodReloadAllowance', 'coreSampleAllowance'].some((allowance) => hasStarterPackAllowance(crew, allowance))
+  || (hasValidStarterPack(crew) && crew.StarterPack.buildingAllowances?.some(({ count }) => Number(count) > 0))
+);
+
 const starterRestrictionSeconds = 14 * 24 * 60 * 60;
 const defaultStation = { label: Entity.IDS.BUILDING, id: 1 };
 const defaultClasses = [
