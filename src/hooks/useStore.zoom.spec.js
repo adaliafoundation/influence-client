@@ -65,7 +65,7 @@ test.each([0, 1, 2, 3, 4, 5, 6, 7, 8])('migrates version %s while preserving acc
   expect(useStore.getState().selectedCrewId).toBe(42);
   expect(useStore.getState().pendingTransactions).toEqual(saved.pendingTransactions);
   expect(useStore.getState().starterPackCheckout).toBeNull();
-  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(10);
+  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(11);
 });
 
 test('migrates version 9 bridge records without clearing current purchase or account work', async () => {
@@ -95,7 +95,7 @@ test('migrates version 9 bridge records without clearing current purchase or acc
   }
   expect(state.bridgeTransfers).toEqual({ current: transfer });
   const stored = JSON.parse(localStorage.getItem(STORE_NAME));
-  expect(stored.version).toBe(10);
+  expect(stored.version).toBe(11);
   expect(stored.state.bridgeTransfers).toEqual({ current: transfer });
 });
 
@@ -105,4 +105,53 @@ test('live navigation still animates but is not persisted', () => {
   expect(useStore.getState().asteroids.origin).toBe(1);
   expect(useStore.getState().asteroids.zoomStatus).toBe('zooming-in');
   expect(JSON.parse(localStorage.getItem(STORE_NAME)).state.asteroids).toBeUndefined();
+});
+
+test.each([
+  [[], []],
+  [['0x2'], ['0x2']],
+  [['0x1'], ['0x1']],
+  [['0x1', '0x2'], ['0x2', '0x1']],
+  [['0x2', '0x3', '0x4'], ['0x2']]
+])('preserves legacy fee selections %j without treating native tokens as fallbacks', async (feeTokens, expected) => {
+  localStorage.setItem(STORE_NAME, JSON.stringify({ state: {
+    gameplay: { feeTokens, useSessions: false }, currentSession: { token: 'keep' }
+  }, version: 10 }));
+  await useStore.persist.rehydrate();
+  expect(useStore.getState().gameplay.feeTokens).toEqual(expected);
+  expect(useStore.getState().gameplay.useSessions).toBe(false);
+  expect(useStore.getState().currentSession.token).toBe('keep');
+  await useStore.persist.rehydrate();
+  expect(useStore.getState().gameplay.feeTokens).toEqual(expected);
+});
+
+test.each([['ETH', []], ['SWAY', ['0x1']]])('maps the old single-token %s choice', async (feeToken, expected) => {
+  localStorage.setItem(STORE_NAME, JSON.stringify({ state: { gameplay: { feeToken } }, version: 7 }));
+  await useStore.persist.rehydrate();
+  expect(useStore.getState().gameplay.feeTokens).toEqual(expected);
+  expect(useStore.getState().gameplay.feeToken).toBeUndefined();
+});
+
+test('missing old preferences use the new defaults', async () => {
+  localStorage.setItem(STORE_NAME, JSON.stringify({ state: { gameplay: { useSessions: true } }, version: 10 }));
+  await useStore.persist.rehydrate();
+  expect(useStore.getState().gameplay.feeTokens).toBeNull();
+});
+
+test('starter defaults are account-specific and an explicit choice survives hydration', async () => {
+  const { getFallbackFeeTokens } = require('../lib/feePreferences');
+  const { Address } = require('@influenceth/sdk');
+  const address = Address.toStandard('0xabc');
+  const store = useStore.getState();
+  expect(getFallbackFeeTokens(store.gameplay, address)).toEqual([]);
+  store.dispatchStarterPackFeeDefaults(address);
+  expect(getFallbackFeeTokens(useStore.getState().gameplay, address)).toEqual(['0x2', '0x1']);
+  expect(getFallbackFeeTokens(useStore.getState().gameplay, '0xdef')).toEqual([]);
+  useStore.setState({ currentSession: { accountAddress: address } });
+  store.dispatchFeeTokenToggle('0x2');
+  expect(getFallbackFeeTokens(useStore.getState().gameplay, address)).toEqual(['0x1']);
+  store.dispatchFeeTokenToggle('0x1');
+  store.dispatchStarterPackFeeDefaults(address);
+  await useStore.persist.rehydrate();
+  expect(getFallbackFeeTokens(useStore.getState().gameplay, address)).toEqual([]);
 });

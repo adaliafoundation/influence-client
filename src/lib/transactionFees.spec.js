@@ -7,15 +7,22 @@ jest.mock('~/hooks/useStore', () => ({
 const { executePaidTransaction } = require('./transactionFees');
 
 const tx = { transaction_hash: '0xabc' };
+const bounds = {
+  l1_gas: { max_amount: 2n, max_price_per_unit: 3n },
+  l1_data_gas: { max_amount: 2n, max_price_per_unit: 4n },
+  l2_gas: { max_amount: 2n, max_price_per_unit: 5n }
+};
 const unavailable = () => Object.assign(new Error('Paymaster not found'), { status: 404 });
 let options;
 beforeEach(() => {
   options = {
     account: {
+      estimateInvokeFee: jest.fn().mockResolvedValue({ resourceBounds: bounds }),
       estimatePaymasterTransactionFee: jest.fn().mockResolvedValue({ suggested_max_fee_in_gas_token: 10n }),
       executePaymasterTransaction: jest.fn().mockResolvedValue(tx),
       execute: jest.fn().mockResolvedValue(tx)
     },
+    getStrkBalance: jest.fn().mockResolvedValue(100n),
     calls: [{ contractAddress: '0x1', entrypoint: 'test', calldata: [] }],
     usePaymaster: true,
     feeTokens: [
@@ -28,65 +35,56 @@ beforeEach(() => {
   };
 });
 
-test('uses paid gasless fees when sponsorship has ended but the paymaster works', async () => {
+test.each([24n, 100n])('prefers STRK when it covers all resource bounds (%s)', async balance => {
+  options.getStrkBalance.mockResolvedValue(balance);
   await expect(executePaidTransaction(options)).resolves.toEqual(tx);
+  expect(options.account.estimateInvokeFee).toHaveBeenCalledWith(options.calls, { skipValidate: true });
+  expect(options.account.execute).toHaveBeenCalledWith(options.calls, { resourceBounds: bounds });
+  expect(options.account.estimatePaymasterTransactionFee).not.toHaveBeenCalled();
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+});
+
+test.each([0n, 23n])('uses enabled USDC only when STRK is insufficient (%s)', async balance => {
+  options.getStrkBalance.mockResolvedValue(balance);
+  await expect(executePaidTransaction(options)).resolves.toEqual(tx);
+  expect(options.account.execute).not.toHaveBeenCalled();
   expect(options.account.executePaymasterTransaction).toHaveBeenCalledWith(options.calls, {
     feeMode: { mode: 'default', gasToken: '0x2' }
   });
-  expect(options.account.execute).not.toHaveBeenCalled();
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+  expect(options.account.estimateInvokeFee).toHaveBeenCalledTimes(balance === 0n ? 0 : 1);
 });
 
-test('skips gasless fees when the sponsored endpoint was unavailable', async () => {
-  options.usePaymaster = false;
-  await expect(executePaidTransaction(options)).resolves.toEqual(tx);
-  expect(options.account.estimatePaymasterTransactionFee).not.toHaveBeenCalled();
-  expect(options.account.execute).toHaveBeenCalledWith(options.calls, {});
+test('uses enabled SWAY before asking permission for disabled USDC', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.feeTokens[0].enabled = false;
+  options.feeTokens[1].enabled = true;
+  await executePaidTransaction(options);
+  expect(options.account.executePaymasterTransaction).toHaveBeenCalledWith(options.calls, {
+    feeMode: { mode: 'default', gasToken: '0x3' }
+  });
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
 });
 
-test.each(['estimatePaymasterTransactionFee', 'executePaymasterTransaction'])('falls back to STRK after a 404 from %s', async (method) => {
-  options.account[method].mockRejectedValue(unavailable());
-  await expect(executePaidTransaction(options)).resolves.toEqual(tx);
-  expect(options.account[method]).toHaveBeenCalledTimes(1);
-  expect(options.account.execute).toHaveBeenCalledTimes(1);
-});
-
-test('tries another permitted token after an insufficient fee balance', async () => {
+test('tries USDC before SWAY when both are enabled', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.feeTokens[1].enabled = true;
   options.account.executePaymasterTransaction.mockRejectedValueOnce(new Error('Insufficient balance'));
   await expect(executePaidTransaction(options)).resolves.toEqual(tx);
-  expect(options.requestFeePermission).toHaveBeenCalledWith('SWAY');
-  expect(options.enableFeeToken).toHaveBeenCalledWith('0x3');
-  expect(options.account.executePaymasterTransaction).toHaveBeenCalledTimes(2);
-});
-
-test('falls back to native fees after failed gasless estimates', async () => {
-  options.account.estimatePaymasterTransactionFee.mockRejectedValue(new Error('Estimation failed'));
-  await expect(executePaidTransaction(options)).resolves.toEqual(tx);
-  expect(options.account.execute).toHaveBeenCalledTimes(1);
-});
-
-test.each([true, false])('shows a top-up prompt when all payment methods fail (paymaster available: %s)', async (available) => {
-  options.account.estimatePaymasterTransactionFee.mockRejectedValue(available ? new Error('Estimation failed') : unavailable());
-  options.account.execute.mockRejectedValue(new Error('Insufficient STRK balance'));
-  await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
-  expect(options.requestFeePermission).toHaveBeenCalledWith(available ? 'TOP_UP' : 'TOP_UP_STRK');
-  expect(options.openTopUp).toHaveBeenCalledTimes(1);
-});
-
-test.each(['estimatePaymasterTransactionFee', 'executePaymasterTransaction', 'execute'])('does not retry or request a top-up after rejection in %s', async (method) => {
-  if (method === 'execute') options.usePaymaster = false;
-  options.account[method].mockRejectedValue(new Error('User rejected transaction'));
-  await expect(executePaidTransaction(options)).rejects.toThrow('User rejected');
+  expect(options.account.executePaymasterTransaction.mock.calls.map(([, details]) => details.feeMode.gasToken)).toEqual(['0x2', '0x3']);
   expect(options.requestFeePermission).not.toHaveBeenCalled();
-  expect(options.account.execute).toHaveBeenCalledTimes(method === 'execute' ? 1 : 0);
 });
 
-test('does not resubmit after an ambiguous execution failure', async () => {
-  options.account.executePaymasterTransaction.mockRejectedValue(new Error('Execute failed'));
-  await expect(executePaidTransaction(options)).rejects.toThrow('Execute failed');
-  expect(options.account.execute).not.toHaveBeenCalled();
+test('asks before enabling a disabled fee token', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.feeTokens[0].enabled = false;
+  await executePaidTransaction(options);
+  expect(options.requestFeePermission).toHaveBeenCalledWith('USDC');
+  expect(options.enableFeeToken).toHaveBeenCalledWith('0x2');
 });
 
 test('respects declined fee-token permission', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
   options.feeTokens[0].enabled = false;
   options.requestFeePermission.mockResolvedValue(false);
   await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
@@ -94,32 +92,59 @@ test('respects declined fee-token permission', async () => {
   expect(options.account.execute).not.toHaveBeenCalled();
 });
 
+test.each(['estimatePaymasterTransactionFee', 'executePaymasterTransaction'])('offers a STRK top-up after paymaster unavailability in %s', async method => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.account[method].mockRejectedValue(unavailable());
+  await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
+  expect(options.account[method]).toHaveBeenCalledTimes(1);
+  expect(options.requestFeePermission).toHaveBeenCalledWith('TOP_UP_STRK');
+  expect(options.account.execute).not.toHaveBeenCalled();
+});
 
-test.each(['Timeout waiting for wallet signature', 'Network request failed', 'Execute failed', 'Contract execution reverted', 'Insufficient max fee'])('does not suggest funding for a native transaction error: %s', async (message) => {
+test('skips the unavailable paymaster and requests a STRK top-up', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
   options.usePaymaster = false;
+  await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
+  expect(options.account.estimatePaymasterTransactionFee).not.toHaveBeenCalled();
+  expect(options.requestFeePermission).toHaveBeenCalledWith('TOP_UP_STRK');
+});
+
+test('offers a top-up when neither fallback token covers its estimated fee', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.account.estimatePaymasterTransactionFee.mockResolvedValue({ suggested_max_fee_in_gas_token: 101n });
+  await expect(executePaidTransaction(options)).rejects.toMatchObject({ suppressTransactionFailure: true });
+  expect(options.requestFeePermission).toHaveBeenCalledWith('TOP_UP');
+  expect(options.openTopUp).toHaveBeenCalledTimes(1);
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+});
+
+test.each(['User rejected transaction', 'Timeout waiting for wallet signature', 'Network request failed', 'Execute failed', 'Contract execution reverted', 'Insufficient max fee', 'Insufficient balance'])('never resubmits a native execution failure: %s', async message => {
   const error = new Error(message);
   options.account.execute.mockRejectedValue(error);
   await expect(executePaidTransaction(options)).rejects.toBe(error);
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
   expect(options.requestFeePermission).not.toHaveBeenCalled();
-  expect(options.openTopUp).not.toHaveBeenCalled();
-  expect(error.suppressTransactionFailure).toBeUndefined();
-  expect(options.account.execute).toHaveBeenCalledTimes(1);
 });
 
-test('waiting for a wallet signature never opens a funding prompt', async () => {
-  jest.useFakeTimers();
-  try {
-    options.usePaymaster = false;
-    let sign;
-    options.account.execute.mockImplementation(() => new Promise(resolve => { sign = resolve; }));
-    const pending = executePaidTransaction(options);
-    jest.advanceTimersByTime(30000);
-    await Promise.resolve();
-    expect(options.requestFeePermission).not.toHaveBeenCalled();
-    expect(options.openTopUp).not.toHaveBeenCalled();
-    sign(tx);
-    await expect(pending).resolves.toEqual(tx);
-  } finally {
-    jest.useRealTimers();
-  }
+test.each(['getStrkBalance', 'estimateInvokeFee'])('does not mistake a %s failure for insufficient STRK', async method => {
+  const error = new Error('Network request failed');
+  (options[method] || options.account[method]).mockRejectedValue(error);
+  await expect(executePaidTransaction(options)).rejects.toBe(error);
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+});
+
+test.each(['estimatePaymasterTransactionFee', 'executePaymasterTransaction'])('does not retry user rejection in %s', async method => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.account[method].mockRejectedValue(new Error('User rejected transaction'));
+  await expect(executePaidTransaction(options)).rejects.toThrow('User rejected');
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+});
+
+test('does not resubmit an ambiguous paymaster execution failure', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.account.executePaymasterTransaction.mockRejectedValue(new Error('Execute failed'));
+  await expect(executePaidTransaction(options)).rejects.toThrow('Execute failed');
+  expect(options.account.executePaymasterTransaction).toHaveBeenCalledTimes(1);
+  expect(options.account.execute).not.toHaveBeenCalled();
 });

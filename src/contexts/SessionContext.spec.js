@@ -29,13 +29,13 @@ jest.mock('~/lib/loginTypedData', () => ({
   getLoginVerificationParams: (value) => value
 }), { virtual: true });
 jest.mock('~/lib/paymaster', () => ({}), { virtual: true });
-jest.mock('~/lib/priceUtils', () => ({ TOKEN: {} }), { virtual: true });
+jest.mock('~/lib/priceUtils', () => ({ TOKEN: { STRK: '0x3', USDC: '0x4', SWAY: '0x5' } }), { virtual: true });
 jest.mock('~/lib/utils', () => ({ areChainsEqual: (a, b) => a === b, resolveChainId: (value) => value, fireTrackingEvent: jest.fn() }), { virtual: true });
 jest.mock('~/lib/walletPolicies', () => ({ buildGameplaySessionPolicies: () => [] }), { virtual: true });
 jest.mock('~/lib/walletSessions', () => ({ createWalletSession: jest.fn() }), { virtual: true });
 jest.mock('~/lib/wallets', () => ({
   WALLET_IDS: { CONTROLLER: 'controller', PRIVY: 'privy' },
-  WALLET_ERROR_CODES: {},
+  WALLET_ERROR_CODES: { USER_REJECTED: 'USER_REJECTED', CONNECTOR_NOT_FOUND: 'CONNECTOR_NOT_FOUND' },
   defaultEnabledConnectors: { controller: true },
   normalizeEnabledConnectors: (value) => value,
   normalizeConnectorId: (value) => value,
@@ -353,4 +353,31 @@ test('ignores a silent restore that completes after logout', async () => {
   await expect(restored).resolves.toBe(false);
   expect(session.walletReadyForTransactions).toBe(false);
   expect(WalletAccount).not.toHaveBeenCalled();
+});
+
+test('tracks STRK as a fee token even with all paymaster fallbacks disabled', () => {
+  state.gameplay.feeTokens = [];
+  renderAuthenticatedSession();
+  expect(session.gasTokens).toEqual(['0x3']);
+});
+
+test('reports a queued Ready session request without claiming login failure or retrying approval', async () => {
+  const { errorMessages } = require('../lib/errorMessages');
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  walletSession.supported.mockResolvedValue(true);
+  walletSession.prepare.mockRejectedValue(Object.assign(new Error('An error occurred (UNKNOWN_ERROR)'), {
+    name: 'WalletRPCError', cause: new Error('Timeout')
+  }));
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  expect(state.dispatchAlertLogged).toHaveBeenCalledWith(expect.objectContaining({
+    duration: 0,
+    data: expect.objectContaining({ content: errorMessages.walletRequestPending })
+  }));
+  expect(walletSession.prepare).toHaveBeenCalledTimes(1);
+  expect(state.dispatchSessionStarted).not.toHaveBeenCalled();
+  expect(session.gameplaySessionReady).toBe(false);
 });

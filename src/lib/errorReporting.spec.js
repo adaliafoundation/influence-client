@@ -73,3 +73,32 @@ test('does not label a non-timeout wallet rejection as a pending request', () =>
   error.name = 'WalletRPCError';
   expect(classifyFailure(error)).toBe('actionFailed');
 });
+
+test('recognizes wrapped Ready timeouts despite generic login messages and caller overrides', () => {
+  const walletError = Object.assign(new Error('An error occurred (UNKNOWN_ERROR)'), {
+    name: 'WalletRPCError', cause: new Error('Timeout')
+  });
+  const error = Object.assign(new Error(errorMessages.loginFailed), {
+    userMessage: errorMessages.loginFailed, cause: walletError
+  });
+  expect(classifyFailure(error)).toBe('walletRequestPending');
+  const notify = jest.fn();
+  reportFailure(notify, error, { message: 'loginFailed' });
+  expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+    duration: 0,
+    data: expect.objectContaining({ content: errorMessages.walletRequestPending })
+  }));
+});
+
+test('does not mistake an outer service timeout for a wallet timeout', () => {
+  const error = Object.assign(new Error('Service timeout'), {
+    cause: Object.assign(new Error('Wallet failed'), { name: 'WalletRPCError' })
+  });
+  expect(classifyFailure(error)).toBe('unknownOutcome');
+});
+
+test('handles a circular wallet error cause without reporting a timeout', () => {
+  const error = Object.assign(new Error('Wallet failed'), { name: 'WalletRPCError' });
+  error.cause = error;
+  expect(classifyFailure(error)).toBe('actionFailed');
+});

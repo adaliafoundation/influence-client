@@ -1,3 +1,4 @@
+import { getFallbackFeeTokens } from '../lib/feePreferences';
 import { flushSync } from 'react-dom';
 import { reportFailure } from '../lib/errorReporting';
 import { errorMessages } from '../lib/errorMessages';
@@ -879,13 +880,12 @@ export function SessionProvider({ children }) {
   }, [currentSession, disconnectWalletOnly, error, createAlert, logout]);
 
   const gasTokens = useMemo(() => {
-    if (gameplay.feeTokens?.length > 0 && paymasterTokens?.length > 0) {
-      return [TOKEN.USDC, TOKEN.SWAY].filter((t) => gameplay.feeTokens.includes(t)).filter((t) => {
-        return !!paymasterTokens.find((pt) => Address.areEqual(pt.token_address, t));
-      });
-    }
-    return [];
-  }, [gameplay.feeTokens, paymasterTokens]);
+    const feeTokens = getFallbackFeeTokens(gameplay, currentSession?.accountAddress);
+    const supportedFallbacks = feeTokens.filter((token) => paymasterTokens?.some((supported) => (
+      Address.areEqual(supported.token_address, token)
+    )));
+    return [TOKEN.STRK, ...supportedFallbacks];
+  }, [gameplay, currentSession?.accountAddress, paymasterTokens]);
 
   // Block management -------------------------------------------------------------------------------------------------
 

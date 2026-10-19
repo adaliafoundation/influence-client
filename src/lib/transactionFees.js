@@ -1,3 +1,4 @@
+import { stark } from 'starknet';
 import { isPaymasterUnavailable } from './paymaster';
 
 import { isUserCancellation as isUserRejection } from './errorReporting';
@@ -10,8 +11,18 @@ const cancelFeePayment = () => {
 };
 
 export const executePaidTransaction = async ({
-  account, calls, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp
+  account, calls, getStrkBalance, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp
 }) => {
+  const strkBalance = await getStrkBalance();
+  if (strkBalance > 0n) {
+    const estimate = await account.estimateInvokeFee(calls, { skipValidate: true });
+    const maxFee = stark.resourceBoundsToEstimateFeeResponse(estimate.resourceBounds).overall_fee;
+    if (strkBalance >= maxFee) {
+      // Once submitted, never retry through another payment method on an ambiguous failure.
+      return account.execute(calls, { resourceBounds: estimate.resourceBounds });
+    }
+  }
+
   let paymasterAvailable = usePaymaster;
   // Try already-authorized tokens before asking permission to use another balance.
   const tokens = [...feeTokens.filter((token) => token.enabled), ...feeTokens.filter((token) => !token.enabled)];
@@ -45,14 +56,9 @@ export const executePaidTransaction = async ({
     }
   }
 
-  try {
-    // Let the account estimate native fees using current balances and resource bounds.
-    return await account.execute(calls, {});
-  } catch (error) {
-    if (isUserRejection(error) || !isInsufficientFee(error)) throw error;
-    const openWallet = await requestFeePermission(paymasterAvailable ? 'TOP_UP' : 'TOP_UP_STRK');
-    if (openWallet) openTopUp();
-    error.suppressTransactionFailure = true;
-    throw error;
-  }
+  const openWallet = await requestFeePermission(paymasterAvailable ? 'TOP_UP' : 'TOP_UP_STRK');
+  if (openWallet) openTopUp();
+  const error = new Error('Insufficient balance for network fees.');
+  error.suppressTransactionFailure = true;
+  throw error;
 };

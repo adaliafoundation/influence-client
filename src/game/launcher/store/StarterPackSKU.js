@@ -1290,6 +1290,7 @@ const StarterPackSKU = () => {
   const dispatchStarterPackCustomizationDraftUpdated = useStore(s => s.dispatchStarterPackCustomizationDraftUpdated);
   const dispatchStarterPackCustomizationCrewmateUpdated = useStore(s => s.dispatchStarterPackCustomizationCrewmateUpdated);
   const dispatchStarterPackCustomizationDraftCleared = useStore(s => s.dispatchStarterPackCustomizationDraftCleared);
+  const dispatchStarterPackFeeDefaults = useStore(s => s.dispatchStarterPackFeeDefaults);
   const dispatchStarterPackStateReset = useStore(s => s.dispatchStarterPackStateReset);
   const dispatchCrewSelected = useStore(s => s.dispatchCrewSelected);
   const dispatchHudMenuOpened = useStore(s => s.dispatchHudMenuOpened);
@@ -1344,6 +1345,9 @@ const StarterPackSKU = () => {
     ? pendingPurchase
     : null;
   const realPurchase = checkoutPurchase || usablePendingPurchase || null;
+  useEffect(() => {
+    if (realPurchase?.paidAt) dispatchStarterPackFeeDefaults(realPurchase.recipient || accountAddress);
+  }, [realPurchase, accountAddress, dispatchStarterPackFeeDefaults]);
   const purchase = devToolsEnabled && devPurchase ? devPurchase : realPurchase;
   const grantedCrewId = purchase?.status === STARTER_PACK_STATUSES.GRANT_CONFIRMED && purchase.grantedCrew?.id
     ? Number(purchase.grantedCrew?.id)

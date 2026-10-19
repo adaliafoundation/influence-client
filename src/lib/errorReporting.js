@@ -32,9 +32,9 @@ export const isUserCancellation = error => [4001, '4001', 'ACTION_REJECTED', 'US
   || error?.name === 'UserRejectedRequestError';
 
 export const classifyFailure = error => {
+  if (isWalletRequestTimeout(error)) return 'walletRequestPending';
   const knownMessage = Object.keys(errorMessages).find(key => typeof errorMessages[key] === 'string' && errorMessages[key] === error?.userMessage);
   if (knownMessage) return knownMessage;
-  if (isWalletRequestTimeout(error)) return 'walletRequestPending';
   const seen = new Set([error]);
   for (let cause = error?.cause; cause && !seen.has(cause); cause = cause.cause) {
     seen.add(cause);
@@ -50,12 +50,13 @@ export const classifyFailure = error => {
 };
 
 // Callers may propagate an error after reporting it. The same error is displayed once.
-export const reportFailure = (notify, error, { message = classifyFailure(error), context = {} } = {}) => {
+export const reportFailure = (notify, error, { message: fallbackMessage = classifyFailure(error), context = {} } = {}) => {
   if (error?.suppressTransactionFailure || isUserCancellation(error)) return;
   if (error && typeof error === 'object') {
     if (reported.has(error)) return;
     reported.add(error);
   }
+  const message = isWalletRequestTimeout(error) ? 'walletRequestPending' : fallbackMessage;
   notify({ type: 'GenericAlert', level: 'warning', duration: message === 'walletRequestPending' ? 0 : 10000,
     data: { content: errorMessages[message], report: createErrorReport(error, context) } });
 };
