@@ -12,14 +12,11 @@ import CrewmateCardFramed from '~/components/CrewmateCardFramed';
 import Details from '~/components/DetailsModal';
 import {
   CheckIcon,
-  CheckedIcon,
   CrewmateCreditIcon,
   LotControlIcon,
-  MyAssetIcon,
-  UncheckedIcon,
-  WarningIcon
+  MyAssetIcon
 } from '~/components/Icons';
-import { CheckboxButton } from '~/components/filters/components';
+import AcknowledgementCheckbox from '~/components/AcknowledgementCheckbox';
 import PageLoader from '~/components/PageLoader';
 import PurchaseTermsLinks from '~/components/PurchaseTermsLinks';
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
@@ -496,26 +493,6 @@ const StarterPackStatusSlot = styled.div`
   width: 96%;
 `;
 
-const CheckoutAcknowledgement = styled.div`
-  align-items: center;
-  color: #ddd;
-  cursor: ${p => p.theme.cursors.active};
-  display: flex;
-  flex: 0 1 auto;
-  font-size: 12px;
-  gap: 8px;
-  line-height: 1.3;
-  margin: 0;
-  max-width: 980px;
-
-  & ${CheckboxButton} {
-    color: ${p => p.$checked ? p.theme.colors.main : '#aaa'};
-    flex: 0 0 auto;
-    margin-right: 0;
-    opacity: ${p => p.$checked ? 1 : 0.65};
-  }
-`;
-
 const DesignerWrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -884,34 +861,15 @@ const ProductCard = ({ disabled, expanded, isPurchasing, isRecommended, locked, 
 };
 
 const PackSelectionStatus = ({ acknowledged, confirming, onAcknowledge, onCancel, onConfirm, product }) => {
-  const onAcknowledgementKeyDown = (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onAcknowledge();
-    }
-  };
-
   return (
     <Notice>
       <NoticeBody>
-        <CheckoutAcknowledgement
-          $checked={acknowledged}
-          aria-checked={acknowledged}
-          onClick={onAcknowledge}
-          onKeyDown={onAcknowledgementKeyDown}
-          role="checkbox"
-          tabIndex={0}>
-          <CheckboxButton
-            checked={acknowledged}
-            tabIndex={-1}
-            type="button">
-            {acknowledged ? <CheckedIcon /> : <UncheckedIcon />}
-          </CheckboxButton>
+        <AcknowledgementCheckbox checked={acknowledged} onChange={onAcknowledge}>
           <span>
             I agree to the <PurchaseTermsLinks />.{' '}
             I understand after purchasing the <b>{product.name}</b>, fulfillment begins when I submit my crew customization, and once fulfillment begins I lose any statutory withdrawal right for this digital content.
           </span>
-        </CheckoutAcknowledgement>
+        </AcknowledgementCheckbox>
       </NoticeBody>
       <NoticeActions>
         <Button disabled={nativeBool(confirming)} onClick={onCancel}>Back</Button>

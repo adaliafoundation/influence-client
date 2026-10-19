@@ -1,3 +1,4 @@
+import WarningAlert from '~/components/WarningAlert';
 import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
 import withOpenDialog from '~/components/withOpenDialog';
 import { getInstantTransferDetails, getTripTiming } from '~/lib/transport';
@@ -1247,30 +1248,7 @@ const ShipStatus = styled.span`
   }
 `;
 
-export const WarningAlert = styled.div`
-  align-items: center;
-  background: rgba(${p => hexToRGB(p.theme.colors[p.severity === 'warning' ? 'orange' : 'red'])}, 0.2);
-  color: ${p => p.theme.colors[p.severity === 'warning' ? 'orange' : 'red']};
-  display: flex;
-  flex-direction: row;
-  margin-top: 10px;
-  padding: 10px;
-  width: 100%;
-  & > div:first-child {
-    font-size: 30px;
-    margin-right: 12px;
-  }
-  & > div:last-child {
-    font-size: 96%;
-    & > i {
-      color: white;
-      font-style: normal;
-    }
-  }
-  &:first-child {
-    margin-top: 0;
-  }
-`;
+export { default as WarningAlert } from '~/components/WarningAlert';
 
 const SwayInputInstruction = styled.div`
   color: white;

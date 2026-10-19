@@ -7,6 +7,7 @@ import { Entity } from '@influenceth/sdk';
 import { cloneDeep } from 'lodash';
 
 import Button from '~/components/ButtonAlt';
+import CrewExchangeConfirmation from '~/components/CrewExchangeConfirmation';
 import CrewmateCardFramed, { EmptyCrewmateCardFramed } from '~/components/CrewmateCardFramed';
 import CrewLocationLabel from '~/components/CrewLocationLabel';
 import LiveFoodStatus from '~/components/LiveFoodStatus';
@@ -18,6 +19,8 @@ import useHydratedLocation from '~/hooks/useHydratedLocation';
 import useStore from '~/hooks/useStore';
 import useCrewSwapManager from '~/hooks/actionManagers/useCrewSwapManager';
 import actionStages from '~/lib/actionStages';
+import api from '~/lib/api';
+import { getCrewExchangeWarnings, rosterChanged } from '~/lib/crewExchange';
 import formatters from '~/lib/formatters';
 import { reactBool, nativeBool } from '~/lib/utils';
 import theme from '~/theme';
@@ -217,6 +220,9 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
   const [pristine, setPristine] = useState();
   const [orderedCrewmates, setOrderedCrewmates] = useState([]);
 
+  const [exchangeConfirmation, setExchangeConfirmation] = useState(null);
+  const [checkingExchange, setCheckingExchange] = useState(false);
+
   const [dragging, setDragging] = useState();
   const [dragOffset, setDragOffset] = useState();
   const [dragPosition, setDragPosition] = useThrottle(null, 30, true);
@@ -249,22 +255,39 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
     setPristine(slots.map((c) => c?.id));
   }, [crew?._crewmates, exchangeCrew?._crewmates]);
 
-  const onSaveChanges = useCallback(() => {
-    if (!(crew?.id > 0 && orderedCrewmates.length > 0)) return;
-    if (exchangeCrew) {
-      return swapCrewmates({
-        crewId1: crew.id,
-        newRoster1: orderedCrewmates.slice(0, 5).map((c) => c?.id).filter((c) => !!c),
-        crewId2: exchangeCrew.id,
-        newRoster2: orderedCrewmates.slice(5).map((c) => c?.id).filter((c) => !!c),
-      })
-    } else {
-      return reorderRoster({
-        crewId: crew.id,
-        newRoster: orderedCrewmates.slice(0, 5).map((c) => c?.id).filter((c) => !!c),
-      });
+  const onSaveChanges = useCallback(async () => {
+    if (!(crew?.id > 0 && orderedCrewmates.length > 0) || checkingExchange) return;
+    const newRoster1 = orderedCrewmates.slice(0, 5).map((c) => c?.id).filter(Boolean);
+    if (!exchangeCrew) return reorderRoster({ crewId: crew.id, newRoster: newRoster1 });
+
+    const newRoster2 = orderedCrewmates.slice(5).map((c) => c?.id).filter(Boolean);
+    const exchange = { crewId1: crew.id, newRoster1, crewId2: exchangeCrew.id, newRoster2 };
+    if (!rosterChanged(crew.Crew.roster, newRoster1) && !rosterChanged(exchangeCrew.Crew.roster, newRoster2)) {
+      return swapCrewmates(exchange);
     }
-  }, [crew?.id, exchangeCrew, orderedCrewmates, reorderRoster, swapCrewmates]);
+
+    setCheckingExchange(true);
+    try {
+      const missions = await Promise.all([crew, exchangeCrew].map((entry) => (
+        entry.id > 0 ? api.getStarterMissions(entry.id) : null
+      )));
+      const warnings = getCrewExchangeWarnings([crew, exchangeCrew], [newRoster1, newRoster2], missions);
+      if (warnings.missions.length || warnings.benefits.length) {
+        setExchangeConfirmation({ exchange, warnings });
+      } else {
+        await swapCrewmates(exchange);
+      }
+    } catch (error) {
+      createAlert({
+        type: 'GenericAlert',
+        level: 'warning',
+        data: { content: 'Unable to check crewmate exchange consequences. Please try again.' },
+        duration: 10000
+      });
+    } finally {
+      setCheckingExchange(false);
+    }
+  }, [crew, exchangeCrew, orderedCrewmates, reorderRoster, swapCrewmates, checkingExchange, createAlert]);
 
   const onMouseDown = useCallback((index) => (e) => {
     e.preventDefault();
@@ -363,7 +386,7 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
         overrideColor={stage === actionStages.NOT_STARTED ? theme.colors.main : undefined}
         stage={stage} />
 
-      <ActionDialogBody style={{ minHeight: '55vh' }}>
+      <ActionDialogBody style={{ minHeight: '55vh', pointerEvents: checkingExchange ? 'none' : undefined }}>
         <FlexSection style={{ marginBottom: 16 }}>
           <FlexSectionBlock
             title="Active Crew"
@@ -437,11 +460,23 @@ const ManageCrew = ({ altCrews, crew, isForeignCrew, manager, stage, ...props })
       </ActionDialogBody>
 
       <ActionDialogFooter
-        disabled={nativeBool(isPristine)}
-        goLabel="Save Changes"
+        disabled={nativeBool(isPristine || checkingExchange)}
+        goLabel={checkingExchange ? 'Checking Exchange...' : 'Save Changes'}
         onGo={onSaveChanges}
         stage={stage}
         {...props} />
+
+      {exchangeConfirmation && (
+        <CrewExchangeConfirmation
+          warnings={exchangeConfirmation.warnings}
+          onReject={() => setExchangeConfirmation(null)}
+          onConfirm={() => {
+            const { exchange } = exchangeConfirmation;
+            setExchangeConfirmation(null);
+            swapCrewmates(exchange);
+          }}
+        />
+      )}
 
       {dragging >= 0 && createPortal(
         <Dragging offset={dragOffset} position={dragPosition}>
@@ -481,7 +516,7 @@ const Wrapper = ({ crew, loading, ...props }) => {
       && crew.id !== c.id
       && c._ready === true // only show crews that are ready
     ));
-  }, [crew?._location]);
+  }, [crews, crew?.id, crew?._location, crew?.Location.location]);
 
   useEffect(() => {
     // if could not load crew...
