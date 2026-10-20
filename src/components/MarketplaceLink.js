@@ -28,22 +28,22 @@ const MarketplaceLink = ({ assetType, chain, children, id }) => {
         url += `${id}`;
       }
 
-    // Starknet > Pyramid
+    // Starknet > Element
     } else if (chain === 'STARKNET') {
       url = `${appConfig.get('Url.starknetNftMarket')}/`;
       // single asset
       if (assetType === 'asteroid' && id) {
-        url += `asset/${appConfig.get('Starknet.Address.asteroidToken')}/${id}`;
+        url += `assets/starknet/${appConfig.get('Starknet.Address.asteroidToken')}/${id}`;
       } else if(assetType === 'crewmate' && id) {
-        url += `asset/${appConfig.get('Starknet.Address.crewmateToken')}/${id}`;
+        url += `assets/starknet/${appConfig.get('Starknet.Address.crewmateToken')}/${id}`;
       // collection
       } else if (assetType === 'asteroid') {
-        url += `collection/${appConfig.get('Starknet.Address.asteroidToken')}`;
+        url += 'collections/influence-asteroids';
       } else if (assetType === 'crewmate') {
-        url += `collection/${appConfig.get('Starknet.Address.crewmateToken')}`;
+        url += 'collections/influence-crewmates';
       // account
       } else if (assetType === 'account') {
-        url += `user/${id}`;
+        url += `account/${id}`;
       }
     }
 
