@@ -36,7 +36,11 @@ jest.mock('~/contexts/ChainTransactionContext', () => {
   } };
 }, { virtual: true });
 jest.mock('~/components/Dialog', () => jest.requireActual('./components/Dialog'), { virtual: true });
-jest.mock('~/components/Button', () => ({ __esModule: true, default: ({ children, onClick }) => <button onClick={onClick}>{children}</button> }), { virtual: true });
+jest.mock('~/components/ButtonAlt', () => ({ __esModule: true, default: ({ children, onClick }) => <button onClick={onClick}>{children}</button> }), { virtual: true });
+jest.mock('~/components/Loader', () => jest.requireActual('./components/Loader'), { virtual: true });
+jest.mock('~/components/NavIcon', () => jest.requireActual('./components/NavIcon'), { virtual: true });
+jest.mock('~/lib/utils', () => ({ nativeBool: Boolean }), { virtual: true });
+jest.mock('./components/Icons', () => ({ WarningIcon: () => null }));
 jest.mock('~/theme', () => ({ __esModule: true, default: { colors: { contentBackdrop: 'rgba(0, 0, 0, 0.5)' }, breakpoints: { mobile: 600 } } }), { virtual: true });
 jest.mock('~/appConfig/features', () => ({ features: {} }), { virtual: true });
 jest.mock('~/appConfig', () => ({ appConfig: { get: () => true } }), { virtual: true });
