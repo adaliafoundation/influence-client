@@ -97,7 +97,7 @@ const BridgeModalDialog = ({ onClose }) => {
             <div>
               All of your assets are still accounted for and can still be traded on either
               L1 Ethereum (i.e. via <a href={`${appConfig.get('Url.ethereumNftMarket')}/Influence?tab=created`} target="_blank" rel="noreferrer">OpenSea</a>)
-              or Starknet (i.e. via <a href={appConfig.get('Url.starknetNftMarket')} target="_blank" rel="noreferrer">Unframed</a>)
+              or Starknet (i.e. via <a href={appConfig.get('Url.starknetNftMarket')} target="_blank" rel="noreferrer">Element</a>)
             </div>
             <div>
               In the interest of lower transaction fees, however, Influence itself will only be

@@ -43,6 +43,6 @@
     "ethereumExplorer": "https://sepolia.etherscan.io",
     "ethereumNftMarket": "https://testnets.opensea.io",
     "starknetExplorer": "https://sepolia.starkscan.co",
-    "starknetNftMarket": "https://pyramid.market"
+    "starknetNftMarket": "https://element.market"
   }
 }
