@@ -2,6 +2,7 @@ import { isExpired } from 'react-jwt';
 import { act, render } from '@testing-library/react';
 import { useContext } from 'react';
 import SessionContext, { SessionProvider } from './SessionContext';
+import TransactionFeePrompt from '~/components/TransactionFeePrompt';
 import { AUTH_PHASES } from '~/lib/authFlow';
 import { RpcProvider, WalletAccount } from 'starknet';
 import { createWalletConnectors } from '~/lib/wallets';
@@ -21,6 +22,7 @@ jest.mock('~/appConfig', () => ({ appConfig: { get: (key) => ({
   'Starknet.provider': 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/test-key',
   'Starknet.chainId': 'SN_SEPOLIA'
 })[key] } }), { virtual: true });
+jest.mock('~/components/TransactionFeePrompt', () => jest.fn(() => null), { virtual: true });
 jest.mock('~/components/Reconnecting', () => () => null, { virtual: true });
 jest.mock('~/contexts/PrivyWalletContext', () => ({ usePrivyWallet: () => ({}) }), { virtual: true });
 jest.mock('~/lib/api', () => ({ requestLogin: jest.fn(), verifyLogin: jest.fn() }), { virtual: true });
@@ -72,12 +74,14 @@ beforeEach(() => {
   };
   useStore.mockImplementation((select) => select(state));
   useStore.getState = () => state;
+  state.dispatchUseSessionsSet = jest.fn(value => { state.gameplay.useSessions = value; });
+  state.dispatchGameplaySessionUpdated = jest.fn();
   provider = { getClassAt: jest.fn() };
   RpcProvider.mockImplementation(() => provider);
   connector = { id: 'controller', wallet: { id: 'controller' }, connect: jest.fn() };
   createWalletConnectors.mockReturnValue({ controller: connector });
   WalletAccount.mockImplementation(() => ({ address: '0x123', signMessage: jest.fn().mockResolvedValue(['0x1', '0x2']) }));
-  walletSession = { supported: jest.fn().mockResolvedValue(false), prepare: jest.fn(), ready: false };
+  walletSession = { supported: jest.fn().mockResolvedValue(false), prepare: jest.fn(), cancelPreparation: jest.fn(), ready: false };
   createWalletSession.mockReturnValue(walletSession);
 });
 afterEach(() => jest.useRealTimers());
@@ -380,4 +384,92 @@ test('reports a queued Ready session request without claiming login failure or r
   expect(walletSession.prepare).toHaveBeenCalledTimes(1);
   expect(state.dispatchSessionStarted).not.toHaveBeenCalled();
   expect(session.gameplaySessionReady).toBe(false);
+});
+
+const openSessionRecovery = async () => {
+  provider.getClassAt.mockResolvedValue({});
+  api.requestLogin.mockResolvedValue({});
+  api.verifyLogin.mockResolvedValue('api-token');
+  walletSession.supported.mockResolvedValue(true);
+  walletSession.prepare.mockResolvedValue(true);
+  connector.connect.mockResolvedValue({ account: '0x123', chainId: 'SN_SEPOLIA' });
+  render(<SessionProvider><Probe /></SessionProvider>);
+  await startLogin();
+  const options = createWalletSession.mock.calls.at(-1)[0];
+  act(() => { options.onChange(null); options.onFeeLimit(); });
+  expect(state.dispatchGameplaySessionUpdated).toHaveBeenLastCalledWith('0x123', 'controller', null);
+  expect(state.gameplay.useSessions).toBe(false);
+  expect(session.gameplaySessionReady).toBe(false);
+  expect(TransactionFeePrompt.mock.calls.at(-1)[0].type).toBe('SESSION_FEE_LIMIT');
+  return options;
+};
+
+test('regular-wallet recovery keeps sessions disabled and closes the modal', async () => {
+  await openSessionRecovery();
+  const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+  TransactionFeePrompt.mockClear();
+  act(() => prompt.onReject());
+  expect(state.gameplay.useSessions).toBe(false);
+  expect(walletSession.prepare).toHaveBeenCalledTimes(1);
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+});
+
+test('starting a new session closes recovery before wallet approval', async () => {
+  await openSessionRecovery();
+  const approval = deferred();
+  walletSession.prepare.mockReturnValue(approval.promise);
+  const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+  TransactionFeePrompt.mockClear();
+  let recovery;
+  await act(async () => { recovery = prompt.onConfirm(); });
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  expect(session.gameplaySessionReady).toBe(false);
+  TransactionFeePrompt.mockClear();
+  await act(async () => { approval.resolve(true); await recovery; });
+  expect(state.gameplay.useSessions).toBe(true);
+  expect(session.gameplaySessionReady).toBe(true);
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+});
+
+test.each([
+  ['rejected', Object.assign(new Error('User rejected request'), { name: 'UserRejectedRequestError' })],
+  ['failed', new Error('Wallet unavailable')]
+])('%s renewal returns to regular wallet with the modal closed', async (_, error) => {
+  await openSessionRecovery();
+  walletSession.prepare.mockRejectedValue(error);
+  const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+  TransactionFeePrompt.mockClear();
+  await act(async () => { await prompt.onConfirm(); });
+  expect(state.gameplay.useSessions).toBe(false);
+  expect(session.gameplaySessionReady).toBe(false);
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).toHaveBeenCalledTimes(error.name === 'UserRejectedRequestError' ? 0 : 1);
+});
+
+test('ignores recovery callbacks from a disconnected wallet', async () => {
+  const options = await openSessionRecovery();
+  await act(async () => { await session.logout(); });
+  expect(walletSession.cancelPreparation).toHaveBeenCalled();
+  TransactionFeePrompt.mockClear();
+  state.dispatchUseSessionsSet.mockClear();
+  act(() => options.onFeeLimit());
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  expect(state.dispatchUseSessionsSet).not.toHaveBeenCalled();
+});
+
+test('ignores a late recovery failure after disconnecting', async () => {
+  await openSessionRecovery();
+  const approval = deferred();
+  walletSession.prepare.mockReturnValue(approval.promise);
+  const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+  TransactionFeePrompt.mockClear();
+  let recovery;
+  await act(async () => { recovery = prompt.onConfirm(); });
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  await act(async () => { await session.logout(); });
+  state.dispatchUseSessionsSet.mockClear();
+  await act(async () => { approval.reject(new Error('Late wallet error')); await recovery; });
+  expect(state.dispatchUseSessionsSet).not.toHaveBeenCalled();
+  expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  expect(state.dispatchAlertLogged).not.toHaveBeenCalled();
 });

@@ -18,7 +18,7 @@ const calls = [{ contractAddress: '0x123', entrypoint: 'run_system', calldata: [
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
 
-function setup({ walletId = WALLET_IDS.ARGENT_X, storedSession, enabled = true } = {}) {
+function setup({ walletId = WALLET_IDS.ARGENT_X, storedSession, enabled = true, onFeeLimit } = {}) {
   const provider = new RpcProvider({ nodeUrl: 'https://rpc.example', chainId });
   provider.callContract = jest.fn(async ({ entrypoint }) => entrypoint === 'getVersion'
     ? [shortString.encodeShortString('0.5.0')] : ['0x1234']);
@@ -29,7 +29,7 @@ function setup({ walletId = WALLET_IDS.ARGENT_X, storedSession, enabled = true }
   let active = true;
   const onChange = jest.fn();
   const session = createWalletSession({ walletId, wallet, account, provider, chainId, storedSession,
-    serviceUrl: 'https://sessions.example/v1', strkToken: '0x999', onChange,
+    serviceUrl: 'https://sessions.example/v1', strkToken: '0x999', onChange, onFeeLimit,
     isEnabled: () => active && useSessions !== false, isActive: () => active, approvedOnConnect: enabled !== false });
   return { session, wallet, account, provider, onChange,
     disconnect: () => { active = false; }, setEnabled: (value) => { useSessions = value; } };
@@ -86,16 +86,16 @@ test('creates, serializes and restores a Ready session without another prompt', 
   expect(first.wallet.request.mock.calls[0][0].params.message['Allowed Methods']).toEqual(allowedMethods);
   const saved = JSON.parse(JSON.stringify(first.onChange.mock.calls[0][0]));
   expect(JSON.parse(saved.metadata).txFees).toEqual([
-    { tokenAddress: '0x999', maxAmount: '10000000000000000000' }
+    { tokenAddress: '0x999', maxAmount: '100000000000000000000' }
   ]);
   const restored = setup({ storedSession: saved });
   expect(restored.session.ready).toBe(true);
   await restored.session.prepare();
   expect(restored.wallet.request).not.toHaveBeenCalled();
-  expect(isReadySessionValid(saved, '0xdef', chainId)).toBe(false);
-  expect(isReadySessionValid(saved, '0xabc', '0x534e5f4d41494e')).toBe(false);
-  expect(isReadySessionValid({ ...saved, expiresAt: 1 }, '0xabc', chainId)).toBe(false);
-  expect(isReadySessionValid({ ...saved, allowedMethods: [...allowedMethods, { 'Contract Address': '0x456', selector: 'transfer' }] }, '0xabc', chainId)).toBe(false);
+  expect(isReadySessionValid(saved, '0xdef', chainId, '0x999')).toBe(false);
+  expect(isReadySessionValid(saved, '0xabc', '0x534e5f4d41494e', '0x999')).toBe(false);
+  expect(isReadySessionValid({ ...saved, expiresAt: 1 }, '0xabc', chainId, '0x999')).toBe(false);
+  expect(isReadySessionValid({ ...saved, allowedMethods: [...allowedMethods, { 'Contract Address': '0x456', selector: 'transfer' }] }, '0xabc', chainId, '0x999')).toBe(false);
 });
 
 test('Never, explicit signatures and mixed multicalls use normal wallet authorization', async () => {
@@ -230,6 +230,116 @@ test('rejects a signature returned after sessions are disabled', async () => {
 test('discards malformed or duplicate persisted policies', async () => {
   const { session } = setup();
   await session.prepare();
-  expect(isReadySessionValid({ ...session.session, address: 'bad address' }, '0xabc', chainId)).toBe(false);
-  expect(isReadySessionValid({ ...session.session, allowedMethods: allowedMethods.map(() => allowedMethods[0]) }, '0xabc', chainId)).toBe(false);
+  expect(isReadySessionValid({ ...session.session, address: 'bad address' }, '0xabc', chainId, '0x999')).toBe(false);
+  expect(isReadySessionValid({ ...session.session, allowedMethods: allowedMethods.map(() => allowedMethods[0]) }, '0xabc', chainId, '0x999')).toBe(false);
+});
+
+test.each(['1000000000000000000', '10000000000000000000', '100000000000000000000'])('restoring a %s STRK-unit allowance requests approval only if outdated', async maxAmount => {
+  const first = setup();
+  await first.session.prepare();
+  const saved = JSON.parse(JSON.stringify(first.session.session));
+  const metadata = JSON.parse(saved.metadata);
+  metadata.txFees[0].maxAmount = maxAmount;
+  saved.metadata = JSON.stringify(metadata);
+  const restored = setup({ storedSession: saved });
+  const current = maxAmount === '100000000000000000000';
+  expect(restored.session.ready).toBe(current);
+  await restored.session.prepare();
+  expect(restored.wallet.request).toHaveBeenCalledTimes(current ? 0 : 1);
+  expect(JSON.parse(restored.session.session.metadata).txFees[0].maxAmount).toBe('100000000000000000000');
+  expect(JSON.parse(saved.metadata).txFees[0].maxAmount).toBe(maxAmount);
+});
+
+test.each([undefined, '{}', '{invalid', JSON.stringify({ txFees: [{ tokenAddress: '0x111', maxAmount: '100000000000000000000' }] })])('does not reuse a session without a valid STRK allowance: %s', async metadata => {
+  const first = setup();
+  await first.session.prepare();
+  const restored = setup({ storedSession: { ...first.session.session, metadata } });
+  expect(restored.session.ready).toBe(false);
+});
+
+test('reports the real cosigner fee-limit rejection and clears the session without retrying', async () => {
+  const { errorMessages } = require('./errorMessages');
+  global.fetch = jest.fn(async () => ({ ok: false, json: async () => ({ status: 'gasExceedsLimit' }) }));
+  const onFeeLimit = jest.fn();
+  const { session, wallet, onChange } = setup({ onFeeLimit });
+  const account = await session.getAccount(calls);
+  const bounds = { max_amount: 1n, max_price_per_unit: 1n };
+  const details = { walletAddress: '0xabc', chainId, cairoVersion: '1', nonce: 0,
+    version: '0x3', resourceBounds: { l1_gas: bounds, l1_data_gas: bounds, l2_gas: bounds },
+    tip: 0n, paymasterData: [], accountDeploymentData: [], nonceDataAvailabilityMode: 'L1', feeDataAvailabilityMode: 'L1' };
+  account.prepareInvoke = jest.fn(async () => {
+    await account.signer.signTransaction(calls, details);
+  });
+  await expect(account.execute(calls)).rejects.toMatchObject({
+    message: 'Sign session error', cause: 'gasExceedsLimit', userMessage: errorMessages.sessionFeeLimit, suppressTransactionFailure: true
+  });
+  expect(onFeeLimit).toHaveBeenCalledTimes(1);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(wallet.request).toHaveBeenCalledTimes(1);
+  expect(session.ready).toBe(false);
+  expect(session.sessionAccount).toBeNull();
+  expect(onChange).toHaveBeenLastCalledWith(null);
+});
+
+const deferredApproval = () => {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+};
+
+test('abandoned approval cannot block or replace a new session, even after re-enabling sessions', async () => {
+  const { session, wallet, onChange, setEnabled, account } = setup();
+  session.supported = jest.fn().mockResolvedValue(true);
+  const first = deferredApproval();
+  const second = deferredApproval();
+  const firstStarted = deferredApproval();
+  const secondStarted = deferredApproval();
+  wallet.request
+    .mockImplementationOnce(() => { firstStarted.resolve(); return first.promise; })
+    .mockImplementationOnce(() => { secondStarted.resolve(); return second.promise; });
+  const oldApproval = session.prepare();
+  await firstStarted.promise;
+  setEnabled(false);
+  const cancelled = expect(oldApproval).rejects.toMatchObject({ name: 'UserRejectedRequestError' });
+  session.cancelPreparation();
+  await cancelled;
+  expect(await session.getAccount(calls)).toBe(account);
+  setEnabled(true);
+  const newApproval = session.prepare();
+  await secondStarted.promise;
+  expect(wallet.request).toHaveBeenCalledTimes(2);
+  first.resolve(['0x1', '0x2']);
+  await Promise.resolve();
+  expect(session.ready).toBe(false);
+  expect(onChange).not.toHaveBeenCalled();
+  const sharedApproval = session.prepare();
+  await Promise.resolve();
+  expect(wallet.request).toHaveBeenCalledTimes(2);
+  second.resolve(['0x3', '0x4']);
+  expect(await newApproval).toBe(true);
+  expect(await sharedApproval).toBe(true);
+  expect(onChange).toHaveBeenCalledTimes(1);
+});
+
+test.each(['revoked', 'expired'])('clears a session when SDK wraps session/%s in its cause and permits renewal', async status => {
+  const { session, wallet, onChange } = setup();
+  const account = await session.getAccount(calls);
+  account.prepareInvoke = jest.fn().mockRejectedValue(Object.assign(new Error('Sign session error'), {
+    cause: `session/${status}`
+  }));
+  await expect(account.execute(calls)).rejects.toMatchObject({ userMessage: require('./errorMessages').errorMessages.sessionEnded });
+  expect(session.ready).toBe(false);
+  expect(onChange).toHaveBeenLastCalledWith(null);
+  await session.getAccount(calls);
+  expect(wallet.request).toHaveBeenCalledTimes(2);
+  expect(session.ready).toBe(true);
+});
+
+test('natural expiry renews before the next transaction without reconnecting', async () => {
+  const { session, wallet } = setup();
+  await session.getAccount(calls);
+  session.session.expiresAt = Math.floor(Date.now() / 1000) - 1;
+  await session.getAccount(calls);
+  expect(session.ready).toBe(true);
+  expect(wallet.request).toHaveBeenCalledTimes(2);
 });

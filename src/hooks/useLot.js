@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient,  } from '@tanstack/react-query';
-import { Entity, Lot, Permission, Ship } from '@influenceth/sdk';
+import { Entity, Lot, Ship } from '@influenceth/sdk';
 
 import useBlockTime from '~/hooks/useBlockTime';
 import useEntity from '~/hooks/useEntity';
@@ -79,7 +79,7 @@ const useLot = (rawLotId) => {
   const data = useMemo(() => {
     if (isLoading || !lotEntity?.uuid) return undefined;
 
-    const { asteroidId, lotIndex } = Lot.toPosition(lotId) || {};
+    const { asteroidId } = Lot.toPosition(lotId) || {};
     const prepaidAgreements = lot?.PrepaidAgreements || [];
     const activePrepaidAgreement = getActiveUseLotAgreement(prepaidAgreements, blockTime);
     const expiredPrepaidAgreement = getExpiredUseLotAgreement(prepaidAgreements, blockTime);
@@ -121,16 +121,7 @@ const useLot = (rawLotId) => {
         },
       ContractPolicies: asteroid?.ContractPolicies,
       PrepaidAgreementAuctionSet: asteroid?.PrepaidAgreementAuctionSet,
-      PrepaidPolicies: (asteroid?.PrepaidPolicies || []).map((p) => {
-        // for simplicity, apply AP's special lot rating here so don't have to apply it everywhere else
-        if (p.permission === Permission.IDS.USE_LOT && asteroid.id === 1) {
-          return {
-            ...p,
-            rate: Math.floor(Permission.getAdaliaPrimeLotRate(p, lotIndex))
-          }
-        }
-        return p;
-      }),
+      PrepaidPolicies: asteroid?.PrepaidPolicies || [],
     };
   }, [lotEntity, lotId, lot, lotPermissions, asteroidPermissions, isLoading, asteroid, blockTime, buildings, deposits, ships, objArrDataUpdatedAt]);
 

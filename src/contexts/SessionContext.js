@@ -9,6 +9,7 @@ import { RpcProvider, WalletAccount } from 'starknet';
 import { Address } from '@influenceth/sdk';
 import { appConfig } from '~/appConfig';
 import Reconnecting from '~/components/Reconnecting';
+import TransactionFeePrompt from '~/components/TransactionFeePrompt';
 import api from '~/lib/api';
 import { AUTH_PHASES, getAuthPhaseLabel } from '~/lib/authFlow';
 import { usePrivyWallet } from '~/contexts/PrivyWalletContext';
@@ -224,6 +225,7 @@ export function SessionProvider({ children }) {
   const [walletAccount, setWalletAccount] = useState();
   const [accountDeploymentData, setAccountDeploymentData] = useState();
   const [gameplaySessionReady, setGameplaySessionReady] = useState(false);
+  const [sessionRecovery, setSessionRecovery] = useState(null);
 
   const [paymasterTokens, setPaymasterTokens] = useState([]);
   const authFlowRef = useRef(0);
@@ -415,13 +417,20 @@ export function SessionProvider({ children }) {
           approvedOnConnect: useStore.getState().gameplay.useSessions !== false,
           isActive: () => walletSessionRef.current === walletSession,
           isEnabled: () => walletSessionRef.current === walletSession && useStore.getState().gameplay.useSessions !== false,
+          onFeeLimit: () => {
+            if (walletSessionRef.current !== walletSession) return;
+            useStore.getState().dispatchUseSessionsSet(false);
+            setSessionRecovery(walletSession);
+          },
           onChange: (session) => {
             if (walletSessionRef.current !== walletSession) return;
             dispatchGameplaySessionUpdated(newAccount.address, walletId, session);
             setGameplaySessionReady(!!session);
           }
         });
+        walletSessionRef.current?.cancelPreparation?.();
         walletSessionRef.current = walletSession;
+        setSessionRecovery(null);
         setGameplaySessionReady(!!walletSession?.ready);
 
         clearPendingAuthWalletId();
@@ -502,6 +511,8 @@ export function SessionProvider({ children }) {
   }, [connect, connecting, currentSession, status]);
 
   const clearWalletConnection = useCallback(() => {
+    setSessionRecovery(null);
+    walletSessionRef.current?.cancelPreparation?.();
     walletSessionRef.current = null;
     setConnectedAccount();
     setConnectedChainId();
@@ -550,6 +561,7 @@ export function SessionProvider({ children }) {
   // End / delete session, disconnect wallet and forget last wallet provider (full reset)
   const logout = useCallback(async () => {
     const connector = getDisconnectConnector();
+    walletSessionRef.current?.cancelPreparation?.();
     walletSessionRef.current = null;
     resettingWalletRef.current = true;
     try {
@@ -668,9 +680,36 @@ export function SessionProvider({ children }) {
       setGameplaySessionReady(approved);
       return approved;
     } catch (e) {
+      if (isLoginCancelledError(e)) throw e;
       throw createGameplaySessionApprovalError(e);
     }
   }, [shouldUseSessionKeys]);
+
+  const restartGameplaySession = useCallback(async () => {
+    const walletSession = sessionRecovery;
+    if (!walletSession || walletSession !== walletSessionRef.current) return;
+    setSessionRecovery(null);
+    useStore.getState().dispatchUseSessionsSet(true);
+    try {
+      const approved = await prepareGameplaySession();
+      if (walletSession !== walletSessionRef.current) return;
+      if (!approved) useStore.getState().dispatchUseSessionsSet(false);
+    } catch (error) {
+      if (walletSession !== walletSessionRef.current) return;
+      useStore.getState().dispatchUseSessionsSet(false);
+      if (!isLoginCancelledError(error)) reportFailure(createAlert, error);
+    }
+  }, [sessionRecovery, prepareGameplaySession, createAlert]);
+
+  const useRegularWallet = useCallback(() => {
+    walletSessionRef.current?.cancelPreparation?.();
+    useStore.getState().dispatchUseSessionsSet(false);
+    setSessionRecovery(null);
+  }, []);
+
+  useEffect(() => {
+    if (gameplay.useSessions === false) walletSessionRef.current?.cancelPreparation?.();
+  }, [gameplay.useSessions]);
 
   const getTransactionAccount = useCallback(async (account, calls, options) => {
     const walletSession = walletSessionRef.current;
@@ -1001,6 +1040,12 @@ export function SessionProvider({ children }) {
       blockNumber,
       blockTime
     }}>
+      {sessionRecovery && (
+        <TransactionFeePrompt
+          type="SESSION_FEE_LIMIT"
+          onConfirm={restartGameplaySession}
+          onReject={useRegularWallet} />
+      )}
       {readyForChildren
         ? children
         : (

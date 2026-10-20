@@ -37,7 +37,7 @@ const Buttons = styled.div`
   display: flex;
   flex-direction: row;
   height: 60px;
-  justify-content: space-between;
+  justify-content: ${p => p.$alignRight ? 'flex-end' : 'space-between'};
   align-items: center;
   padding: 8px 8px 16px;
   & > button {
@@ -67,6 +67,7 @@ const GenericDialog = ({
   loading,
   onConfirm,
   confirmButtonProps = {},
+  alignActionsRight = false,
   onReject,
   rejectButtonProps = {},
   isTransaction,
@@ -88,7 +89,7 @@ const GenericDialog = ({
       <Body>
         {loading && !isTransaction ? <Loader /> : children}
       </Body>
-      <Buttons>
+      <Buttons $alignRight={alignActionsRight}>
         {onReject
           ? (
             <Button
