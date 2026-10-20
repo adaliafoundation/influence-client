@@ -5,6 +5,7 @@ import { buildSessionAccount, bytesToHexString, createSession, createSessionRequ
 import { WALLET_IDS } from './walletIds';
 import { allowedMethods, areSessionCallsAllowed, buildGameplaySessionPolicies } from './walletPolicies';
 
+const SESSION_MAX_STRK_FEE = '100000000000000000000';
 const SESSION_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const SESSION_NETWORKS = {
   '0x534e5f4d41494e': 'mainnet',
@@ -17,10 +18,14 @@ const normalizeSessionCalls = (calls) => calls.map((call) => ({
   entrypoint: allowedMethods.find((method) => hash.getSelectorFromName(method.selector) === call.entrypoint)?.selector || call.entrypoint
 }));
 
-export const isReadySessionValid = (session, accountAddress, chainId, now = Date.now()) => {
+export const isReadySessionValid = (session, accountAddress, chainId, strkToken, now = Date.now()) => {
   if (!session?.sessionKey?.privateKey || !session.authorisationSignature?.length) return false;
   try {
-    return BigInt(session.address) === BigInt(accountAddress)
+    const fees = JSON.parse(session.metadata).txFees;
+    const hasCurrentFeeAllowance = fees.some((fee) => (
+      BigInt(fee.tokenAddress) === BigInt(strkToken) && BigInt(fee.maxAmount) >= BigInt(SESSION_MAX_STRK_FEE)
+    ));
+    return hasCurrentFeeAllowance && BigInt(session.address) === BigInt(accountAddress)
       && BigInt(session.chainId) === BigInt(chainId)
       && Number(session.expiresAt) > Math.floor(now / 1000)
       && session.allowedMethods?.length === allowedMethods.length
@@ -49,19 +54,20 @@ export const supportsReadySessions = async (provider, address) => {
 
 const sessionExpiredError = () => {
   const error = new Error('Wallet session expired.');
-  error.userMessage = 'Your wallet session expired. Please try again to approve a new session.';
+  error.userMessage = errorMessages.sessionEnded;
   return error;
 };
 
 class ReadyWalletSession {
-  constructor({ wallet, account, provider, chainId, storedSession, serviceUrl, strkToken, onChange, isEnabled, isActive }) {
-    Object.assign(this, { wallet, account, provider, chainId, serviceUrl, strkToken, onChange, isEnabled, isActive });
-    this.session = isReadySessionValid(storedSession, account.address, chainId) ? storedSession : null;
+  constructor({ wallet, account, provider, chainId, storedSession, serviceUrl, strkToken, onChange, onFeeLimit, isEnabled, isActive }) {
+    Object.assign(this, { wallet, account, provider, chainId, serviceUrl, strkToken, onChange, onFeeLimit, isEnabled, isActive });
+    this.authorizationId = 0;
+    this.session = isReadySessionValid(storedSession, account.address, chainId, strkToken) ? storedSession : null;
   }
 
   get ready() {
     return !!this.serviceUrl && !!SESSION_NETWORKS[this.chainId]
-      && isReadySessionValid(this.session, this.account.address, this.chainId);
+      && isReadySessionValid(this.session, this.account.address, this.chainId, this.strkToken);
   }
 
   async supported() {
@@ -78,12 +84,32 @@ class ReadyWalletSession {
     if (!await this.supported()) return false;
     if (!this.isEnabled()) return false;
     if (!this.preparing) {
-      this.preparing = this.authorize().finally(() => { this.preparing = null; });
+      const authorizationId = ++this.authorizationId;
+      const cancelled = new Promise((_, reject) => {
+        this.cancelApproval = () => {
+          const error = new Error('User cancelled wallet session approval');
+          error.name = 'UserRejectedRequestError';
+          reject(error);
+        };
+      });
+      this.preparing = Promise.race([this.authorize(authorizationId), cancelled]).finally(() => {
+        if (authorizationId === this.authorizationId) {
+          this.preparing = null;
+          this.cancelApproval = null;
+        }
+      });
     }
     return this.preparing;
   }
 
-  async authorize() {
+  cancelPreparation() {
+    this.authorizationId += 1;
+    this.cancelApproval?.();
+    this.cancelApproval = null;
+    this.preparing = null;
+  }
+
+  async authorize(authorizationId) {
     const privateKey = bytesToHexString(ec.starkCurve.utils.randomPrivateKey());
     const sessionKey = { privateKey, publicKey: ec.starkCurve.getStarkKey(privateKey) };
     const sessionRequest = createSessionRequest({
@@ -94,17 +120,19 @@ class ReadyWalletSession {
         expiry: BigInt(Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS),
         metaData: {
           projectID: 'influence',
-          txFees: [{ tokenAddress: this.strkToken, maxAmount: '10000000000000000000' }]
+          txFees: [{ tokenAddress: this.strkToken, maxAmount: SESSION_MAX_STRK_FEE }]
         }
       }
     });
     const authorisationSignature = await this.wallet.request({
       type: 'wallet_signTypedData', params: sessionRequest.sessionTypedData
     });
-    if (!this.isEnabled()) return false;
-    this.session = await createSession({
+    if (!this.isEnabled() || authorizationId !== this.authorizationId) return false;
+    const session = await createSession({
       sessionRequest, authorisationSignature, address: this.account.address, chainId: this.chainId
     });
+    if (!this.isEnabled() || authorizationId !== this.authorizationId) return false;
+    this.session = session;
     this.sessionAccount = null;
     this.onChange(this.session);
     return true;
@@ -120,6 +148,9 @@ class ReadyWalletSession {
         session, sessionKey: session.sessionKey, provider: this.provider,
         argentSessionServiceBaseUrl: this.serviceUrl
       });
+      if (!this.isActive()) throw new Error('Account is disconnected');
+      if (!this.isEnabled()) return this.account;
+      if (this.session !== session) throw sessionExpiredError();
       account.paymaster = this.account.paymaster;
       const signTransaction = account.signer.signTransaction.bind(account.signer);
       const assertAuthorized = () => {
@@ -159,10 +190,20 @@ class ReadyWalletSession {
           try {
             return await execute(...args);
           } catch (error) {
-            if (this.session === session && /session\/(revoked|expired)/i.test(error.message)) {
+            const feeLimitExceeded = error.message === 'Sign session error' && error.cause === 'gasExceedsLimit';
+            if (feeLimitExceeded) error.userMessage = errorMessages.sessionFeeLimit;
+            const sessionEnded = /session\/(revoked|expired)/i.test(error.message)
+              || /session\/(revoked|expired)/i.test(typeof error.cause === 'string' ? error.cause : error.cause?.message || '');
+            if (sessionEnded) error.userMessage = errorMessages.sessionEnded;
+            if (this.session === session && (feeLimitExceeded || sessionEnded)) {
+              this.cancelPreparation();
               this.session = null;
               this.sessionAccount = null;
               this.onChange(null);
+              if (feeLimitExceeded && this.isActive() && this.onFeeLimit) {
+                this.onFeeLimit();
+                error.suppressTransactionFailure = true;
+              }
             }
             throw error;
           }

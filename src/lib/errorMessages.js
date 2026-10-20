@@ -24,6 +24,8 @@ export const errorMessages = {
   actionFailed: 'That action could not be completed. Please try again.',
   connection: 'Connection lost. Please reconnect and try again.',
   signIn: 'Please login again to continue.',
+  sessionEnded: 'Your wallet session has ended. Try again to approve a new session, or select Never under Use Wallet Sessions in Settings to use your regular wallet.',
+  sessionFeeLimit: 'This transaction exceeds your Ready session’s fee allowance. It was not submitted. To approve it directly in your wallet, set Use Wallet Sessions to Never in Settings and try again.',
   unavailable: 'Account is not ready. Please reconnect and try again.',
   busy: 'Action is taking longer than expected. Check its status before trying again.',
   walletRequestPending: 'The wallet did not respond, but your request may still be waiting for approval. Open your wallet to check it. Do not submit again until you have cancelled that request or confirmed its outcome.',
@@ -57,6 +59,7 @@ export const errorMessages = {
     copy: 'Copy error report', refresh: 'Refresh page', reset: 'Reload state'
   },
   feePrompts: {
+    SESSION_FEE_LIMIT: { title: 'Wallet Session Ended', confirmText: 'Start new session', rejectText: 'End session', body: ['Your wallet session could not authorize this action because it exceeds the session’s fee allowance. The session has been cleared and the action was not submitted.', 'Start a new session, or use your wallet without a session to approve each transaction. After choosing, retry your action.'] },
     TRANSITION: { title: 'Gas-Free Period Complete', confirmText: 'Got it, continue', body: ['Your gas-free period has ended. You are now responsible for the network fees on your actions.', 'STRK is used first. If your STRK balance is insufficient, enabled fallback tokens can cover the fee: USDC first, then SWAY. You can change these choices under Fallback fee tokens in Settings.'] },
     USDC: { title: 'Choose How to Pay', confirmText: 'Use USDC', body: ['Allow Influence to use your USDC balance for the small processing fees on your actions?'] },
     SWAY: { title: 'Choose How to Pay', confirmText: 'Use SWAY', body: ['Allow Influence to use your SWAY balance for the small processing fees on your actions?'] },
