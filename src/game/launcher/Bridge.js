@@ -599,7 +599,7 @@ const ConnectEthereum = () => {
       <Header>
         <WalletIcon />
         <div>
-          <Title>Connect Ethereum Wallet</Title>
+          <Title>Connect to Ethereum</Title>
           <Subtitle>Connect an Ethereum wallet to view and bridge assets.</Subtitle>
         </div>
       </Header>
@@ -619,6 +619,18 @@ const ConnectEthereum = () => {
     </Pane>
   );
 };
+
+const useEthereumReady = () => {
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  return isConnected && chainId === configuredChain.id;
+};
+
+const EthereumColumn = ({ ready, children }) => ready ? children : (
+  <ChainColumn>
+    <ConnectEthereum />
+  </ChainColumn>
+);
 
 const ChainAssetColumn = ({
   actionLabel,
@@ -789,6 +801,7 @@ const ChainAssetColumn = ({
 const AssetPane = ({ assetType }) => {
   const queryClient = useQueryClient();
   const { address: ethereumAddress } = useAccount();
+  const ethereumReady = useEthereumReady();
   const { accountAddress: starknetAddress, login } = useSession();
   const { bridgeAssetsToEthereum, bridgeAssetsToStarknet, busyKey, claimedAsteroidIds, mintCrewFromAsteroid, receiveAssetsOnEthereum } = useBridgeActions();
   const { config, ethereumAssets, progressItems, starknetAssets } = useBridgeAssets(assetType);
@@ -900,27 +913,29 @@ const AssetPane = ({ assetType }) => {
           </div>
         </Header>
         <Columns>
-          <ChainAssetColumn
-            actionLabel="Bridge to Starknet"
-            address={ethereumAddress}
-            assets={ethereumAssets.data || []}
-            assetType={assetType}
-            canAct={!busyKey && !delegation && !transfer}
-            chain="ethereum"
-            renderAssetAction={renderAssetAction('ethereum')}
-            icon={<EthIcon />}
-            isLoading={ethereumAssets.isLoading}
-            onAction={bridgeFromEthereum}
-            pendingProgressKeys={pendingProgressKeys}
-            progressItems={visibleProgressItems}
-            title="Ethereum" />
+          <EthereumColumn ready={ethereumReady}>
+            <ChainAssetColumn
+              actionLabel="Bridge to Starknet"
+              address={ethereumAddress}
+              assets={ethereumAssets.data || []}
+              assetType={assetType}
+              canAct={!busyKey && !delegation && !transfer}
+              chain="ethereum"
+              renderAssetAction={renderAssetAction('ethereum')}
+              icon={<EthIcon />}
+              isLoading={ethereumAssets.isLoading}
+              onAction={bridgeFromEthereum}
+              pendingProgressKeys={pendingProgressKeys}
+              progressItems={visibleProgressItems}
+              title="Ethereum" />
+          </EthereumColumn>
           <ChainAssetColumn
             actionBusy={busyKey === `receive-${assetType}`}
             actionLabel="Bridge to Ethereum"
             address={starknetAddress}
             assets={starknetAssets.data || []}
             assetType={assetType}
-            canAct={!!starknetAddress && !busyKey && !delegation && !transfer}
+            canAct={ethereumReady && !!starknetAddress && !busyKey && !delegation && !transfer}
             chain="starknet"
             renderAssetAction={renderAssetAction('starknet')}
             icon={<ChainImageIcon alt="" src={StarknetIconImage} />}
@@ -958,6 +973,7 @@ const AssetPane = ({ assetType }) => {
 
 const SwayPane = () => {
   const { address: ethereumAddress } = useAccount();
+  const ethereumReady = useEthereumReady();
   const { accountAddress: starknetAddress, login } = useSession();
   const { bridgeSwayToEthereum, bridgeSwayToStarknet, busyKey, swayDepositStatus, receiveSwayOnEthereum } = useBridgeActions();
   const { ethereumSway, starknetSway, swayCrossings } = useBridgeSway();
@@ -1031,64 +1047,66 @@ const SwayPane = () => {
           </div>
         </Header>
         <SwayGrid>
-          <ChainColumn>
-            <ChainHeader>
-              <ChainTitle><EthIcon />Ethereum</ChainTitle>
-              <Address>{formatAddress(ethereumAddress)}</Address>
-            </ChainHeader>
-            <ColumnControls>
-              <Input
-                onChange={(e) => setEthereumAmount(e.currentTarget.value)}
-                placeholder="Amount"
-                value={ethereumAmount} />
-              <Button
-                disabled={!ethereumAmount || !!busyKey}
-                onClick={() => bridgeSwayToStarknet(ethereumAmount)}
-                primary>
-                {busyKey === 'sway-l1' ? 'Processing…' : 'Bridge to Starknet'}
-              </Button>
-            </ColumnControls>
-            <BalanceLabel>SWAY Balance</BalanceLabel>
-            <Balance>{formatSwayBalance(l1Balance)}</Balance>
-            <PendingSway {...pendingSway.ethereum} />
-            {swayDepositStatus && <SubmissionStatus role="status" aria-live="polite">{swayDepositStatus}</SubmissionStatus>}
-            <RowList>
-              {[...readySwayItems, ...pendingSwayItems].map((item) => {
-                const key = getSwayCrossingKey(item);
-                const checked = !!selectedSway[key];
-                const isProcessing = processingSwayIds.includes(key);
-                const amount = formatSwayBalance(getSwayAmountValue(item.amount));
-                return (
-                  <AssetRow
-                    key={key}
-                    selected={checked}
-                    disabled={!item.canConfirm || isProcessing}
-                    dim
-                    $inProgress={!item.canConfirm || isProcessing}
-                    onClick={() => item.canConfirm && !isProcessing && toggleSwayItem(item)}>
-                    <AssetBadge selected={checked} dim>
-                      <SwayIcon />
-                    </AssetBadge>
-                    <div>
-                      <AssetName>{amount} SWAY</AssetName>
-                      <AssetMeta>from {formatAddress(item.fromAddress)}</AssetMeta>
-                    </div>
-                    <Status ready={item.canConfirm && !isProcessing}>
-                      {item.canConfirm && !isProcessing ? 'Ready' : 'In progress'}
-                    </Status>
-                  </AssetRow>
-                );
-              })}
-            </RowList>
-            {(readySwayItems.length > 0 || pendingSwayItems.length > 0) && (
-              <ColumnFooter>
-                <span>{selectedReadySwayItems.length} selected</span>
-                <Button disabled={selectedReadySwayItems.length === 0 || !!busyKey} onClick={finalizeReadySway} primary>
-                  {busyKey === 'sway-receive' ? 'Processing' : 'Finalize'}
+          <EthereumColumn ready={ethereumReady}>
+            <ChainColumn>
+              <ChainHeader>
+                <ChainTitle><EthIcon />Ethereum</ChainTitle>
+                <Address>{formatAddress(ethereumAddress)}</Address>
+              </ChainHeader>
+              <ColumnControls>
+                <Input
+                  onChange={(e) => setEthereumAmount(e.currentTarget.value)}
+                  placeholder="Amount"
+                  value={ethereumAmount} />
+                <Button
+                  disabled={!ethereumAmount || !!busyKey}
+                  onClick={() => bridgeSwayToStarknet(ethereumAmount)}
+                  primary>
+                  {busyKey === 'sway-l1' ? 'Processing…' : 'Bridge to Starknet'}
                 </Button>
-              </ColumnFooter>
-            )}
-          </ChainColumn>
+              </ColumnControls>
+              <BalanceLabel>SWAY Balance</BalanceLabel>
+              <Balance>{formatSwayBalance(l1Balance)}</Balance>
+              <PendingSway {...pendingSway.ethereum} />
+              {swayDepositStatus && <SubmissionStatus role="status" aria-live="polite">{swayDepositStatus}</SubmissionStatus>}
+              <RowList>
+                {[...readySwayItems, ...pendingSwayItems].map((item) => {
+                  const key = getSwayCrossingKey(item);
+                  const checked = !!selectedSway[key];
+                  const isProcessing = processingSwayIds.includes(key);
+                  const amount = formatSwayBalance(getSwayAmountValue(item.amount));
+                  return (
+                    <AssetRow
+                      key={key}
+                      selected={checked}
+                      disabled={!item.canConfirm || isProcessing}
+                      dim
+                      $inProgress={!item.canConfirm || isProcessing}
+                      onClick={() => item.canConfirm && !isProcessing && toggleSwayItem(item)}>
+                      <AssetBadge selected={checked} dim>
+                        <SwayIcon />
+                      </AssetBadge>
+                      <div>
+                        <AssetName>{amount} SWAY</AssetName>
+                        <AssetMeta>from {formatAddress(item.fromAddress)}</AssetMeta>
+                      </div>
+                      <Status ready={item.canConfirm && !isProcessing}>
+                        {item.canConfirm && !isProcessing ? 'Ready' : 'In progress'}
+                      </Status>
+                    </AssetRow>
+                  );
+                })}
+              </RowList>
+              {(readySwayItems.length > 0 || pendingSwayItems.length > 0) && (
+                <ColumnFooter>
+                  <span>{selectedReadySwayItems.length} selected</span>
+                  <Button disabled={selectedReadySwayItems.length === 0 || !!busyKey} onClick={finalizeReadySway} primary>
+                    {busyKey === 'sway-receive' ? 'Processing' : 'Finalize'}
+                  </Button>
+                </ColumnFooter>
+              )}
+            </ChainColumn>
+          </EthereumColumn>
           <ChainColumn>
             <ChainHeader>
               <ChainTitle><ChainImageIcon alt="" src={StarknetIconImage} />Starknet</ChainTitle>
@@ -1100,7 +1118,7 @@ const SwayPane = () => {
                 placeholder="Amount"
                 value={starknetAmount} />
               <Button
-                disabled={!starknetAmount || !starknetAddress || !!busyKey}
+                disabled={!ethereumReady || !starknetAmount || !starknetAddress || !!busyKey}
                 onClick={() => bridgeSwayToEthereum(starknetAmount)}
                 primary>
                 Bridge to Ethereum
@@ -1122,10 +1140,9 @@ const SwayPane = () => {
 };
 
 const BridgePane = ({ assetType }) => {
-  const { address: ethereumAddress, isConnected } = useAccount();
+  const { address: ethereumAddress } = useAccount();
   const { accountAddress: starknetAddress } = useSession();
   const walletKey = `${ethereumAddress}:${starknetAddress}`;
-  if (!isConnected) return <ConnectEthereum />;
   if (assetType === 'sway') return <SwayPane key={walletKey} />;
   return <AssetPane key={`${assetType}:${walletKey}`} assetType={assetType} />;
 };
@@ -1144,28 +1161,10 @@ const panes = [
 ];
 
 const Bridge = () => (
-  <BridgeDialog />
+  <LauncherDialog
+    panes={panes}
+    paneOverflow="hidden"
+    bottomLeftMenu={<EthereumConnection />} />
 );
-
-const BridgeDialog = () => {
-  const chainId = useChainId();
-  const { isConnected } = useAccount();
-  const isReady = isConnected && chainId === configuredChain.id;
-
-  if (!isReady) {
-    return (
-      <LauncherDialog
-        paneOverflow="hidden"
-        singlePane={<ConnectEthereum />} />
-    );
-  }
-
-  return (
-    <LauncherDialog
-      panes={panes}
-      paneOverflow="hidden"
-      bottomLeftMenu={<EthereumConnection />} />
-  );
-};
 
 export default Bridge;
