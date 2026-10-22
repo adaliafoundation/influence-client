@@ -79,7 +79,7 @@ jobs:
       - name: Check critical npm vulnerabilities before building
         run: >-
           docker run --rm -v "$PWD:/app:ro" -w /app
-          node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284
+          node:22.23.4-trixie-slim@sha256:8eb619e402eaede1748a3c8173bffab391592812e85136452f781741c7242ddf
           npm run audit:security -- --package-lock-only
 
       - name: Set up Docker Buildx

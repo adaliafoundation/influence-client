@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284 AS dependencies
+FROM node:22.23.4-trixie-slim@sha256:8eb619e402eaede1748a3c8173bffab391592812e85136452f781741c7242ddf AS dependencies
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends g++ make python3 \
@@ -26,7 +26,7 @@ ENV GENERATE_SOURCEMAP=false
 COPY . .
 RUN npm run test:runtime-config && npm run build
 
-FROM node:22-trixie-slim@sha256:7b8a0c89c54499bee567618f96578e1a12a800f062fbdbfd1fb6a443fa6f6284 AS production
+FROM node:22.23.4-trixie-slim@sha256:8eb619e402eaede1748a3c8173bffab391592812e85136452f781741c7242ddf AS production
 WORKDIR /app
 ENV NODE_ENV=production
 ENV REQUIRE_RUNTIME_CONFIG=true
