@@ -1,10 +1,11 @@
-import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
+import { STARTER_CAMPAIGN_NAME, STARTER_CAMPAIGN_CREW_REQUIREMENT } from '~/lib/starterCampaign';
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
 import Details from '~/components/DetailsModal';
 import HeroLayout from '~/components/HeroLayout';
-import { SwayIcon } from '~/components/Icons';
+import WarningAlert from '~/components/WarningAlert';
+import { SwayIcon, WarningOutlineIcon } from '~/components/Icons';
 import { getLicensedAssetUrl } from '~/lib/assetUtils';
 import { STARTER_MISSION_IMAGES } from '~/lib/starterMissions';
 import { getMissionObjectives } from '~/lib/missionPresentation';
@@ -19,6 +20,12 @@ const Section = styled.section`
   border-top: 1px solid #273039;
   margin-top: 22px;
   padding-top: 18px;
+`;
+const CrewWarning = styled(WarningAlert)`
+  font-size: 13px;
+  & > div:first-child {
+    font-size: 1em;
+  }
 `;
 const Briefing = styled(Section)`
   border-top: 0;
@@ -80,6 +87,10 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
               {!!story.length && <Briefing aria-label="Mission briefing">
                 <Eyebrow>Mission briefing</Eyebrow>
                 {story.map((paragraph, index) => <Muted key={index}>{paragraph}</Muted>)}
+                <CrewWarning severity="warning">
+                  <div><WarningOutlineIcon /></div>
+                  <div>{STARTER_CAMPAIGN_CREW_REQUIREMENT}</div>
+                </CrewWarning>
               </Briefing>}
               <Section aria-label="Mission progress" aria-live="polite">
                 <Eyebrow>Progress</Eyebrow>

@@ -1,3 +1,5 @@
+jest.mock('~/components/WarningAlert', () => jest.requireActual('../../../components/WarningAlert'), { virtual: true });
+jest.mock('~/theme', () => jest.requireActual('../../../theme'), { virtual: true });
 jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
@@ -11,7 +13,7 @@ const { StarterMission } = require('@influenceth/sdk');
 
 jest.mock('~/components/Icons', () => {
   const React = require('react');
-  return Object.fromEntries(['CheckIcon','HelpIcon','LockIcon','PlayIcon','SwayIcon','TargetIcon','ChevronDoubleDownIcon','ChevronDoubleUpIcon','ForwardIcon','RewardsIcon'].map(name => [name, () => React.createElement('svg', { 'aria-hidden': true })]));
+  return Object.fromEntries(['WarningOutlineIcon','CheckIcon','HelpIcon','LockIcon','PlayIcon','SwayIcon','TargetIcon','ChevronDoubleDownIcon','ChevronDoubleUpIcon','ForwardIcon','RewardsIcon'].map(name => [name, () => React.createElement('svg', { 'aria-hidden': true })]));
 }, { virtual: true });
 jest.mock('~/components/ActionSubmissionProvider', () => ({ __esModule: true, default: ({ children }) => children }), { virtual: true });
 jest.mock('~/components/ButtonAlt', () => ({ __esModule: true, default: ({ children, onClick, disabled }) => <button onClick={onClick} disabled={disabled}>{children}</button> }), { virtual: true });

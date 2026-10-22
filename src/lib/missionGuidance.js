@@ -72,8 +72,8 @@ export const gameplayGuides = {
     title: "Cultivate life",
     pages: [
       "Bioreactors are where we can cultivate life, and grow what we need to sustain the lives of all humans here in Adalia.",
-      "Open My Assets and select your completed Bioreactor. You will use its Manufacture Organics action to grow biological products. Start by comparing recipes and the materials they need.",
-      "Click Manufacture Organics. Open the process selector and choose a supported recipe. Read the input and output quantities, then set the batch size to cover at least one full batch for the mission.",
+      "Open My Assets and select your completed Bioreactor. You will use its Manufacture Organics action to grow biological products. We recommend BPA Bacteria Culturing for this mission. Check its required materials before starting.",
+      "Click Manufacture Organics. Open the process selector and choose BPA Bacteria Culturing, our recommended recipe. Any supported biological process qualifies. Read the input and output quantities, then set the batch size to cover at least one full batch for the mission.",
       "Select a source inventory that contains all the required inputs. If you are missing materials, buy, produce, or deliver them first and finish those actions before returning to the Bioreactor.",
       "Choose an output inventory with enough free capacity. Review the selected recipe, quantities, fees, and duration, then confirm the operation.",
       "When the timer finishes, return to the Bioreactor and reopen its processing action. Finish the operation to breathe in the sweet smell of success (or is that fertilizer?) and then you’ll receive the biological products. Check Objectives for progress."
