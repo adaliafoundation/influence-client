@@ -5,6 +5,7 @@ import { NewCoreSampleIcon, ResourceIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useStore from '~/hooks/useStore';
 import useCoreSampleManager from '~/hooks/actionManagers/useCoreSampleManager';
+import useClosestAccessibleInventory from '~/hooks/useClosestAccessibleInventory';
 import actionStage from '~/lib/actionStages';
 import { hasStarterCoreSampleEntitlement } from '~/lib/starterPacks';
 import { reactBool, formatFixed, formatTimer, locationsArrToObj, getCrewAbilityBonuses } from '~/lib/utils';
@@ -59,8 +60,15 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
   const [sampleId, setSampleId] = useState();
   const [resourceId, setResourceId] = useState(prepop.resourceId);
   const [drillSource, setDrillSource] = useState();
+  const [hasUserSelectedResource, setHasUserSelectedResource] = useState(false);
+  const [hasUserSelectedDrillSource, setHasUserSelectedDrillSource] = useState(false);
   const [resourceSelectorOpen, setResourceSelectorOpen] = useState(false);
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false);
+  const closestDrillSource = useClosestAccessibleInventory(
+    usingCoreSampleEntitlement ? null : asteroid?.id,
+    Product.IDS.CORE_DRILL,
+    usingCoreSampleEntitlement || !lot?.id ? undefined : { lotIndex: Lot.toIndex(lot.id) }
+  );
 
   useEffect(() => {
     if (currentSamplingAction) {
@@ -73,23 +81,29 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
         dispatchResourceMapToggle(true);
       }
     }
-    if (originEntity) {
+    if (originEntity && !hasUserSelectedDrillSource) {
       const { lotIndex } = locationsArrToObj(originEntity.Location?.locations || []);
       setDrillSource({
         lotIndex,
         slot: currentSamplingAction?.originSlot || null
       });
     }
-  }, [currentSamplingAction, originEntity]);
+  }, [currentSamplingAction, hasUserSelectedDrillSource, originEntity]);
 
   const onSelectResource = useCallback((r) => {
     setResourceId(r);
+    setHasUserSelectedResource(true);
 
     // if open to a different resource map, switch... if a resource map is not open, don't open one
     if (resourceMap?.active && resourceMap.selected !== r) {
       dispatchResourceMapSelect(r);
     }
-  }, [resourceMap?.active]);
+  }, [dispatchResourceMapSelect, resourceMap?.active, resourceMap?.selected]);
+
+  const onSelectDrillSource = useCallback((selection) => {
+    setDrillSource(selection);
+    setHasUserSelectedDrillSource(true);
+  }, []);
 
   const [, initialYieldTonnage]  = useMemo(() => {
     if (lot?.deposits && resourceId && sampleId) {
@@ -120,6 +134,45 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
   }, [asteroid, lot]);
 
   const lotAbundance = resourceId ? lotAbundances[resourceId] : 0;
+
+  const mostAbundantResourceId = useMemo(() => Object.entries(lotAbundances).reduce((mostAbundant, [id, abundance]) => {
+    if (abundance > 0 && (!mostAbundant || abundance > mostAbundant.abundance)) {
+      return { id: Number(id), abundance };
+    }
+    return mostAbundant;
+  }, null)?.id, [lotAbundances]);
+
+  useEffect(() => {
+    if (stage !== actionStage.NOT_STARTED || currentSamplingAction?.resourceId || hasUserSelectedResource || !prepop.resourceId) return;
+    setResourceId(prepop.resourceId);
+  }, [currentSamplingAction?.resourceId, hasUserSelectedResource, prepop.resourceId, stage]);
+
+  useEffect(() => {
+    if (
+      stage !== actionStage.NOT_STARTED
+      || resourceId
+      || prepop.resourceId
+      || currentSamplingAction?.resourceId
+      || hasUserSelectedResource
+      || mostAbundantResourceId == null
+    ) return;
+
+    setResourceId(mostAbundantResourceId);
+  }, [currentSamplingAction?.resourceId, hasUserSelectedResource, mostAbundantResourceId, prepop.resourceId, resourceId, stage]);
+
+  useEffect(() => {
+    if (
+      stage !== actionStage.NOT_STARTED
+      || usingCoreSampleEntitlement
+      || prepop.origin
+      || currentSamplingAction?.origin
+      || drillSource
+      || hasUserSelectedDrillSource
+      || !closestDrillSource
+    ) return;
+
+    setDrillSource(closestDrillSource);
+  }, [closestDrillSource, currentSamplingAction?.origin, drillSource, hasUserSelectedDrillSource, prepop.origin, stage, usingCoreSampleEntitlement]);
 
   const [crewTravelBonus, crewDistBonus, sampleQualityBonus, sampleTimeBonus] = useMemo(() => {
     const bonusIds = [
@@ -358,7 +411,7 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
             isSourcing
             itemIds={[Product.IDS.CORE_DRILL]}
             onClose={() => setSourceSelectorOpen(false)}
-            onSelected={setDrillSource}
+            onSelected={onSelectDrillSource}
             open={sourceSelectorOpen}
             requirePresenceOfItemIds
           />

@@ -121,6 +121,13 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     ));
   }, [crewCan, accountCrewIds, lot?.deposits, crew?.id]);
 
+  const ownSamples = useMemo(() => {
+    return usableSamples.filter((s) => (
+      accountCrewIds?.includes(s.Control.controller.id)
+      && !s.PrivateSale?.amount
+    ));
+  }, [accountCrewIds, usableSamples]);
+
   const selectCoreSample = useCallback((sample) => {
     setSelectedCoreSample(sample);
     setAmount(0);
@@ -150,12 +157,17 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
         defaultSelection = usableSamples.find((s) => s.id === props.preselect.depositId);
       } else if (usableSamples.length === 1) {
         defaultSelection = usableSamples[0];
+      } else if (ownSamples.length > 0) {
+        // auto-select highest-yield own sample (none listed for sale)
+        defaultSelection = ownSamples.reduce((a, b) => (
+          b.Deposit.remainingYield > a.Deposit.remainingYield ? b : a
+        ));
       }
       if (defaultSelection) {
         selectCoreSample(defaultSelection);
       }
     }
-  }, [currentExtraction, !selectedCoreSample, lot?.deposits, usableSamples]);
+  }, [currentExtraction, !selectedCoreSample, lot?.deposits, ownSamples, usableSamples]);
 
   const resource = useMemo(() => {
     if (!selectedCoreSample) return null;
