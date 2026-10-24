@@ -31,3 +31,10 @@ jsconfig.json
 # Browser test artifacts
 /test-results
 /playwright-report
+
+# IntelliJ IDEA
+.idea
+
+# Agents
+.vibe
+.junie
