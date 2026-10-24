@@ -510,7 +510,11 @@ const LotResources = () => {
           selected={selected} />
       </Scrollable>
 
-      {(currentSamplingActions?.length || selectedResource || selectedSample || currentExtraction) && (
+      {((scanned && !!actionProps?.crew)
+        || currentSamplingActions?.length
+        || selectedResource
+        || selectedSample
+        || currentExtraction) && (
         <Tray>
           <>
             {(currentSamplingActions?.length || selectedResource || selectedSample) && (
@@ -523,6 +527,9 @@ const LotResources = () => {
               && (currentExtraction || selectedSample)
               && <actionButtons.Extract.Component {...actionProps} {...extraExtractParams} />
             }
+            {scanned && !!actionProps?.crew && (
+              <actionButtons.BatchCoreSampling.Component {...actionProps} />
+            )}
           </>
         </Tray>
       )}
