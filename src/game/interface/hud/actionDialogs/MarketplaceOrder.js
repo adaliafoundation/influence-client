@@ -185,6 +185,47 @@ const TooltipBody = styled.div`
   }
 `;
 
+export const hasMatchingBuyOrder = (buyOrders, {
+  buyerCrewId,
+  exchangeId,
+  productId,
+  price,
+  storageId,
+  storageSlot
+}) => {
+  const candidatePrice = Number(price);
+  const candidateKey = {
+    buyerCrewId,
+    exchangeId,
+    productId,
+    price: candidatePrice,
+    priceInSway: Math.round(candidatePrice * TOKEN_SCALE[TOKEN.SWAY]),
+    storageId,
+    storageSlot
+  };
+
+  return buyOrders.some((order) => {
+    const orderKey = {
+      buyerCrewId: order.crew?.id,
+      exchangeId: order.entity?.id,
+      productId: order.product,
+      price: order.price,
+      priceInSway: Math.round(order.price * TOKEN_SCALE[TOKEN.SWAY]),
+      storageId: order.storage?.id,
+      storageSlot: order.storageSlot
+    };
+    const matches = {
+      buyerCrewId: Number(orderKey.buyerCrewId) === Number(candidateKey.buyerCrewId),
+      exchangeId: Number(orderKey.exchangeId) === Number(candidateKey.exchangeId),
+      productId: Number(orderKey.productId) === Number(candidateKey.productId),
+      price: orderKey.priceInSway === candidateKey.priceInSway,
+      storageId: Number(orderKey.storageId) === Number(candidateKey.storageId),
+      storageSlot: Number(orderKey.storageSlot) === Number(candidateKey.storageSlot)
+    };
+    return Object.values(matches).every(Boolean);
+  });
+};
+
 const MarketplaceOrder = ({
   asteroid,
   lot,
@@ -260,6 +301,23 @@ const MarketplaceOrder = ({
   const storageLotId = useMemo(() => storage && locationsArrToObj(storage?.Location?.locations || []).lotId, [storage]);
   const { data: storageLot } = useLot(storageLotId);
   const storageInventory = useMemo(() => (storage?.Inventories || []).find((i) => i.slot === storageSelection?.slot), [storage, storageSelection]);
+
+  const hasDuplicateBuyOrder = useMemo(() => (
+    !isCancellation
+      && mode === 'buy'
+      && type === 'limit'
+      && hasMatchingBuyOrder(buyOrders, {
+        buyerCrewId: crew?.id,
+        exchangeId: exchange?.id,
+        productId: resourceId,
+        price: limitPrice,
+        storageId: storageSelection?.id,
+        storageSlot: storageSelection?.slot
+      })
+  ), [
+    buyOrders, crew?.id, exchange?.id, isCancellation, limitPrice,
+    mode, resourceId, storageSelection?.id, storageSelection?.slot, type
+  ]);
 
   const { totalTime: crewTravelTime } = useMemo(() => {
     if (!asteroid?.id || !crew?._location?.lotId || !lot?.id) return {};
@@ -900,9 +958,10 @@ const MarketplaceOrder = ({
           (!isCancellation && (
             !storageSelection || !quantity || !total
             || exceedsOtherSide || insufficientAssets || insufficientCapacity
-            || !isPermitted
+            || !isPermitted || hasDuplicateBuyOrder
           ))
         }
+        disabledReason={hasDuplicateBuyOrder ? 'order already exists' : undefined}
         goLabel={goLabel}
         onGo={onSubmitOrder}
         stage={stage}
