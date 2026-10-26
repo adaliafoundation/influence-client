@@ -234,7 +234,7 @@ const StandardButton = (props) => {
   );
 };
 
-const TransactionButton = (props) => {
+const TransactionButton = ({disabledTooltipText, ...props}) => {
   const { promptingTransaction } = useContext(ChainTransactionContext);
   const submission = useActionSubmission();
   const standalone = useTransactionSubmission();
@@ -253,9 +253,17 @@ const TransactionButton = (props) => {
           'data-tooltip-id': tooltipId
         }
       };
+    } else if (props.disabled && disabledTooltipText) {
+      return {
+        disabledTooltip: {
+          'data-tooltip-content': disabledTooltipText,
+          'data-tooltip-place': tooltipPlace || 'top',
+          'data-tooltip-id': tooltipId
+        }
+      };
     }
     return {};
-  }, [busy, tooltipId, tooltipPlace]);
+  }, [busy, disabledTooltipText, tooltipId, tooltipPlace]);
 
   const loading = props.loading || standalone.busy || (submission?.busy && (!activeButton || activeButton === buttonId));
   const onClick = async event => {
