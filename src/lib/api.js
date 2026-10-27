@@ -98,6 +98,16 @@ const api = {
     return response.data;
   },
 
+  getColonizationMissions: async (asteroidId) => {
+    const response = await instance.get(`/${apiVersion}/missions/colonization/${encodeURIComponent(asteroidId)}`);
+    return response.data;
+  },
+
+  getMissionObservationCandidates: async (params) => {
+    const response = await instance.get(`/${apiVersion}/missions/observation-candidates`, { params });
+    return response.data;
+  },
+
   getStarterMissions: async (crewId) => {
     const response = await instance.get(`/${apiVersion}/missions/starter/${encodeURIComponent(crewId)}`);
     return response.data;

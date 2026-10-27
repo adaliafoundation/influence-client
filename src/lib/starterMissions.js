@@ -1,5 +1,4 @@
 import { Address, Entity, StarterMission, System } from '@influenceth/sdk';
-import { MISSION_ACTIONS } from './missionBindings';
 
 export const STARTER_MISSION_IMAGES = {
   [StarterMission.IDS.MAKE_LANDFALL]: 'stories/foothold/1.jpg',
@@ -12,36 +11,33 @@ export const STARTER_MISSION_IMAGES = {
   [StarterMission.IDS.CLOSE_THE_PRODUCTION_LOOP]: 'stories/close-the-production-loop/1.jpg'
 };
 
-// The capstone requires use or delivery; market orders do not qualify.
-const COMPOSITE_ACTIONS = new Set(['FlexibleExtractResourceStart', 'LeaseAndProcessProductsStart']);
-export const STARTER_MISSION_ACTIONS = new Set(Object.keys(MISSION_ACTIONS).filter(key => !COMPOSITE_ACTIONS.has(key)));
-export const STARTER_MISSION_SYSTEMS = new Set(['AcceptMission', 'ClaimMissionReward', 'MissionValidate', 'CompleteStarterMission']);
+export const MISSION_SYSTEMS = new Set(['AcceptMission', 'ClaimMissionReward', 'MissionValidate', 'CompleteMission']);
 
 export const getMissionCompletionCalls = ({ assignment }) => [
   { system: 'MissionValidate', vars: { assignment, arguments: [] } },
   { system: 'ClaimMissionReward', vars: { assignment } }
 ];
 
-export const canonicalCrewId = (id) => {
-  if (typeof id === 'number' && !Number.isSafeInteger(id)) throw new Error('Unsafe crew ID');
-  if (!/^(0x[0-9a-f]+|[0-9]+)$/i.test(String(id))) throw new Error('Invalid crew ID');
+export const canonicalEntityId = (id) => {
+  if (typeof id === 'number' && !Number.isSafeInteger(id)) throw new Error('Unsafe entity ID');
+  if (!/^(0x[0-9a-f]+|[0-9]+)$/i.test(String(id))) throw new Error('Invalid entity ID');
   const value = BigInt(id);
-  if (value <= 0n || value >= (1n << 64n)) throw new Error('Invalid crew ID');
+  if (value <= 0n || value >= (1n << 64n)) throw new Error('Invalid entity ID');
   return value.toString();
 };
 
 export const starterMissionsQueryKey = (chainId, apiUrl, crewId) => [
-  'starterMissions', chainId, apiUrl, crewId == null ? null : canonicalCrewId(crewId)
+  'starterMissions', chainId, apiUrl, crewId == null ? null : canonicalEntityId(crewId)
 ];
 
 export const getStarterMissionAssignment = (view, missionId) => StarterMission.getAssignment({
   campaign: view.campaign,
-  crewId: canonicalCrewId(view.subject.id),
+  crewId: canonicalEntityId(view.subject.id),
   missionId
 });
 
 export const getMissionAssignmentKey = ({ campaign, subject, mission }) => (
-  `${BigInt(campaign)}:${subject.label}:${canonicalCrewId(subject.id)}:${mission}`
+  `${BigInt(campaign)}:${subject.label}:${canonicalEntityId(subject.id)}:${mission}`
 );
 
 export const findPendingMissionTransaction = (transactions, assignment) => {
@@ -55,10 +51,10 @@ export const findPendingMissionTransaction = (transactions, assignment) => {
 // A receipt confirms execution, but buttons must wait for the indexed result.
 export const isMissionTransactionIndexed = (tx, view) => {
   const assignment = tx.vars?.assignment;
-  if (!STARTER_MISSION_SYSTEMS.has(tx.key) || !assignment || !view?.campaign || !view?.subject
+  if (!MISSION_SYSTEMS.has(tx.key) || !assignment || !view?.campaign || !view?.subject
     || BigInt(view.campaign) !== BigInt(assignment.campaign)
     || view.subject.label !== assignment.subject.label
-    || canonicalCrewId(view.subject.id) !== canonicalCrewId(assignment.subject.id)) return false;
+    || canonicalEntityId(view.subject.id) !== canonicalEntityId(assignment.subject.id)) return false;
   const mission = view.missions?.find(entry => entry.id === assignment.mission);
   if (tx.key === 'AcceptMission') return !!(mission?.accepted || mission?.completed || mission?.claimed);
   if (tx.key === 'MissionValidate') return !!(mission?.completed || mission?.claimed);
@@ -76,36 +72,15 @@ export const assertStarterMissionOperation = (view, assignment, operation, accou
   if (!view.active || !view.campaign
     || BigInt(view.campaign) !== BigInt(assignment.campaign)
     || assignment.subject.label !== Entity.IDS.CREW
-    || canonicalCrewId(view.subject.id) !== canonicalCrewId(assignment.subject.id)) {
+    || canonicalEntityId(view.subject.id) !== canonicalEntityId(assignment.subject.id)) {
     throw new Error('The starter mission campaign or crew has changed. Refresh and try again.');
   }
   const mission = view.missions.find((entry) => entry.id === assignment.mission);
   const allowed = operation === 'AcceptMission' ? mission?.canAccept
     : operation === 'ClaimMissionReward' ? mission?.claimable
-      : operation === 'CompleteStarterMission' ? view.eligible && mission?.accepted && mission?.earned && !mission?.claimed
+      : operation === 'CompleteMission' ? view.eligible && mission?.accepted && mission?.earned && !mission?.claimed
       : view.eligible && mission?.accepted;
   if (!allowed) throw new Error('This mission operation is not currently available.');
-};
-
-export const assertStarterMissionAction = (systemName) => {
-  if (!STARTER_MISSION_ACTIONS.has(systemName) && !COMPOSITE_ACTIONS.has(systemName)) {
-    throw new Error(`${systemName} is not supported by starter missions.`);
-  }
-};
-
-export const getStarterMissionActionCall = (systemName, vars, assignment, dispatcher) => {
-  if (!STARTER_MISSION_ACTIONS.has(systemName)) throw new Error(`Unsupported mission action: ${systemName}`);
-  if (vars.caller_crew?.label !== assignment.subject.label
-    || canonicalCrewId(vars.caller_crew?.id) !== canonicalCrewId(assignment.subject.id)) {
-    throw new Error('Mission action crew does not match its assignment.');
-  }
-  const inputs = System.Systems[systemName].inputs
-    .map(({ name }) => name).filter((name) => name !== 'caller_crew' && name !== 'context');
-  return System.getRunSystemCall('MissionAction', {
-    assignment,
-    action: systemName,
-    arguments: System.formatSystemCalldata(systemName, vars, inputs)
-  }, dispatcher);
 };
 
 export const getMissionValidationArguments = (delivery) => {

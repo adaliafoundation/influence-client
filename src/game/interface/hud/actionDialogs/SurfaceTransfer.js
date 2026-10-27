@@ -1,4 +1,3 @@
-import { useMissionActionDetails, useMissionDeliveryTarget } from '~/contexts/MissionActionContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Asteroid, Crewmate, Inventory, Lot, Permission, Product } from '@influenceth/sdk';
 import styled from 'styled-components';
@@ -265,10 +264,6 @@ const SurfaceTransfer = ({
   const senderHasDestPerm = senderDestinationAuthorization.status === 'allowed';
   const checkingDestinationAccess = senderDestinationAuthorization.status === 'unresolved';
   const isP2P = currentDelivery?.isProposal || senderDestinationAuthorization.status === 'denied';
-  useMissionActionDetails(useMemo(() => ({
-    origin, destination, destinationSlot: destinationSelection?.slot,
-    products: selectedItems, unsupported: currentDelivery ? !!currentDelivery.isProposal : !!isP2P
-  }), [origin, destination, destinationSelection?.slot, selectedItems, isP2P, currentDelivery]));
 
   const stats = useMemo(() => ([
     {
@@ -693,7 +688,6 @@ const Wrapper = (props) => {
     });
   }, [deliveryManager.currentVersion, deliveryId, txHash]);
 
-  useMissionDeliveryTarget(currentDeliveryAction?.action?.deliveryId);
 
   const { data: originEntity, isLoading: originLoading } = useEntity(currentDeliveryAction?.action?.origin || props.origin);
   const { data: destEntity, isLoading: destLoading } = useEntity(currentDeliveryAction?.action?.dest || props.destination);

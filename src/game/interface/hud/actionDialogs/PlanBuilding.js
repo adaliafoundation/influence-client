@@ -1,5 +1,4 @@
 
-import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Building } from '@influenceth/sdk';
@@ -42,7 +41,6 @@ const PlanBuilding = ({ asteroid, lot, constructionManager, stage, ...props }) =
   const { crew } = useCrewContext();
 
   const [buildingType, setBuildingType] = useState();
-  useMissionActionDetails(useMemo(() => ({ buildingType }), [buildingType]));
 
   const crewTimeRequirement = useMemo(() => formatTimeRequirements([[0, 'Initiate Building Plan']]), []);
   const stats = [{ label: 'Task Duration', value: formatTimer(0), isTimeStat: true }];

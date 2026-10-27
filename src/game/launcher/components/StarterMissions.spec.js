@@ -1,3 +1,4 @@
+jest.mock('./ColonizationMissions', () => () => null);
 jest.mock('~/components/WarningAlert', () => jest.requireActual('../../../components/WarningAlert'), { virtual: true });
 jest.mock('~/theme', () => jest.requireActual('../../../theme'), { virtual: true });
 jest.mock('~/lib/starterCampaign', () => jest.requireActual('../../../lib/starterCampaign'), { virtual: true });
@@ -44,7 +45,7 @@ jest.mock('~/lib/missionPresentation', () => jest.requireActual('../../../lib/mi
 jest.mock('~/assets/images/cursor.png', () => '', { virtual: true });
 jest.mock('~/assets/images/cursor-active.png', () => '', { virtual: true });
 jest.mock('~/components/InProgressIcon', () => jest.requireActual('../../../components/InProgressIcon'), { virtual: true });
-const { StarterCampaign } = require('./StarterMissions');
+const StarterCampaign = require('./MissionCampaign').default;
 const theme = require('../../../theme').default;
 
 const setup = (overrides = {}, onGuide, initiallyExpanded = false) => {
@@ -236,4 +237,22 @@ test('acceptance keeps the mission open through wallet, submission, refresh fail
   expect(screen.getByRole('dialog')).toBe(dialog);
   expect(within(dialog).getByText('Mission accepted')).toBeInTheDocument();
   expect(within(dialog).getByText('Plan your campaign Warehouse')).toBeInTheDocument();
+});
+
+test('colonization reuses the mission dialog with independent branches and no starter-only objectives', async () => {
+  const { ColonizationMission, Entity } = require('@influenceth/sdk');
+  const { colonizationPresentation } = require('../../../lib/colonizationMissions');
+  const view = { campaign: '124', subject: { label: Entity.IDS.ASTEROID, id: '99' }, eligible: true,
+    progress: { selectedBuildings: [{ ready: true }, { ready: false }, { ready: true }], capstoneReady: false },
+    missions: Object.values(ColonizationMission.TYPES).map(m => ({ ...m, accepted: true, completed: m.id === 4 })) };
+  const manager = { canManage: true, getPending: () => null, accept: jest.fn(), complete: jest.fn() };
+  render(<ThemeProvider theme={theme}><StarterCampaign view={view} manager={manager} initiallyExpanded presentation={colonizationPresentation} /></ThemeProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Found a Colony: Completed' }));
+  fireEvent.load(screen.getByRole('dialog').querySelector('img'));
+  expect(screen.getByRole('button', { name: 'Complete mission' })).toBeDisabled();
+  expect(screen.getByText(/Restore qualifying operational buildings/)).toBeInTheDocument();
+  expect(screen.getAllByRole('img', { name: 'Objective completed' })).toHaveLength(2);
+  expect(screen.getAllByRole('img', { name: 'Objective incomplete' })).toHaveLength(1);
+  expect(screen.queryByText(/Refinery/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/current crew delegate/)).not.toBeInTheDocument();
 });

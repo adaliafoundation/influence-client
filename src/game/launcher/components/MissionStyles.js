@@ -61,3 +61,9 @@ export const SurfaceButton = styled.button`
   &:hover { border-color: ${p => p.theme.colors.main}; background-color: #17232b; }
   &:focus-visible { outline: 2px solid ${p => p.theme.colors.main}; outline-offset: 3px; }
 `;
+
+export const CampaignList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`;

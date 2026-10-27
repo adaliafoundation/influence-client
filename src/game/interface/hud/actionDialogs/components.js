@@ -2,8 +2,6 @@ import WarningAlert from '~/components/WarningAlert';
 import { useActionSubmission } from '~/contexts/ActionSubmissionContext';
 import withOpenDialog from '~/components/withOpenDialog';
 import { getInstantTransferDetails, getTripTiming } from '~/lib/transport';
-import { useMissionAction } from '~/contexts/MissionActionContext';
-import MissionActionNotice from './MissionActionNotice';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { createPortal } from 'react-dom';
@@ -5322,9 +5320,7 @@ export const ActionDialogFooter = ({
 }) => {
   const submission = useActionSubmission();
   const dismiss = submission?.dismiss || onClose;
-  const mission = useMissionAction();
-  const missionBlocked = (mission && !mission.ready) || mission?.checking || (mission?.pending && mission?.selected) || (mission?.selected && (!mission.eligible || mission.unavailable))
-    || (stage === actionStage.READY_TO_COMPLETE && mission?.unavailable);
+
   const { crew, isLaunched } = useCrewContext();
   const { data: user, isLoading: userIsLoading } = useUser();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -5382,7 +5378,6 @@ export const ActionDialogFooter = ({
   const isReady = isSequenceable ? crew?._readyToSequence : crew?._ready;
   return (
     <Footer wide={wide}>
-      <MissionActionNotice stage={stage} />
       <SectionBody>
         {showNotificationOption && (
           <NotificationEnabler
@@ -5406,7 +5401,7 @@ export const ActionDialogFooter = ({
               {!submission?.busy && waitForCrewReady && allowedOrLaunched && !isReady && <CrewBusyButton isSequenceable={isSequenceable} />}
               {(submission?.busy || !waitForCrewReady || (isReady && allowedOrLaunched)) && (
                 <Button
-                  disabled={nativeBool(disabled || userIsLoading || missionBlocked)}
+                  disabled={nativeBool(disabled || userIsLoading)}
                   isTransaction
                   loading={reactBool(buttonsLoading)}
                   submissionId="dialog-go"
@@ -5437,7 +5432,7 @@ export const ActionDialogFooter = ({
                   {displayFinalizeActions.map((a, i) => (
                     <Button
                       key={i}
-                      disabled={nativeBool(disabled || missionBlocked)}
+                      disabled={nativeBool(disabled)}
                       isTransaction
                       loading={reactBool(buttonsLoading)}
                       submissionId={`dialog-finalize-${i}`}

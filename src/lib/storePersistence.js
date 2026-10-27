@@ -2,7 +2,7 @@ import { pruneBridgeTransfers } from '../bridge/transfers';
 
 // Persist user choices and ongoing account work, never scene or navigation state.
 const persistedKeys = [
-  'isNew', 'missionParticipation', 'objectivePreferences',
+  'isNew', 'objectivePreferences',
   'simulation', 'crewTutorials', 'hasSeenIntroVideo',
   'currentSession', 'sessions', 'lastConnectedWalletId', 'selectedCrewId',
   'crewAssignments', 'chatHistory', 'dmPrivateKey',

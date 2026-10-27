@@ -11,7 +11,6 @@ import { PuffLoader } from 'react-spinners';
 import { Tooltip } from 'react-tooltip';
 import { Lot } from '@influenceth/sdk';
 
-import { MissionActionProvider } from '~/contexts/MissionActionContext';
 import modalHeaders from '~/assets/images/modal_headers';
 import ClipCorner from '~/components/ClipCorner';
 import useAsteroid from '~/hooks/useAsteroid';
@@ -249,7 +248,6 @@ const ActionDialogContent = ({ type, params }) => {
   return (
     <Backdrop>
       <ModalCushion>
-        <MissionActionProvider type={type} params={params}>
         {type === 'ASSEMBLE_SHIP' && <AssembleShip {...allProps} />}
         {type === 'CLAIM_ARRIVAL_REWARD' && <ClaimArrivalReward {...allProps} />}
         {type === 'CLAIM_PREPARE_REWARD' && <ClaimPrepareReward {...allProps} />}
@@ -289,7 +287,6 @@ const ActionDialogContent = ({ type, params }) => {
         {type === 'SURFACE_TRANSFER' && <SurfaceTransfer {...allProps} />}
         {type === 'TRANSFER_AGREEMENT' && <TransferAgreement {...allProps} />}
         {type === 'TRANSFER_TO_SITE' && <TransferToSite {...allProps} />}
-        </MissionActionProvider>
       </ModalCushion>
     </Backdrop>
   );

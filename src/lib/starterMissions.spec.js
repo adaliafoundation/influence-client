@@ -1,12 +1,12 @@
 const { TextDecoder, TextEncoder } = require('util');
 global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
-const { Entity, StarterMission, System } = require('@influenceth/sdk');
+const { Entity, StarterMission } = require('@influenceth/sdk');
 const {
-  STARTER_MISSION_IMAGES, canonicalCrewId, starterMissionsQueryKey, isMissionTransactionIndexed,
+  STARTER_MISSION_IMAGES, canonicalEntityId, starterMissionsQueryKey, isMissionTransactionIndexed,
   getStarterMissionAssignment, getMissionAssignmentKey,
-  assertStarterMissionOperation, assertStarterMissionAction,
-  getStarterMissionActionCall, getMissionValidationArguments, getMissionCompletionCalls
+  assertStarterMissionOperation,
+  getMissionValidationArguments, getMissionCompletionCalls
 } = require('./starterMissions');
 const manifest = require('../assets/media/licensedMedia.v1.json');
 
@@ -16,7 +16,6 @@ const view = {
   missions: [{ id: 0, canAccept: true, accepted: false, claimable: false }]
 };
 const assignment = getStarterMissionAssignment(view, 0);
-const crew = view.subject;
 const entity = (id, label = Entity.IDS.BUILDING) => ({ id, label });
 
 test('completion validates before claiming and requires recorded objectives', () => {
@@ -25,12 +24,12 @@ test('completion validates before claiming and requires recorded objectives', ()
     { system: 'ClaimMissionReward', vars: { assignment } }
   ]);
   const ready = { ...view, missions: [{ id: 0, accepted: true, earned: true }] };
-  expect(() => assertStarterMissionOperation(ready, assignment, 'CompleteStarterMission', '0xabc')).not.toThrow();
+  expect(() => assertStarterMissionOperation(ready, assignment, 'CompleteMission', '0xabc')).not.toThrow();
   for (const flags of [{ earned: false }, { accepted: false }, { claimed: true }]) {
     const blocked = { ...ready, missions: [{ ...ready.missions[0], ...flags }] };
-    expect(() => assertStarterMissionOperation(blocked, assignment, 'CompleteStarterMission', '0xabc')).toThrow('not currently');
+    expect(() => assertStarterMissionOperation(blocked, assignment, 'CompleteMission', '0xabc')).toThrow('not currently');
   }
-  expect(() => assertStarterMissionOperation({ ...ready, eligible: false }, assignment, 'CompleteStarterMission', '0xabc')).toThrow('not currently');
+  expect(() => assertStarterMissionOperation({ ...ready, eligible: false }, assignment, 'CompleteMission', '0xabc')).toThrow('not currently');
 });
 
 test('maps all eight SDK missions to registered media', () => {
@@ -41,10 +40,10 @@ test('maps all eight SDK missions to registered media', () => {
 });
 
 test('normalizes crew IDs without losing precision and scopes queries by deployment', () => {
-  expect(canonicalCrewId('0x20000000000001')).toBe('9007199254740993');
-  expect(() => canonicalCrewId(9007199254740992)).toThrow('Unsafe');
-  expect(() => canonicalCrewId('1.5')).toThrow();
-  expect(() => canonicalCrewId('18446744073709551616')).toThrow();
+  expect(canonicalEntityId('0x20000000000001')).toBe('9007199254740993');
+  expect(() => canonicalEntityId(9007199254740992)).toThrow('Unsafe');
+  expect(() => canonicalEntityId('1.5')).toThrow();
+  expect(() => canonicalEntityId('18446744073709551616')).toThrow();
   expect(starterMissionsQueryKey('SN', 'api', '0x1f5')).toEqual(['starterMissions', 'SN', 'api', '501']);
   expect(getMissionAssignmentKey(assignment)).toBe('123:1:501:0');
 });
@@ -57,29 +56,6 @@ test('checks authority and campaign, but allows completed rewards after invalida
   expect(() => assertStarterMissionOperation(invalidated, assignment, 'ClaimMissionReward', '0xabc')).not.toThrow();
   expect(() => assertStarterMissionOperation(invalidated, assignment, 'MissionValidate', '0xabc')).toThrow('not currently');
   expect(() => assertStarterMissionOperation(view, assignment, 'ConstructionPlan', '0xabc')).toThrow('not currently');
-});
-
-test.each(['FillSellOrder', 'FillBuyOrder', 'BulkFillSellOrder', 'ResupplyFoodFromExchange', 'AcceptDelivery', 'SampleDepositImprove'])('does not wrap %s', (name) => {
-  expect(() => assertStarterMissionAction(name)).toThrow('not supported');
-});
-
-test.each(['FlexibleExtractResourceStart', 'LeaseAndProcessProductsStart'])('supports independently paid composite %s', (name) => {
-  expect(() => assertStarterMissionAction(name)).not.toThrow();
-});
-
-test.each([
-  ['ConstructionPlan', { building_type: 1, lot: entity(100, Entity.IDS.LOT), caller_crew: crew }],
-  ['SampleDepositStart', { lot: entity(100, Entity.IDS.LOT), resource: 1, origin: entity(4), origin_slot: 2, caller_crew: crew }],
-  ['ProcessProductsStart', { processor: entity(4), processor_slot: 1, process: 1, target_output: 1, recipes: 1.5, origin: entity(5), origin_slot: 2, destination: entity(6), destination_slot: 2, caller_crew: crew }],
-  ['SendDelivery', { origin: entity(4), origin_slot: 2, products: [{ product: 1, amount: 100 }], dest: entity(5), dest_slot: 2, caller_crew: crew }]
-])('serializes %s arguments without caller crew, preserving native struct/array formats', (name, vars) => {
-  const call = getStarterMissionActionCall(name, vars, assignment, '0x123');
-  const native = System.formatSystemCalldata(name, vars);
-  const crewData = System.formatSystemCalldata(name, vars, ['caller_crew']);
-  expect(call).toEqual(System.getRunSystemCall('MissionAction', {
-    assignment, action: name, arguments: native.slice(0, -crewData.length)
-  }, '0x123'));
-  expect(() => getStarterMissionActionCall(name, { ...vars, caller_crew: entity(502, Entity.IDS.CREW) }, assignment, '0x123')).toThrow('does not match');
 });
 
 test('serializes optional delivery reconciliation without caller crew', () => {

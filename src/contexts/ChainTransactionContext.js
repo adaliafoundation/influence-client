@@ -4,7 +4,8 @@ import { errorMessages } from '../lib/errorMessages';
 import { createFundingError, isUserCancellation, reportFailure } from '../lib/errorReporting';
 import { deliveryPaymentTransfers } from '~/lib/deliveryAuthorization';
 import { recheckTransactionAuthorization } from '~/lib/transactionAuthorization';
-import { verifyMissionAction } from '~/lib/missionBindings';
+import { observeNativeMissionCall } from '~/lib/missionObservation';
+import { assertColonizationMissionOperation, colonizationMissionsQueryKey } from '~/lib/colonizationMissions';
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Address, Asteroid, Entity, Order, Permission, System } from '@influenceth/sdk';
 import { isEqual, get } from 'lodash';
@@ -28,9 +29,9 @@ import { executePaidTransaction } from '~/lib/transactionFees';
 import { getCancellationRefund } from '~/lib/escrow';
 import { isPaymasterUnavailable, isSponsorshipUnavailable } from '~/lib/paymaster';
 import {
-  STARTER_MISSION_ACTIONS, STARTER_MISSION_SYSTEMS,
-  assertStarterMissionAction, assertStarterMissionOperation, getMissionCompletionCalls,
-  findPendingMissionTransaction, getMissionAssignmentKey, getStarterMissionActionCall, starterMissionsQueryKey
+  MISSION_SYSTEMS,
+  assertStarterMissionOperation, getMissionCompletionCalls,
+  findPendingMissionTransaction, getMissionAssignmentKey, starterMissionsQueryKey
 } from '~/lib/starterMissions';
 import { cleanseTxHash, safeBigInt } from '~/lib/utils';
 import { TOKEN } from '~/lib/priceUtils';
@@ -55,7 +56,7 @@ const customConfigs = {
   AcceptMission: { equalityTest: missionEquality, isUnblockable: true },
   ClaimMissionReward: { equalityTest: missionEquality, isUnblockable: true },
   MissionValidate: { equalityTest: missionEquality, isUnblockable: true },
-  CompleteStarterMission: {
+  CompleteMission: {
     equalityTest: missionEquality,
     isUnblockable: true,
     isVirtual: true,
@@ -954,6 +955,12 @@ export function ChainTransactionProvider({ children }) {
               }
             }
 
+            const observe = async (system, vars, call, escrow) => {
+              const observed = await observeNativeMissionCall({ system, vars, call, escrow,
+                dispatcher: appConfig.get('Starknet.Address.dispatcher'), account: walletAccount.address, api });
+              options.missionCandidates?.push(...observed.candidates);
+              return observed.calls;
+            };
             let totalEscrow = 0n;
             let totalPrice = 0n;
             let totalPriceToken;
@@ -1032,7 +1039,11 @@ export function ChainTransactionProvider({ children }) {
                   );
 
                   console.log('runSystem via escrow withdrawal', runSystem, processedVars, escrowCall);
-                  calls.push(escrowCall);
+                  calls.push(...await observe(escrowConfig.withdrawHook, processedVars, escrowCall, {
+                    hook: withdrawSystemCall, data: withdrawSystemData,
+                    address: appConfig.get('Starknet.Address.escrow'),
+                    token: appConfig.get('Starknet.Address.swayToken'), withdrawals
+                  }));
                 }
 
               // standard systems
@@ -1040,9 +1051,7 @@ export function ChainTransactionProvider({ children }) {
                 const [systemCall, vars] = getSystemCallAndProcessedVars(runSystem, rawVars);
                 processedVars = vars;
                 console.log('runSystem', runSystem, processedVars, systemCall);
-                calls.push(options.missionAssignment && STARTER_MISSION_ACTIONS.has(runSystem)
-                  ? getStarterMissionActionCall(runSystem, vars, options.missionAssignment, appConfig.get('Starknet.Address.dispatcher'))
-                  : systemCall);
+                calls.push(...await observe(runSystem, vars, systemCall));
               }
 
               if (customConfigs[runSystem]?.getTransferConfig) {
@@ -1200,7 +1209,7 @@ export function ChainTransactionProvider({ children }) {
       if (txEvent) {
         console.warn(`txEvent already exists for "failed" tx ${txHash}`, err);
         contracts[key]?.onConfirmed(txEvent, vars);
-        if (!STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
+        if (!MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
       } else if (err?.execution_status === 'REVERTED' || err?.receipt?.execution_status === 'REVERTED') {
         reportFailure(createAlert, err, { message: 'reverted', context: { action: key, transactionHash: txHash } });
         contracts[key]?.onTransactionError(err, vars);
@@ -1247,10 +1256,10 @@ export function ChainTransactionProvider({ children }) {
               // if a tx just went through and account is not known to be deployed,
               // now is a good time to check again if it is deployed
               if (receipt && !isDeployed) upgradeInsecureSession();
-              if (receipt?.execution_status === 'SUCCEEDED' && (meta?.missionAssignment || STARTER_MISSION_SYSTEMS.has(key))) {
+              if (receipt?.execution_status === 'SUCCEEDED' && (meta?.missionCandidates?.length || MISSION_SYSTEMS.has(key))) {
                 queryClient.invalidateQueries({ queryKey: ['starterMissions'] });
-                queryClient.invalidateQueries({ queryKey: ['missionBindings'] });
-                if (key === 'CompleteStarterMission' || key === 'ClaimMissionReward') {
+                queryClient.invalidateQueries({ queryKey: ['colonizationMissions'] });
+                if (key === 'CompleteMission' || key === 'ClaimMissionReward') {
                   queryClient.invalidateQueries({ queryKey: ['walletBalance', 'sway'] });
                 }
               }
@@ -1284,7 +1293,7 @@ export function ChainTransactionProvider({ children }) {
         const txEvent = getTxEvent(txHash);
         if (txEvent) {
           contracts[key].onConfirmed(txEvent, vars);
-          if (!STARTER_MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
+          if (!MISSION_SYSTEMS.has(key)) dispatchPendingTransactionComplete(txHash);
         }
       });
     }
@@ -1415,8 +1424,8 @@ export function ChainTransactionProvider({ children }) {
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}, options = {}) => {
     if (simulationEnabled) {
-      if (options.missionAssignment || STARTER_MISSION_SYSTEMS.has(key) || key === 'MissionAction') {
-        throw new Error('Starter missions are unavailable in simulation.');
+      if (MISSION_SYSTEMS.has(key)) {
+        throw new Error('Missions are unavailable in simulation.');
       }
       const uuid = `0x${String(performance.now()).replace('.', '')}`;
       dispatchPendingTransaction({
@@ -1459,7 +1468,7 @@ export function ChainTransactionProvider({ children }) {
     // and want to disable isTransaction buttons immediately
     setPromptingTransaction(true);
     let submission;
-    let assignment = STARTER_MISSION_SYSTEMS.has(key) ? vars.assignment : options.missionAssignment;
+    const assignment = MISSION_SYSTEMS.has(key) ? vars.assignment : null;
     let missionKey;
     let ownsMissionSubmission = false;
     const { execute: contractExecute, onTransactionError } = activeContracts[key];
@@ -1468,23 +1477,12 @@ export function ChainTransactionProvider({ children }) {
         notifyWalletDisconnected();
         return { status: 'failed' };
       }
-      if (key === 'MissionAction') throw new Error('Use a native action with missionAssignment for starter missions.');
       if (assignment) {
-        if (options.missionAssignment) assertStarterMissionAction(key);
-        const view = await api.getStarterMissions(assignment.subject.id);
-        queryClient.setQueryData(starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), assignment.subject.id), view);
-        assertStarterMissionOperation(view, assignment, key, activeWalletAccount.address);
-        if (options.missionAssignment) {
-          const qualifies = await verifyMissionAction({ key, vars, assignment, view,
-            getBinding: api.getMissionBinding, getEntity: api.getEntityById });
-          if (!qualifies) {
-            assignment = null;
-            options = { ...options };
-            delete options.missionAssignment;
-            meta = { ...meta };
-            delete meta.missionAssignment;
-          }
-        }
+        const colony = assignment.subject.label === Entity.IDS.ASTEROID;
+        const view = await (colony ? api.getColonizationMissions : api.getStarterMissions)(assignment.subject.id);
+        const queryKey = colony ? colonizationMissionsQueryKey : starterMissionsQueryKey;
+        queryClient.setQueryData(queryKey(chainId, appConfig.get('Api.influence'), assignment.subject.id), view);
+        (colony ? assertColonizationMissionOperation : assertStarterMissionOperation)(view, assignment, key, activeWalletAccount.address);
       }
       if (assignment) {
         missionKey = getMissionAssignmentKey(assignment);
@@ -1497,7 +1495,9 @@ export function ChainTransactionProvider({ children }) {
         meta = { ...meta, missionAssignment: assignment };
       }
       await requireExplicitAuthorization(activeWalletAccount, options);
-      const tx = await contractExecute(vars, options);
+      const missionCandidates = [];
+      const tx = await contractExecute(vars, { ...options, missionCandidates });
+      if (missionCandidates.length) meta = { ...meta, missionCandidates };
       const txHash = cleanseTxHash(tx);
       if (!txHash) throw new Error('Wallet returned no transaction hash.');
       dispatchPendingTransaction({

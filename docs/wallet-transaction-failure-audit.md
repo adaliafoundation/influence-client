@@ -109,7 +109,7 @@ These can coexist with shared transaction alerts; there is no single consistent 
 | Mission verification | Inline status + Retry verification button | “Wait for campaign verification before submitting this action.”; “The starter campaign changed. Reopen this action.”; “This crew cannot perform campaign work.”; API failure: “Campaign verification is unavailable. Retry shortly.”; otherwise thrown message or “Campaign verification failed. Retry shortly.” |
 | Other manager early returns | Caller dependent | Some return denied/checking results while their dialog handlers do not consume the result. For example the normal launch handler calls `undockShip` without displaying a returned failure, whereas the forced-launch handler reads its reason. A blanket claim that every denied action displays an explanation would be incorrect. |
 
-Sources: `src/game/interface/hud/actionDialogs/LaunchShip.js`, `PlanBuilding.js`, `src/hooks/useProductionAuthorization.js`, `src/contexts/MissionActionContext.js`, `src/hooks/actionManagers/useShipDockingManager.js`.
+Sources: `src/game/interface/hud/actionDialogs/LaunchShip.js`, `PlanBuilding.js`, `src/hooks/useProductionAuthorization.js`, `src/lib/missionObservation.js`, `src/hooks/actionManagers/useShipDockingManager.js`.
 
 ## Adjacent bridge and purchase/funding flows
 

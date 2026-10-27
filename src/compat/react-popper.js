@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react';
+import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/react';
 
 const getFallbackPlacements = (modifiers = []) => {
   const flipModifier = modifiers.find((modifier) => modifier?.name === 'flip');
@@ -22,6 +22,8 @@ export const usePopper = (referenceEl, popperEl, options = {}) => {
     }
     next.push(flip({ fallbackPlacements }));
     next.push(shift());
+    const sizeModifier = options.modifiers?.find(modifier => modifier.name === 'size');
+    if (sizeModifier) next.push(size(sizeModifier.options));
 
     return next;
   }, [options.modifiers]);

@@ -10,6 +10,8 @@ jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: () => ({ acc
 jest.mock('~/hooks/useStarterMissions', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/lib/starterMissions', () => jest.requireActual('../../lib/starterMissions'), { virtual: true });
 
+jest.mock('~/hooks/useStore', () => ({ __esModule: true, default: selector => selector({ pendingTransactions: [] }) }), { virtual: true });
+
 const Context = require('~/contexts/ChainTransactionContext').default;
 const useStarterMissions = require('~/hooks/useStarterMissions').default;
 const useStarterMissionManager = require('./useStarterMissionManager').default;
@@ -17,7 +19,7 @@ const execute = jest.fn();
 const wrapper = ({ children }) => <Context.Provider value={{ execute }}>{children}</Context.Provider>;
 
 test.each([
-  [false, true, 'CompleteStarterMission'],
+  [false, true, 'CompleteMission'],
   [true, true, 'ClaimMissionReward'],
   [true, false, 'ClaimMissionReward']
 ])('completion with claimable=%s and eligible=%s uses %s', (claimable, eligible, system) => {

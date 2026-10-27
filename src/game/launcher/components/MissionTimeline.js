@@ -113,17 +113,19 @@ const Controls = styled.div`
   gap: 16px;
 `;
 
-const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onAccept, onComplete, onGuide }) => {
+const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onAccept, onComplete, onGuide, presentation }) => {
   const [routeId, setRouteId] = useState(0);
   const accepted = mission.accepted || mission.completed || mission.claimed;
-  const objectivesMet = mission.earned || mission.completed || mission.claimed;
+  const objectivesMet = mission.requirements?.requiresOperationalSelectedBuildingsAtClaim
+    ? mission.earned || mission.claimed
+    : mission.earned || mission.completed || mission.claimed;
   const canComplete = mission.claimable || (eligible && mission.accepted && mission.earned && !mission.completed && !mission.claimed);
   return <Track aria-label="Mission steps">
     <Step $done={accepted}>
       <Marker $done={accepted} $active={mission.canAccept} aria-hidden="true">{accepted ? <CheckIcon /> : '1'}</Marker>
       <h3>{accepted ? 'Mission accepted' : 'Accept mission'}</h3>
       {!accepted && <>
-        {!mission.canAccept && <Muted>Complete the previous mission to unlock this one.</Muted>}
+        {!mission.canAccept && <Muted>{presentation?.lockedMessage || 'Complete the previous mission to unlock this one.'}</Muted>}
         <Controls><Button disabled={disabled || pending || !mission.canAccept} loading={pending} isTransaction onClick={onAccept}>
           Accept mission
         </Button></Controls>
@@ -133,7 +135,7 @@ const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onA
       <Marker $done={objectivesMet} $active={accepted && !objectivesMet && eligible} aria-hidden="true">{objectivesMet ? <CheckIcon /> : '2'}</Marker>
       <h3>Objectives</h3>
       <Muted>{mission.description}</Muted>
-      {mission.id === StarterMission.IDS.CLOSE_THE_PRODUCTION_LOOP && <RouteSelect
+      {!presentation && mission.id === StarterMission.IDS.CLOSE_THE_PRODUCTION_LOOP && <RouteSelect
         aria-label="Production route" value={routeId} onChange={event => setRouteId(Number(event.target.value))}>
         {Object.values(StarterMission.ROUTE_TYPES).map(route => <option key={route.id} value={route.id}>{route.title}</option>)}
       </RouteSelect>}
@@ -144,7 +146,7 @@ const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onA
         </ObjectiveMarker>
         <div>
           <ObjectiveTitle $done={objective.complete}>{objective.label}</ObjectiveTitle>
-          <MissionObjectiveAssets mission={mission} objectiveIndex={index} routeId={routeId} />
+          {!presentation && <MissionObjectiveAssets mission={mission} objectiveIndex={index} routeId={routeId} />}
         </div>
         {onGuide && mission.accepted && !objective.complete && <GuidanceLink aria-label="Show me how"
           data-tooltip-id="detailsTooltip" data-tooltip-content="Show me how"

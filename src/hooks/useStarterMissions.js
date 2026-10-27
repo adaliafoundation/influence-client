@@ -1,73 +1,8 @@
-import { useContext, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
-import WebsocketContext from '~/contexts/WebsocketContext';
-import { appConfig } from '~/appConfig';
-import useSession from '~/hooks/useSession';
-import useStore from '~/hooks/useStore';
-import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import api from '~/lib/api';
-import { recoverQueries } from '../lib/queryRecovery';
-import { canonicalCrewId, isMissionTransactionIndexed, starterMissionsQueryKey } from '~/lib/starterMissions';
+import { starterMissionsQueryKey } from '~/lib/starterMissions';
+import useMissionQuery from './useMissionQuery';
 
-const useStarterMissions = (crewId, { subscribe = false } = {}) => {
-  const queryClient = useQueryClient();
-  const { chainId, token } = useSession();
-  const simulationEnabled = useSimulationEnabled();
-  const id = crewId == null ? null : canonicalCrewId(crewId);
-  const { wsReady, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler } = useContext(WebsocketContext);
-  const enabled = !!(id && token && !simulationEnabled);
-  const query = useQuery({
-    queryKey: starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), id),
-    queryFn: () => api.getStarterMissions(id),
-    enabled,
-    staleTime: 0
-  });
-  const pendingTransactions = useStore(s => s.pendingTransactions);
-  const completeTransaction = useStore(s => s.dispatchPendingTransactionComplete);
-  useEffect(() => {
-    pendingTransactions.forEach(tx => {
-      if (isMissionTransactionIndexed(tx, query.data)) completeTransaction(tx.txHash);
-    });
-  }, [pendingTransactions, query.data, completeTransaction]);
-
-  const { refetch } = query;
-  useEffect(() => {
-    if (!subscribe || !enabled || !wsReady) return;
-    let timer;
-    let dirty = false;
-    const refresh = () => { dirty = false; refetch(); };
-    const onMessage = ({ type, body }) => {
-      if (type === 'MissionRewardClaimed') {
-        queryClient.invalidateQueries({ queryKey: ['walletBalance', 'sway'] });
-      }
-      const relevant = ['ComponentUpdated_Mission', 'MissionAccepted', 'MissionCompleted', 'MissionRewardClaimed', 'ComponentUpdated_Crew', 'ComponentUpdated_Crew_V1'].includes(type)
-        || (type === 'ConstantRegistered' && ['STARTER_MISSION_CAMPAIGN', 'STARTER_MISSION_CUTOFF'].includes(body?.event?.returnValues?.name));
-      if (relevant) {
-        dirty = true;
-        clearTimeout(timer);
-        // Keep dirty until catch-up, even if the debounced request sees a partial transaction.
-        timer = setTimeout(() => refetch(), 500);
-      } else if (type === 'CURRENT_STARKNET_BLOCK_NUMBER' && dirty) {
-        clearTimeout(timer);
-        refresh();
-      }
-    };
-    const registrations = [registerMessageHandler(onMessage), registerMessageHandler(onMessage, `Crew::${id}`)];
-    const connection = registerConnectionHandler((connected) => {
-      if (connected) {
-        dirty = false;
-        clearTimeout(timer);
-        recoverQueries(queryClient, { queryKey: starterMissionsQueryKey(chainId, appConfig.get('Api.influence'), id), exact: true });
-      }
-    });
-    return () => {
-      clearTimeout(timer);
-      registrations.forEach(unregisterMessageHandler);
-      unregisterConnectionHandler(connection);
-    };
-  }, [subscribe, enabled, id, chainId, wsReady, refetch, queryClient, registerMessageHandler, unregisterMessageHandler, registerConnectionHandler, unregisterConnectionHandler]);
-  return query;
-};
-
+const useStarterMissions = (crewId, { subscribe = false } = {}) => useMissionQuery(crewId, {
+  subscribe, queryKey: starterMissionsQueryKey, getSummary: api.getStarterMissions, room: 'Crew'
+});
 export default useStarterMissions;

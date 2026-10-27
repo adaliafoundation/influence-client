@@ -3,7 +3,6 @@ import { useCallback, useContext, useMemo, useState } from 'react';
 import { Deposit, Entity, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
-import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
@@ -11,11 +10,10 @@ import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 import { getStarterCoreSampleSource } from '~/lib/starterPacks';
 
-const useCoreSampleManager = (lotId, missionId) => {
+const useCoreSampleManager = (lotId) => {
   const reportBlocked = useFailureReporter();
-  const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
-  const { getPendingTx, getStatus } = useContext(ChainTransactionContext);
+  const { getPendingTx, getStatus, execute } = useContext(ChainTransactionContext);
   const { accountCrewIds, crew, pendingTransactions, recheckAuthorization } = useCrewContext();
   const { data: lot } = useLot(lotId);
   const { data: actionItems } = useUnresolvedActivities({ label: Entity.IDS.LOT, id: lotId });

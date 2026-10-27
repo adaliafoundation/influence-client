@@ -42,9 +42,10 @@ jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn() })
 jest.mock('~/lib/escrow', () => ({}), { virtual: true });
 jest.mock('~/lib/paymaster', () => ({ isPaymasterUnavailable: () => false, isSponsorshipUnavailable: error => error?.code === 'SPONSORSHIP_NOT_ELIGIBLE' }), { virtual: true });
 jest.mock('~/lib/deliveryAuthorization', () => ({}), { virtual: true });
-jest.mock('~/lib/missionBindings', () => ({}), { virtual: true });
+jest.mock('~/lib/missionObservation', () => ({ observeNativeMissionCall: async ({ call }) => ({ calls: [call], candidates: [] }) }), { virtual: true });
+jest.mock('~/lib/colonizationMissions', () => ({}), { virtual: true });
 jest.mock('~/lib/transactionAuthorization', () => ({ recheckTransactionAuthorization: async () => ({ status: 'allowed' }) }), { virtual: true });
-jest.mock('~/lib/starterMissions', () => ({ STARTER_MISSION_SYSTEMS: new Set(), STARTER_MISSION_ACTIONS: new Set() }), { virtual: true });
+jest.mock('~/lib/starterMissions', () => ({ MISSION_SYSTEMS: new Set() }), { virtual: true });
 jest.mock('~/lib/utils', () => ({ safeBigInt: BigInt, cleanseTxHash: tx => tx.transaction_hash }), { virtual: true });
 jest.mock('~/lib/priceUtils', () => ({ TOKEN: { USDC: '0x1', SWAY: '0x2' } }), { virtual: true });
 jest.mock('~/lib/wallets', () => ({ getWalletLabel: () => 'Ready' }), { virtual: true });
