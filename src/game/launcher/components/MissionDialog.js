@@ -1,10 +1,11 @@
-import { STARTER_CAMPAIGN_NAME } from '~/lib/starterCampaign';
+import { STARTER_CAMPAIGN_NAME, STARTER_CAMPAIGN_CREW_REQUIREMENT } from '~/lib/starterCampaign';
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
 import Details from '~/components/DetailsModal';
 import HeroLayout from '~/components/HeroLayout';
-import { SwayIcon } from '~/components/Icons';
+import WarningAlert from '~/components/WarningAlert';
+import { SwayIcon, WarningOutlineIcon } from '~/components/Icons';
 import { getLicensedAssetUrl } from '~/lib/assetUtils';
 import { STARTER_MISSION_IMAGES } from '~/lib/starterMissions';
 import { getMissionObjectives } from '~/lib/missionPresentation';
@@ -20,17 +21,23 @@ const Section = styled.section`
   margin-top: 22px;
   padding-top: 18px;
 `;
+const CrewWarning = styled(WarningAlert)`
+  font-size: 13px;
+  & > div:first-child {
+    font-size: 1em;
+  }
+`;
 const Briefing = styled(Section)`
   border-top: 0;
   margin-top: 0;
   padding-top: 10px;
 `;
-const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete, onClose, onGuide }) => {
+const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete, onClose, onGuide, presentation, subjectName }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState();
   const bodyRef = useRef();
-  const story = starterMissionStories[mission.key];
-  const objectives = getMissionObjectives(mission, view.progress);
+  const story = (presentation?.stories || (!presentation && starterMissionStories))?.[mission.key] || [];
+  const objectives = (presentation?.getObjectives || getMissionObjectives)(mission, view.progress);
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -63,7 +70,7 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
   return (
     <Details
       edgeToEdge
-      title={STARTER_CAMPAIGN_NAME}
+      title={presentation?.name || STARTER_CAMPAIGN_NAME}
       headerProps={{ background: 'true', v2: 'true' }}
       width="1150px"
       onClose={onClose}
@@ -71,25 +78,37 @@ const MissionDialog = ({ mission, view, pending, canManage, onAccept, onComplete
       detailsProps={{ ref: bodyRef, role: 'dialog', 'aria-modal': true, 'aria-label': mission.title, tabIndex: -1, onKeyDown: handleKeyDown, style: { outline: 'none' } }}>
       <HeroLayout
         collapseOnScroll={150}
-        coverImage={getLicensedAssetUrl(STARTER_MISSION_IMAGES[mission.id])}
+        coverImage={getLicensedAssetUrl((presentation?.images || STARTER_MISSION_IMAGES)[mission.id])}
         title={mission.title}
         styleOverrides={{ body: { flex: '1 1 0', minWidth: 0 } }}
         subtitle={<Reward><SwayIcon /> {mission.reward.toLocaleString()} SWAY</Reward>}
         rightButton={{ label: 'Close', onClick: onClose }}>
         <Content>
+          {subjectName && <Briefing><Eyebrow>Asteroid</Eyebrow><Muted>{subjectName}</Muted></Briefing>}
               {!!story.length && <Briefing aria-label="Mission briefing">
                 <Eyebrow>Mission briefing</Eyebrow>
                 {story.map((paragraph, index) => <Muted key={index}>{paragraph}</Muted>)}
+                {!presentation && <CrewWarning severity="warning">
+                  <div><WarningOutlineIcon /></div>
+                  <div>{STARTER_CAMPAIGN_CREW_REQUIREMENT}</div>
+                </CrewWarning>}
+              </Briefing>}
+              {presentation?.warning && <Briefing aria-label="Campaign requirements">
+                <CrewWarning severity="warning">
+                  <div><WarningOutlineIcon /></div>
+                  <div>{presentation.warning}</div>
+                </CrewWarning>
               </Briefing>}
               <Section aria-label="Mission progress" aria-live="polite">
                 <Eyebrow>Progress</Eyebrow>
-                <MissionTimeline mission={mission} objectives={objectives} eligible={view.eligible}
+                <MissionTimeline mission={mission} objectives={objectives} eligible={view.eligible} presentation={presentation}
                   disabled={!canManage || !!pending || submitting} pending={!!pending || submitting}
                   onAccept={() => submit(onAccept)} onComplete={() => submit(onComplete)}
                   onGuide={onGuide ? index => { onClose(); onGuide(index); } : undefined} />
-                {!view.eligible && <Muted>This crew can no longer progress in the campaign. Completed rewards remain available to claim.</Muted>}
+                {!presentation && !view.eligible && <Muted>This crew can no longer progress in the campaign. Completed rewards remain available to claim.</Muted>}
               </Section>
-              {!canManage && <Muted>Connect as the current crew delegate to accept missions or claim rewards.</Muted>}
+              {!canManage && <Muted>{presentation?.authorityMessage || 'Connect as the current crew delegate to accept missions or claim rewards.'}</Muted>}
+              {mission.requirements?.requiresOperationalSelectedBuildingsAtClaim && mission.completed && !mission.claimed && !view.progress.capstoneReady && <Muted>Restore qualifying operational buildings before claiming this reward.</Muted>}
               {error && <Muted role="alert">{error}</Muted>}
         </Content>
       </HeroLayout>

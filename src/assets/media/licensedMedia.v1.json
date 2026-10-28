@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "generatedAt": "2026-06-11T09:35:08.256Z",
+  "generatedAt": "2026-10-28T10:27:31.920Z",
   "licenseScope": "Client-only licensed media for the Influence client. Do not publish through the SDK image pipeline.",
   "uploadPrefix": "assets/client-media",
   "gateways": {
@@ -798,6 +798,22 @@
       "family": "stories",
       "storageKey": "assets/client-media/stories/begin-extraction/1.png"
     },
+    "stories/build-a-habitat/1.jpg": {
+      "key": "stories/build-a-habitat/1.jpg",
+      "path": "stories/build-a-habitat/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/build-a-habitat/1.jpg"
+    },
+    "stories/claim-a-new-world/1.jpg": {
+      "key": "stories/claim-a-new-world/1.jpg",
+      "path": "stories/claim-a-new-world/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/claim-a-new-world/1.jpg"
+    },
     "stories/close-the-production-loop/1.jpg": {
       "key": "stories/close-the-production-loop/1.jpg",
       "path": "stories/close-the-production-loop/1.jpg",
@@ -805,6 +821,14 @@
       "kind": "story-image",
       "family": "stories",
       "storageKey": "assets/client-media/stories/close-the-production-loop/1.jpg"
+    },
+    "stories/connect-the-colony/1.jpg": {
+      "key": "stories/connect-the-colony/1.jpg",
+      "path": "stories/connect-the-colony/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/connect-the-colony/1.jpg"
     },
     "stories/counterthrust/1.jpg": {
       "key": "stories/counterthrust/1.jpg",
@@ -821,6 +845,14 @@
       "kind": "story-image",
       "family": "stories",
       "storageKey": "assets/client-media/stories/earth-and-the-void/1.jpg"
+    },
+    "stories/establish-commerce/1.jpg": {
+      "key": "stories/establish-commerce/1.jpg",
+      "path": "stories/establish-commerce/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/establish-commerce/1.jpg"
     },
     "stories/establish-storage/1.jpg": {
       "key": "stories/establish-storage/1.jpg",
@@ -845,6 +877,14 @@
       "kind": "story-image",
       "family": "stories",
       "storageKey": "assets/client-media/stories/foothold/1.jpg"
+    },
+    "stories/found-a-colony/1.jpg": {
+      "key": "stories/found-a-colony/1.jpg",
+      "path": "stories/found-a-colony/1.jpg",
+      "version": "v1",
+      "kind": "story-image",
+      "family": "stories",
+      "storageKey": "assets/client-media/stories/found-a-colony/1.jpg"
     },
     "stories/greatness/1.jpg": {
       "key": "stories/greatness/1.jpg",

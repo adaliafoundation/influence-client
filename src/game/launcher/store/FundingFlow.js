@@ -211,18 +211,6 @@ const BalanceActions = styled.div`
   }
 `;
 
-const ButtonRow = styled.div`
-  display: flex;
-  flex-direction: row;
-
-  & > button {
-    margin-right: 10px;
-
-    &:last-child {
-      margin-right: 0;
-    }
-  }
-`;
 
 const GiantIcon = styled.div`
   align-items: center;
@@ -323,23 +311,6 @@ const EmbeddedCheckoutCloseButton = styled(IconButton)`
   z-index: 10001;
 `;
 
-const SwapConfirmation = styled.div`
-  padding: 10px 30px 25px;
-  width: 450px;
-
-  & > p {
-    color: #ccc;
-    font-size: 16px;
-    line-height: 1.4em;
-    margin: 0 0 22px;
-  }
-
-  & b {
-    color: white;
-    font-weight: normal;
-  }
-`;
-
 const getSuggestedAmounts = (fundsNeeded) => {
   if (!fundsNeeded) return [10e6, 25e6, 50e6];
 
@@ -350,17 +321,6 @@ const getSuggestedAmounts = (fundsNeeded) => {
   if (needed < 200e6) return [needed, 250e6, 500e6];
   return [needed];
 };
-
-export const TokenList = ({ items }) => (
-  <>
-    {items.map((item, index) => (
-      <span key={item.token}>
-        {index > 0 && (index === items.length - 1 ? ' and ' : ', ')}
-        {item.label}
-      </span>
-    ))}
-  </>
-);
 
 const getBanxaCheckoutErrorMessage = (error) => {
   const serverMessage = error?.response?.data?.message || error?.response?.data?.error || error?.message;
@@ -401,7 +361,7 @@ const BanxaEmbeddedCheckout = ({ checkoutUrl, onClose, onLoad }) => {
   );
 };
 
-export const FundingFlow = ({ mode, primaryAction, swapRequirements = [], totalPrice, onClose, onFunded }) => {
+export const FundingFlow = ({ primaryAction, totalPrice, onClose, onFunded }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
 
   const { accountAddress, chainId } = useSession();
@@ -430,7 +390,7 @@ export const FundingFlow = ({ mode, primaryAction, swapRequirements = [], totalP
   );
 
   const fundingAction = primaryAction || (totalPrice && fundsNeeded?.usdcValue === 0 && onFunded
-    ? { label: 'Continue', onClick: onFunded }
+    ? { label: 'Return to purchase', onClick: onFunded }
     : null);
 
   const suggestedAmounts = useMemo(() => getSuggestedAmounts(fundsNeeded), [fundsNeeded]);
@@ -561,27 +521,11 @@ export const FundingFlow = ({ mode, primaryAction, swapRequirements = [], totalP
       {!banxaUrl && createPortal(
       <>
         <Details
-          title={mode === 'swap' ? 'Confirm Swap' : 'Add Funds'}
+          title="Add Funds"
           onClose={onClose}
           modalMode
           style={{ zIndex: 9000 }}>
-        {mode === 'swap' && (
-          <SwapConfirmation>
-            <p>
-              This purchase is priced in <b>USD</b>. To continue, you are authorizing your wallet to swap up to
-              <b><TokenList items={swapRequirements} /></b> through AVNU, then submit the purchase transaction.
-            </p>
-            <ButtonRow>
-              <Button onClick={onClose}>Back</Button>
-              <div style={{ flex: 1 }} />
-              <Button isTransaction onClick={() => { onFunded(); onClose(); }}>
-                <span>Continue</span> <ChevronRightIcon />
-              </Button>
-            </ButtonRow>
-          </SwapConfirmation>
-        )}
-
-        {mode !== 'swap' && !banxaUrl && !layerswapUrl && !creatingBanxaOrder && (
+        {!banxaUrl && !layerswapUrl && !creatingBanxaOrder && (
           <FundingBody>
             <Receipt>
               <div>

@@ -71,7 +71,7 @@ test('continues the purchase after sufficient funds arrive', () => {
   const close = jest.fn();
   const totalPrice = { clone: () => ({ usdcValue: 5000000, to: () => 5000000 }) };
   renderFunding({ totalPrice, onFunded: funded, onClose: close });
-  fireEvent.click(screen.getByText('Continue'));
+  fireEvent.click(screen.getByText('Return to purchase'));
   expect(funded).toHaveBeenCalledTimes(1);
   expect(close).toHaveBeenCalledTimes(1);
 });

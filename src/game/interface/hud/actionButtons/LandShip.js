@@ -1,3 +1,5 @@
+import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
+import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { useCallback, useMemo } from 'react';
 import { Asteroid, Dock, Ship } from '@influenceth/sdk';
 
@@ -18,6 +20,7 @@ const isVisible = ({ asteroid, crew, crewedShip, lot }) => {
 };
 
 const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
+  const setCoachmarkRef = useCoachmarkRefSetter();
   const { crew, authorize } = useCrewContext();
   const { currentDockingAction } = useShipDockingManager(crew?._location?.shipId);
   const { data: crewedShip } = useShip(crew?._location?.shipId)
@@ -64,6 +67,7 @@ const LandShip = ({ asteroid, lot, onSetAction, _disabled }) => {
 
   return (
     <ActionButton
+      ref={setCoachmarkRef(COACHMARK_IDS.actionButtonLandShip)}
       label={`${lot?.building?.Dock ? 'Dock' : 'Land'} Ship`}
       labelAddendum={disabledReason}
       flags={{

@@ -23,13 +23,12 @@ const {
   BANXA_DEFAULTS,
   buildBanxaStatusUrl,
   getFundingAmountUsdc,
-  getTokenSwapRequirements,
   getUsdcValue,
   normalizeBanxaOrder,
   normalizeBanxaOrderStatus,
   parseBanxaReturnUrl
 } = require('./funding');
-const { TOKEN, TOKEN_SCALE } = require('./priceUtils');
+const { TOKEN } = require('./priceUtils');
 
 const createPrice = (usdcValue) => ({
   to: (token) => {
@@ -37,19 +36,6 @@ const createPrice = (usdcValue) => ({
     return usdcValue;
   }
 });
-
-const priceHelper = {
-  from: (amount, token) => ({
-    to: (targetToken) => {
-      if (token === TOKEN.USDC && targetToken === TOKEN.ETH) return Number(amount) * 10;
-      if (token === TOKEN.USDC && targetToken === TOKEN.STRK) return Number(amount) * 2;
-      if (token === TOKEN.ETH && targetToken === TOKEN.USDC) return Number(amount) / 10;
-      if (token === TOKEN.STRK && targetToken === TOKEN.USDC) return Number(amount) / 2;
-      if (token === targetToken) return Number(amount);
-      throw new Error(`Unexpected conversion ${token} -> ${targetToken}`);
-    }
-  })
-};
 
 describe('funding utils', () => {
   it('returns unscaled USDC funding amounts', () => {
@@ -115,20 +101,4 @@ describe('funding utils', () => {
     });
   });
 
-  it('describes the token swaps needed above the USDC balance', () => {
-    const swaps = getTokenSwapRequirements({
-      priceHelper,
-      targetUsdcValue: 25 * TOKEN_SCALE[TOKEN.USDC],
-      tokenBalances: {
-        [TOKEN.USDC]: 5n * BigInt(TOKEN_SCALE[TOKEN.USDC]),
-        [TOKEN.ETH]: 80n * BigInt(TOKEN_SCALE[TOKEN.USDC]),
-        [TOKEN.STRK]: 40n * BigInt(TOKEN_SCALE[TOKEN.USDC])
-      }
-    });
-
-    expect(swaps).toEqual(expect.arrayContaining([
-      expect.objectContaining({ token: TOKEN.ETH, amount: 80 * TOKEN_SCALE[TOKEN.USDC] }),
-      expect.objectContaining({ token: TOKEN.STRK, amount: 24 * TOKEN_SCALE[TOKEN.USDC] })
-    ]));
-  });
 });

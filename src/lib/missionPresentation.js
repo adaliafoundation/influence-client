@@ -1,6 +1,6 @@
 import { StarterMission } from '@influenceth/sdk';
 
-export const getMissionStatus = (mission, pending, eligible = true) => {
+export const getMissionStatus = (mission, pending, eligible = true, presentation) => {
   if (pending) return { key: 'pending', label: 'Transaction pending' };
   if (mission.claimed) return { key: 'claimed', label: 'Reward claimed' };
   if (mission.claimable) return { key: 'claimable', label: 'Reward ready to claim' };
@@ -8,7 +8,7 @@ export const getMissionStatus = (mission, pending, eligible = true) => {
   if (!eligible) return { key: 'locked', label: 'Crew no longer eligible' };
   if (mission.accepted) return { key: 'active', label: mission.earned ? 'Objective met' : 'In progress' };
   if (mission.canAccept) return { key: 'available', label: 'Ready to accept' };
-  return { key: 'locked', label: 'Complete the previous mission' };
+  return { key: 'locked', label: presentation?.lockedLabel || 'Complete the previous mission' };
 };
 
 export const isStarterCampaignVisible = (view) => !!(view?.active && (

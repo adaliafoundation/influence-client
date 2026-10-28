@@ -9,6 +9,8 @@ import useSimulationState from '~/hooks/useSimulationState';
 import useSession from '~/hooks/useSession';
 
 export const COACHMARK_IDS = {
+  actionButtonScanAsteroid: 'actionButtonScanAsteroid',
+  actionButtonLandShip: 'actionButtonLandShip',
   actionButtonAssembleShip: 'actionButtonAssembleShip',
   actionButtonConstruct: 'actionButtonConstruct',
   actionButtonCoreSample: 'actionButtonCoreSample',

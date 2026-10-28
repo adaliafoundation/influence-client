@@ -1,6 +1,6 @@
 # Client authorization
 
-The client uses the SDK 2.7.2 `Authorization` evaluator for current contract rules on every asset. There is no legacy authorization mode.
+The client uses the SDK `Authorization` evaluator for current contract rules on every asset. There is no legacy authorization mode.
 
 ## Boundaries
 
@@ -31,42 +31,47 @@ CI=true npm test -- --watchAll=false --runInBand
 
 Authorization-specific tests cover component completeness, inclusive boundaries, active-tenant precedence (including planned-site repossession), crew/ship docking grants, stale responses, pre-submit changes, candidate batching/pagination, production completion and quote checks, and delivery payments. Tutorial entities explicitly provide their mocked permission components.
 
-The contracts are not deployed. Do not substitute deployed-contract or browser integration tests for these unit checks.
+## Transport and completion time
 
-## Transport and completion-time alignment in SDK 2.7.2
+Production estimates round each travel leg and each setup/production phase to
+whole real-time seconds using SDK helpers before summing or taking a positioning
+maximum. Use `Asteroid.getLotTravelTimeReal` for hopper legs,
+`Process.getSetupTimeReal` and `Process.getProcessingTimeReal` for processing,
+`Extractor.getExtractionTimeReal` for extraction, and `Time.toRealDurationCeil`
+for assembly phases. Crew labor uses `Time.getCrewLaborDuration` after summing
+production phases.
 
-The current contracts and SDK agree that the speed bonus affects instant transport. They compare `distance / speedBonus <= baseFreeRadius * distanceBonus`; the physical instant-transfer radius therefore includes both bonuses, and its boundary is inclusive. The client delegates timing to `Asteroid.getLotTravelTimeReal` and displays the same rule in transfer-distance tooltips. Food resupply retains its contract-specific no-penalty bonus floor.
+The same integer duration feeds display, lease quotes, and authorization.
+`Time.getProductionCompletionTime` uses the later of block time and crew ready
+time and rejects fractional durations during fresh submission checks. Two legs
+of 340.208 seconds require 682 seconds; a lease ending at 681 seconds is too short.
+Do not add a buffer. Processing's input leg runs from origin to processor even
+when input and output storage share a lot. Orbital/calendar conversions and dock
+queue calculations have separate semantics.
 
-The current processing contract calculates the input leg from origin to processor, matching the existing client route. Input and output storage sharing a lot does not remove the trip to a processor elsewhere. These updates resolve the two timing differences identified in the previous review. Production authorization continues to use the calculated completion time, with fresh permission checks and transaction validation.
+Instant transport includes both speed and distance bonuses, with an inclusive
+boundary: `distance / speedBonus <= baseFreeRadius * distanceBonus`. Food resupply
+retains its contract-specific no-penalty bonus floor.
 
-SDK 2.7.2 resolves the remaining rounding-order issue. The client uses whole real-time SDK helpers for every hopper leg and rounds production phases independently before summing. Processing uses `Process.getSetupTimeReal` and `getProcessingTimeReal`; extraction uses `Extractor.getExtractionTimeReal`; assembly uses `Time.toRealDurationCeil` per phase. Crew labor uses `Time.getCrewLaborDuration`, and display/submission completion checks use `Time.getProductionCompletionTime` with whole-second inputs.
+## Action-specific rules
 
-The shared trip estimator, delivery/marketplace estimates, sampling, stationing, launch/landing travel, movement visualization and tutorial travel now use the same per-leg helper. General orbital/calendar conversions and dock queue calculations retain their separate semantics.
+- Wallet asset listings and ownership indicators are presentation, not permission
+  decisions. Preserve exact pilot/tenant identity checks required by contracts.
+- Proposed deliveries require REMOVE_PRODUCTS access at the origin and
+  ADD_PRODUCTS access at the destination. Unresolved candidates remain disabled.
+- Agreement lookup and edits preserve entity label plus ID. Normalize account
+  address padding and distinguish ship grants from crew grants.
+- Crew eviction and repossession refresh emergency mode, delegation, roster,
+  readiness, and location. Forced ship launch has its own prerequisites.
+- Lease-auction start requires confirmed absence of the tenant's USE_LOT access,
+  not merely an expired prepaid agreement. Concurrent tenancy changes remain
+  unresolved.
+- Bulk purchases and escrow buy-order creation use transaction permission
+  preflight. Planning and ship eviction share the external-policy reader at an
+  explicit block.
+- Recruitment into an existing crew uses SDK checks and submission preflight.
+  A new crew has no identity until execution; its creation path relies on
+  transaction validation rather than substituting the selected crew's grants.
 
-The regression example (asteroid 1, lots 1 and 102, acceleration 24) now produces two 341-second legs, totaling 682 seconds. Unit coverage checks that a lease one second short is rejected and exact completion coverage is accepted, including after fresh submission reads.
-
-## Follow-up review
-
-The additional review removed wallet crew-list control gates from construction, scanning, travel and administration UI, replacing them with SDK controls. Wallet asset listings and ownership indicators remain presentation; exact pilot/tenant identity checks remain where required by contracts. Policy descriptions and lease/auction price helpers also remain presentation, not permission decisions. No direct `Permission.isPermitted` calls or `crewStatus` comparisons authorize actions.
-
-Additional fixes and regressions cover:
-
-- Selected-crew changes invalidate captured and in-flight submission checks.
-- Proposed deliveries source from REMOVE_PRODUCTS-authorized inventories, retain checking state for unresolved destination access, and describe acceptance by any ADD_PRODUCTS-authorized crew.
-- Fresh production completion times must fit within the quoted new lease, including the exact end boundary.
-- Agreement lookup and edits preserve entity label plus ID; account grant matching normalizes address padding. Allowlist edits preserve ship-versus-crew identity.
-- Crew eviction and repossession refresh emergency mode on the current ship or escape module, alongside delegation, roster, readiness and location. Forced ship launch keeps its distinct contract prerequisites.
-- Lease-auction start requires confirmed absence of the recorded tenant's USE_LOT, not merely an expired prepaid agreement. A concurrent tenancy change remains unresolved.
-- Bulk purchases and escrow buy-order creation use the underlying transaction permission preflight.
-- Planning and ship eviction reuse the shared external-policy reader with an explicit block. The unused boolean permission adapter was removed.
-
-The transaction preflight maps supported systems to SDK primitives; it is not a replacement for every contract precondition or simulation. Auction pricing, inventories, travel timing and payment requirements remain separate concerns.
-
-Recruitment into an existing crew uses SDK permission checks, including submission preflight. Starting a new crew opens setup with an explicit creation-time access label: its ID does not exist until contract execution, so the client must not substitute the selected crew's entity grants. That creation path relies on transaction validation for the new identity, rather than claiming a resolved SDK authorization before it exists.
-
-
-## Whole-second timing (SDK 2.7.2)
-
-Production estimates round each travel leg and each setup/production phase to whole real-time seconds using SDK helpers before summing or taking a positioning maximum. Shared crew trip details use `Asteroid.getLotTravelTimeReal`; processing uses `Process.getSetupTimeReal` and `getProcessingTimeReal`; extraction uses `Extractor.getExtractionTimeReal`; assembly rounds each phase with `Time.toRealDurationCeil`. Crew labor uses `Time.getCrewLaborDuration` after summing production phases.
-
-The same integer task duration feeds display, lease quotes, and production authorization. `Time.getProductionCompletionTime` uses the later of block time and crew ready time and refuses fractional durations during fresh submission checks. Two legs of 340.208 seconds require 682 seconds, so a lease ending at 681 seconds is rejected. No buffer is added, and the existing origin-to-processor route is preserved. These callers require SDK 2.7.2; refresh the client's SDK lockfile after that version is published (the existing semver range includes it).
+Transaction preflight maps supported systems to SDK primitives. Auction pricing,
+inventories, travel timing, payments, and simulation remain separate checks.

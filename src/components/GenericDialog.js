@@ -47,6 +47,14 @@ const Buttons = styled.div`
       margin-left: 0;
     }
   }
+  @media (max-width: ${p => p.theme.breakpoints.mobile}px) {
+    height: auto;
+    min-height: 60px;
+    & > button {
+      flex: 1;
+      min-width: 0;
+    }
+  }
 `;
 
 const Wrapper = styled.div`

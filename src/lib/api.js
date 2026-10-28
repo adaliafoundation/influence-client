@@ -4,7 +4,7 @@ import { missionBindingUrl } from './missionBindings';
 import axios from 'axios';
 import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
 import esb from 'elastic-builder';
-import { executeSwap, getQuotes } from '@avnu/avnu-sdk';
+import { getQuotes } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import useStore from '~/hooks/useStore';
@@ -96,6 +96,23 @@ const api = {
   getMissionBinding: async (query) => {
     const response = await instance.get(missionBindingUrl(query));
     return response.data;
+  },
+
+  getColonizationMissions: async (asteroidId) => {
+    const response = await instance.get(`/${apiVersion}/missions/colonization/${encodeURIComponent(asteroidId)}`);
+    return response.data;
+  },
+
+  getMissionObservationCandidates: async (params) => {
+    const response = await instance.get(`/${apiVersion}/missions/observation-candidates`, { params });
+    return response.data;
+  },
+
+  getMissionCampaign: async (campaign) => {
+    const response = await instance.get(`/${apiVersion}/missions/campaigns/${encodeURIComponent(campaign)}`, {
+      validateStatus: status => (status >= 200 && status < 300) || status === 404
+    });
+    return response.status === 404 ? null : response.data;
   },
 
   getStarterMissions: async (crewId) => {
@@ -829,11 +846,6 @@ const api = {
       sellAmount: safeBigInt(amount),
       takerAddress: account
     }, options);
-  },
-
-  executeSwaySwap: async ({ quote, account }) => {
-    const options = { baseUrl: appConfig.get('Api.avnu') };
-    return executeSwap({ provider: account, quote, slippage: 0.05, executeApprove: true }, options);
   },
 
   // getBook: async (id) => {

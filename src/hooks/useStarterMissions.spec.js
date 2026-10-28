@@ -70,7 +70,7 @@ test.each([
   ['AcceptMission', { accepted: true }],
   ['MissionValidate', { completed: true }],
   ['ClaimMissionReward', { claimed: true }],
-  ['CompleteStarterMission', { claimed: true }]
+  ['CompleteMission', { claimed: true }]
 ])('%s stays pending through stale refreshes until its result is indexed', (key, result) => {
   const assignment = { campaign: '123', subject: { label: 1, id: '501' }, mission: 0 };
   const view = { campaign: '123', subject: assignment.subject, missions: [{ id: 0 }] };
@@ -83,11 +83,28 @@ test.each([
   useQuery.mockReturnValue({ refetch, data: { ...view }, isFetching: false });
   rerender();
   expect(store.dispatchPendingTransactionComplete).not.toHaveBeenCalled();
-  const partial = key === 'CompleteStarterMission' ? { completed: true } : {};
+  const partial = key === 'CompleteMission' ? { completed: true } : {};
   useQuery.mockReturnValue({ refetch, data: { ...view, missions: [{ id: 0, ...partial }] } });
   rerender();
   expect(store.dispatchPendingTransactionComplete).not.toHaveBeenCalled();
   useQuery.mockReturnValue({ refetch, data: { ...view, missions: [{ id: 0, ...result }] } });
   rerender();
   expect(store.dispatchPendingTransactionComplete).toHaveBeenCalledWith('0xabc');
+});
+
+jest.mock('~/lib/colonizationMissions', () => jest.requireActual('../lib/colonizationMissions'), { virtual: true });
+test('colony queries subscribe to the asteroid, reconcile third-party evidence, and recover after reconnect', () => {
+  const useColonizationMissions = require('./useColonizationMissions').default;
+  const { rerender } = renderHook(({ asteroidId }) => useColonizationMissions(asteroidId), { wrapper, initialProps: { asteroidId: 99 } });
+  expect(useQuery).toHaveBeenLastCalledWith(expect.objectContaining({ queryKey: ['colonizationMissions', 'sepolia', 'api', '99'], refetchInterval: 15000 }));
+  expect(socket.registerMessageHandler).toHaveBeenCalledWith(expect.any(Function), 'Asteroid::99');
+  const onMessage = socket.registerMessageHandler.mock.calls.find(([, room]) => room === 'Asteroid::99')[0];
+  act(() => { onMessage({ type: 'ComponentUpdated_Mission' }); jest.advanceTimersByTime(500); });
+  act(() => onMessage({ type: 'CURRENT_STARKNET_BLOCK_NUMBER' }));
+  expect(refetch).toHaveBeenCalledTimes(2);
+  act(() => socket.registerConnectionHandler.mock.calls[0][0](true));
+  expect(recoverQueries).toHaveBeenCalledWith(expect.anything(), { queryKey: ['colonizationMissions', 'sepolia', 'api', '99'], exact: true });
+  rerender({ asteroidId: 100 });
+  expect(socket.unregisterMessageHandler.mock.calls.map(([id]) => id)).toContain('Asteroid::99');
+  expect(socket.registerMessageHandler).toHaveBeenCalledWith(expect.any(Function), 'Asteroid::100');
 });

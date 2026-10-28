@@ -1,4 +1,4 @@
-import { TOKEN, TOKEN_FORMATTER, TOKEN_SCALE } from './priceUtils';
+import { TOKEN, TOKEN_SCALE } from './priceUtils';
 
 export const BANXA_DEFAULTS = {
   blockchain: 'STARK',
@@ -17,31 +17,6 @@ export const getUsdcValue = (price) => (
 export const getFundingAmountUsdc = (price) => (
   Math.max(0, Math.ceil(getUsdcValue(price) / TOKEN_SCALE[TOKEN.USDC]))
 );
-
-export const getTokenSwapRequirements = ({ priceHelper, targetUsdcValue, tokenBalances = {} }) => {
-  let remaining = Math.max(0, targetUsdcValue - Number(tokenBalances[TOKEN.USDC] || 0n));
-  const swaps = [];
-
-  [TOKEN.ETH, TOKEN.STRK].forEach((token) => {
-    if (remaining <= 0) return;
-
-    const balance = Number(tokenBalances[token] || 0n);
-    if (balance <= 0) return;
-
-    const required = priceHelper.from(remaining, TOKEN.USDC).to(token);
-    const amount = Math.min(Number(required), balance);
-    if (amount <= 0) return;
-
-    swaps.push({
-      amount,
-      label: TOKEN_FORMATTER[token](BigInt(Math.ceil(amount))),
-      token
-    });
-    remaining -= Number(priceHelper.from(amount, token).to(TOKEN.USDC));
-  });
-
-  return swaps;
-};
 
 export const buildBanxaStatusUrl = ({ baseUrl, orderRef }) => {
   if (!baseUrl || !orderRef) return null;

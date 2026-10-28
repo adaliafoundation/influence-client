@@ -4,7 +4,7 @@ global.TextEncoder = TextEncoder;
 jest.mock('~/hooks/useStore', () => ({
   __esModule: true, default: { getState: () => ({ currentSession: {} }) }
 }), { virtual: true });
-const { executePaidTransaction } = require('./transactionFees');
+const { executePaidTransaction, preparePaidTransactionFee, executeReviewedTransaction } = require('./transactionFees');
 
 const tx = { transaction_hash: '0xabc' };
 const bounds = {
@@ -147,4 +147,81 @@ test('does not resubmit an ambiguous paymaster execution failure', async () => {
   await expect(executePaidTransaction(options)).rejects.toThrow('Execute failed');
   expect(options.account.executePaymasterTransaction).toHaveBeenCalledTimes(1);
   expect(options.account.execute).not.toHaveBeenCalled();
+});
+
+test('keeps reviewed fee bounds and checks approval immediately before submission', async () => {
+  const assertCurrent = jest.fn();
+  await executePaidTransaction({ ...options, resourceBounds: bounds, assertCurrent });
+  expect(options.account.estimateInvokeFee).not.toHaveBeenCalled();
+  expect(assertCurrent).toHaveBeenCalledTimes(1);
+  expect(options.account.execute).toHaveBeenCalledWith(options.calls, { resourceBounds: bounds });
+});
+
+test('does not submit a review invalidated while checking fees', async () => {
+  await expect(executePaidTransaction({
+    ...options, assertCurrent: () => { throw new Error('Quote expired'); }
+  })).rejects.toThrow('Quote expired');
+  expect(options.account.execute).not.toHaveBeenCalled();
+});
+
+
+test('reviews USDC fees without executing when there is no STRK', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  const fee = await preparePaidTransactionFee(options);
+  expect(fee).toMatchObject({ mode: 'default', name: 'USDC', maxFee: 10n });
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+  await executeReviewedTransaction({ ...options, fee });
+  expect(options.account.executePaymasterTransaction).toHaveBeenCalledWith(options.calls, fee.details, 10n);
+});
+
+test('review preserves enabled SWAY priority over disabled USDC', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.feeTokens[0].enabled = false;
+  options.feeTokens[1].enabled = true;
+  expect(await preparePaidTransactionFee(options)).toMatchObject({ name: 'SWAY' });
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+});
+
+test('review asks before enabling a new fee token', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  options.feeTokens[0].enabled = false;
+  expect(await preparePaidTransactionFee(options)).toMatchObject({ name: 'USDC' });
+  expect(options.requestFeePermission).toHaveBeenCalledWith('USDC');
+  expect(options.enableFeeToken).toHaveBeenCalledWith('0x2');
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+});
+
+test.each(['disabled', 'unsupported', 'insufficient'])('does not submit if reviewed fee token becomes %s', async reason => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  const fee = await preparePaidTransactionFee(options);
+  if (reason === 'disabled') options.feeTokens[0].enabled = false;
+  if (reason === 'unsupported') options.feeTokens[0].supported = false;
+  if (reason === 'insufficient') options.feeTokens[0].balance = 9n;
+  await expect(executeReviewedTransaction({ ...options, fee })).rejects.toThrow(/Review the swap again/);
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+});
+
+test('reviewed payment failure never changes fee token or resubmits', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  const fee = await preparePaidTransactionFee(options);
+  options.account.executePaymasterTransaction.mockRejectedValue(new Error('Insufficient balance'));
+  await expect(executeReviewedTransaction({ ...options, fee })).rejects.toThrow('Insufficient balance');
+  expect(options.account.executePaymasterTransaction).toHaveBeenCalledTimes(1);
+});
+
+test('expired review cannot submit through the paymaster', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  const fee = await preparePaidTransactionFee(options);
+  await expect(executeReviewedTransaction({ ...options, fee, assertCurrent: () => { throw new Error('Expired'); } })).rejects.toThrow('Expired');
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+});
+
+
+test('includes account deployment in the reviewed user-paid fee', async () => {
+  options.getStrkBalance.mockResolvedValue(0n);
+  const deploymentData = { address: '0xabc' };
+  const fee = await preparePaidTransactionFee({ ...options, deploymentData });
+  expect(fee.details).toEqual({ feeMode: { mode: 'default', gasToken: '0x2' }, deploymentData });
+  await executeReviewedTransaction({ ...options, fee });
+  expect(options.account.executePaymasterTransaction).toHaveBeenCalledWith(options.calls, fee.details, 10n);
 });

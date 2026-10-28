@@ -1,5 +1,4 @@
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
-import { useMissionActionDetails } from '~/contexts/MissionActionContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Asteroid, Crewmate, Deposit, Extractor, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
@@ -54,9 +53,6 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
   const [amount, setAmount] = useState(0);
   const [selectedCoreSample, setSelectedCoreSample] = useState();
-  useMissionActionDetails(useMemo(() => ({
-    amount: Math.ceil(amount), resource: selectedCoreSample?.Deposit?.resource, running: !!currentExtraction
-  }), [amount, selectedCoreSample?.Deposit?.resource, currentExtraction]));
   const [sampleSelectorOpen, setSampleSelectorOpen] = useState(false);
   const [destinationSelectorOpen, setDestinationSelectorOpen] = useState(false);
 

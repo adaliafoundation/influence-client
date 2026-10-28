@@ -32,7 +32,7 @@ const useFundingIntentMonitor = (intent, { enabled = true, notifyOnComplete = tr
     const currentUsdc = toBigInt(wallet.tokenBalances?.[TOKEN.USDC]);
     const targetUsdcValue = Number(intent.targetUsdcValue || 0);
     const hasBalanceIncrease = currentUsdc > startingUsdc;
-    const hasTargetBalance = !targetUsdcValue || wallet.combinedBalance?.usdcValue >= targetUsdcValue;
+    const hasTargetBalance = !targetUsdcValue || currentUsdc >= BigInt(Math.ceil(targetUsdcValue));
 
     return {
       currentUsdc,

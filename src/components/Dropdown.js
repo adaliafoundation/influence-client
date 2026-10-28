@@ -23,13 +23,11 @@ const IconWrapper = styled.span`
 const Options = styled.div`
   background: #111;
 
-  max-height: 50vh;
+  max-height: min(50vh, var(--dropdown-available-height, 50vh));
+  max-width: calc(100vw - 16px);
+  overscroll-behavior: contain;
   min-width: ${p => p.width ? `${p.width}px` : 'auto'};
   overflow: auto;
-  position: absolute;
-  ${p => p.dropUp && `
-    bottom: 32px;
-  `}
 `;
 const Option = styled.div`
   background-color: transparent;
@@ -37,6 +35,7 @@ const Option = styled.div`
   padding: 8px;
   transition: background-color 200ms ease;
   width: 100%;
+  box-sizing: border-box;
   &:hover {
     background-color: rgba(${p => p.theme.colors.mainRGB}, 0.3);
   }
@@ -57,6 +56,8 @@ const Dropdown = ({
   labelKey = 'label',
   valueKey = 'value',
   onChange,
+  triggerComponent: Trigger = Button,
+  menuZIndex = 1000,
   options: rawOptions,
   ...styleProps
 }) => {
@@ -75,12 +76,21 @@ const Dropdown = ({
   const [selected, setSelected] = useState();
 
   const { styles, attributes } = usePopper(referenceEl, popperEl, {
-    placement: 'bottom-start',
+    placement: styleProps.dropUp ? 'top-start' : 'bottom-start',
     modifiers: [
+      {
+        name: 'size',
+        options: {
+          padding: 8,
+          apply: ({ availableHeight, elements }) => {
+            elements.floating.style.setProperty('--dropdown-available-height', `${Math.max(0, availableHeight)}px`);
+          }
+        }
+      },
       {
         name: 'flip',
         options: {
-          fallbackPlacements: ['top-start', 'top-end', 'right', 'left'],
+          fallbackPlacements: [styleProps.dropUp ? 'bottom-start' : 'top-start'],
         },
       },
     ],
@@ -135,19 +145,19 @@ const Dropdown = ({
       onMouseLeave={handleMouseLeave}>
 
       <span ref={setReferenceEl}>
-        <Button
+        <Trigger
           disabled={nativeBool(disabled)}
           onClick={handleToggle}
           {...styleProps}>
           {selected[iconKey] && <IconWrapper>{selected[iconKey]}</IconWrapper>}
           <SelectedLabel>{selected[labelKey] || ''}</SelectedLabel>
           <Caret>▾</Caret>
-        </Button>
+        </Trigger>
       </span>
 
       {open && createPortal(
-        <div ref={setPopperEl} style={{ ...styles.popper, zIndex: 1000 }} {...attributes.popper}>
-          <Options {...styleProps}>
+        <div ref={setPopperEl} style={{ ...styles.popper, zIndex: menuZIndex }} {...attributes.popper}>
+          <Options {...styleProps} width={styleProps.width || referenceEl?.getBoundingClientRect().width}>
             {options.filter((o) => !hideSelected || o[valueKey] !== selected[valueKey]).map((o) => (
               <Option key={o[valueKey]} footnote={footnote && footnote(o)} onClick={handleSelection(o)}>
                 {o[iconKey] && <IconWrapper>{o[iconKey]}</IconWrapper>}

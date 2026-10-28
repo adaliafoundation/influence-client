@@ -44,7 +44,7 @@ test('Cartridge and Ready policies have exactly the same four methods', () => {
   expect(Object.entries(cartridge.contracts).flatMap(([address, { methods }]) => methods.map(({ entrypoint }) => ({
     'Contract Address': address, selector: entrypoint
   })))).toEqual(allowedMethods);
-  expect(allowedMethods.map(({ selector }) => selector)).toEqual(['run_system', 'transfer_with_confirmation', 'withdraw', 'deposit']);
+  expect(allowedMethods.map(({ selector }) => selector)).toEqual(['run_system', 'begin_observation', 'end_observation', 'transfer_with_confirmation', 'withdraw', 'deposit']);
   expect(areSessionCallsAllowed([...calls, { contractAddress: '0x456', entrypoint: 'transfer' }])).toBe(false);
   expect(areSessionCallsAllowed([{ ...calls[0], contractAddress: '0x0123', entrypoint: hash.getSelectorFromName('run_system') }])).toBe(true);
   expect(areSessionCallsAllowed([])).toBe(false);

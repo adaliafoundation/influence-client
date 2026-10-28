@@ -63,7 +63,9 @@ const MissionObjectiveAssets = ({ mission, objectiveIndex, routeId }) => {
   const buildingTypes = isProductionLoop
     ? stage ? [processorMissions.find(m => m.requirements.processorType === stage.processorType).requirements.buildingType] : []
     : objectiveIndex === 0 && requirements.buildingType ? [requirements.buildingType] : [];
-  const exampleProcess = requirements.processorType
+  const exampleProcess = mission.id === StarterMission.IDS.CULTIVATE_LIFE
+    ? Process.TYPES[Process.IDS.BPA_BACTERIA_CULTURING]
+    : requirements.processorType
     ? Object.values(Process.TYPES).find(p => p.processorType === requirements.processorType)
     : null;
   const rawRequirements = StarterMission.TYPES[StarterMission.IDS.BEGIN_EXTRACTION].requirements;

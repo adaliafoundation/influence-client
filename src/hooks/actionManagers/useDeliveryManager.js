@@ -7,7 +7,6 @@ import { useCallback, useContext, useMemo } from 'react';
 import { Delivery, Entity, Permission } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
-import useStarterMissionExecution from '~/hooks/useStarterMissionExecution';
 import useBlockTime from '~/hooks/useBlockTime';
 import useCrewContext from '~/hooks/useCrewContext';
 import useDeliveries from '~/hooks/useDeliveries';
@@ -28,12 +27,11 @@ import useEntity from '../useEntity';
 // if more input is included, will filter to those results
 const managedStatuses = [Delivery.STATUSES.ON_HOLD, Delivery.STATUSES.PACKAGED, Delivery.STATUSES.SENT];
 
-const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, deliveryId, txHash, missionId }) => {
+const useDeliveryManager = ({ destination, destinationSlot, origin, originSlot, deliveryId, txHash }) => {
   const reportBlocked = useFailureReporter();
   const createAlert = useStore((state) => state.dispatchAlertLogged);
-  const execute = useStarterMissionExecution(missionId);
   const blockTime = useBlockTime();
-  const { getStatus } = useContext(ChainTransactionContext);
+  const { getStatus, execute } = useContext(ChainTransactionContext);
   const { crew, crewCan, pendingTransactions, recheckAuthorization } = useCrewContext();
 
   const { data: deliveryById, isLoading: deliveryIsLoading } = useEntity(deliveryId ? { label: Entity.IDS.DELIVERY, id: deliveryId } : undefined)

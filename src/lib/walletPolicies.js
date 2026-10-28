@@ -3,6 +3,8 @@ import { hash, num } from 'starknet';
 
 export const sessionPolicyMethods = [
   { contractAddress: appConfig.get('Starknet.Address.dispatcher'), selector: 'run_system' },
+  { contractAddress: appConfig.get('Starknet.Address.dispatcher'), selector: 'begin_observation' },
+  { contractAddress: appConfig.get('Starknet.Address.dispatcher'), selector: 'end_observation' },
   { contractAddress: appConfig.get('Starknet.Address.swayToken'), selector: 'transfer_with_confirmation' },
   { contractAddress: appConfig.get('Starknet.Address.escrow'), selector: 'withdraw' },
   { contractAddress: appConfig.get('Starknet.Address.escrow'), selector: 'deposit' }
@@ -29,6 +31,8 @@ const contractNames = {
 const methodNames = {
   deposit: 'Deposit',
   run_system: 'Run Game Action',
+  begin_observation: 'Observe Mission Action',
+  end_observation: 'Finalize Mission Observation',
   transfer_with_confirmation: 'Marketplace Transfer',
   withdraw: 'Withdraw'
 };

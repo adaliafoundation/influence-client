@@ -115,7 +115,6 @@ const useStore = create(
     persist((set, get) => ({
         actionDialog: {},
         lotCameraTransition: null,
-        missionParticipation: {},
         objectivePreferences: {},
         missionGuidance: null,
         missionDetails: null,
@@ -269,10 +268,6 @@ const useStore = create(
 
         dispatchAlertLogged: (alert) => set(produce(state => {
           state.logs.alerts.unshift(alert);
-        })),
-
-        dispatchMissionParticipation: (scope, enabled) => set(produce(state => {
-          state.missionParticipation[scope] = enabled;
         })),
 
         dispatchObjectivePreferences: (scope, preferences) => set(produce(state => {

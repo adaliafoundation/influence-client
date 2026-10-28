@@ -1,3 +1,5 @@
+import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
+import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { useMemo } from 'react';
 import { useHistory } from 'react-router';
 import { Asteroid } from '@influenceth/sdk';
@@ -16,6 +18,7 @@ const isVisible = ({ crewControls, asteroid, crew }) => {
 };
 
 const ScanAsteroid = ({ asteroid, _disabled }) => {
+  const setCoachmarkRef = useCoachmarkRefSetter();
   const history = useHistory();
   const { scanStatus, scanType } = useScanManager(asteroid);
   const { crew, isLaunched } = useCrewContext();
@@ -92,6 +95,7 @@ const ScanAsteroid = ({ asteroid, _disabled }) => {
 
   return (
     <ActionButton
+      ref={setCoachmarkRef(COACHMARK_IDS.actionButtonScanAsteroid)}
       label={`${label}`}
       labelAddendum={disabledReason}
       flags={flags}

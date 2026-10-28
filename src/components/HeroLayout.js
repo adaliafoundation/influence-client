@@ -68,7 +68,7 @@ const AboveFold = styled.div`
   `}
 
   @media (max-width: ${p => p.theme.breakpoints.mobile}px) {
-    height: ${aboveFoldHeight * 0.72}px;
+    height: ${p => (p.hasSubtitle ? 50 : 0) + aboveFoldHeight * 0.72}px;
     margin-top: ${aboveFoldMobileMargin}px;
     padding: 0 25px;
   }

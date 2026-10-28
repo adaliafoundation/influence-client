@@ -1,0 +1,184 @@
+{
+  "campaign": "Colonization",
+  "missions": [
+    {
+      "id": 0,
+      "key": "CLAIM_A_NEW_WORLD",
+      "title": "Claim a New World",
+      "brief": [
+        "A new world. A blank slate, the open plains, the vast emptiness of a place that has never seen a member of our species before - and it is all yours. It’s time to be a true explorer and go where no person has ever gone before."
+      ],
+      "image": "stories/claim-a-new-world/1.jpg",
+      "guidanceByObjective": [
+        "enroll_colony",
+        "scan_colony"
+      ]
+    },
+    {
+      "id": 1,
+      "key": "BUILD_A_HABITAT",
+      "title": "Build a Habitat",
+      "brief": [
+        "After a long flight, most of your crew is in dire need of a real Habitat. While the Navigators of Adalia might like re-reading Moby Dick for the millionth time, most of us wouldn’t have cut it as sailors back on Earth. The cramped quarters and togetherness of the ship just aren’t conducive to getting the rest required for the hard days on the ground outside, mining the surface of an asteroid. You need to get a Habitat up and running, a place they can call home."
+      ],
+      "image": "stories/build-a-habitat/1.jpg",
+      "guidanceByObjective": [
+        "construct_colony_building",
+        "station_crew"
+      ]
+    },
+    {
+      "id": 2,
+      "key": "CONNECT_THE_COLONY",
+      "title": "Connect the Colony",
+      "brief": [
+        "Loneliness can be a real problem in Adalia, even with a full crew always around. You and your crew need to stay connected to the rest of humanity and the best way to do that is to build a Spaceport which allows you, and others, to dock your ships here. Not only will staying in touch with other Adalians help prevent your crew from going mad because one of them chews too loudly, but it will also give all of us a better chance of surviving."
+      ],
+      "image": "stories/connect-the-colony/1.jpg",
+      "guidanceByObjective": [
+        "construct_colony_building",
+        "dock_ship"
+      ]
+    },
+    {
+      "id": 3,
+      "key": "ESTABLISH_COMMERCE",
+      "title": "Establish Commerce",
+      "brief": [
+        "While these asteroids may look like rocks and feel like islands, no Adalian can survive on one all alone. Marketplaces are essential to our survival. We need to be able to buy, sell, and trade since our resources are so spread out and limited. Establishing a functioning local economy is an absolutely vital link in the great chain of commerce that winds its way throughout the asteroid belt."
+      ],
+      "image": "stories/establish-commerce/1.jpg",
+      "guidanceByObjective": [
+        "construct_colony_building",
+        "trade_at_marketplace"
+      ]
+    },
+    {
+      "id": 4,
+      "key": "FOUND_A_COLONY",
+      "title": "Found a Colony",
+      "brief": [
+        "Well done! This isn’t just a barren lump of lifeless rock anymore - you’ve managed to found a colony in Adalia! Now that you have a Habitat, Spaceport, and Marketplace you are well on your way to having a successful settlement on your own asteroid. Remember: all of these are essential pieces that work together to ensure we, possibly the last remnants of our species, survive in this harsh environment."
+      ],
+      "image": "stories/found-a-colony/1.jpg",
+      "guidanceByObjective": [
+        "maintain_colony",
+        "maintain_colony",
+        "maintain_colony"
+      ]
+    }
+  ],
+  "guidance": {
+    "enroll_colony": {
+      "title": "Enroll your asteroid",
+      "pages": [
+        "Hello again, Lea here, former Chief Navigator of the Arvad. I’m excited to help you start colonizing these empty asteroids. First things first, you’ve got to claim your new world - you’ll be the first human to ever set foot on it, afterall. Then, it’s time to survey it and discover what resources are there.",
+        "Open Missions from the main menu and find Colonization. Use the asteroid selector beside the campaign title to choose the asteroid you want to enroll. The list includes asteroids eligible to start and asteroids with an existing campaign.",
+        "Expand Colonization and open Claim a New World. Check the asteroid shown in the mission details, then accept the mission before starting its first Long-Range Scan. Wait for acceptance to finish before beginning the scan.",
+        "The account that enrolls the asteroid becomes its original colonizer. Mission rewards belong to that account, and it must still own the asteroid when claiming them. Each asteroid has its own campaign and progress."
+      ],
+      "highlights": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "scan_colony": {
+      "title": "Survey your new world",
+      "pages": [
+        "Open My Assets and select the asteroid you enrolled. Make sure you are connected as its original colonizer and still own it. Claim a New World must already be accepted before you start the scan.",
+        "Click Perform Long-Range Scan. Review the scan details and confirm the action. This is the initial surface scan required by the campaign; the later Orbital Scan is a separate action. Scanning an asteroid lets you take a peek to see what resources are hidden beneath the surface - what riches does your asteroid hold?",
+        "Wait for the scan timer to finish, then return to the asteroid and click Retrieve Scan Results. Complete that action as the original colonizer while still owning the asteroid. Starting the scan alone does not complete the mission.",
+        "Return to Missions, select the same asteroid, and open Claim a New World. Once the completed scan is recorded, complete the mission. The Habitat, Spaceport, and Marketplace branches can then be pursued in any order."
+      ],
+      "highlights": [
+        "hudMenuMyAssets",
+        "actionButtonScanAsteroid",
+        "actionButtonScanAsteroid",
+        null
+      ]
+    },
+    "construct_colony_building": {
+      "title": "Build your colony’s infrastructure",
+      "pages": [
+        "Check which building this mission requires: a Habitat for Build a Habitat, a Spaceport for Connect the Colony, or a Marketplace for Establish Commerce. On the campaign asteroid, select an empty lot where you have permission to build.",
+        "Click Plan Building, choose the required building type, and confirm the plan. Planning creates the construction site; it does not make the building operational.",
+        "Select the site and open Start Construction to review its material requirements. Supply the missing materials using Transfer from Inventory or Source from Market, and finish the deliveries before starting construction.",
+        "Construction must start after the campaign’s Long-Range Scan has finished and its results have been retrieved. A building whose construction started earlier will not qualify. Once the timing and materials are correct, confirm construction.",
+        "When the construction timer finishes, return to the site and click Finish Construction. Complete that action to make the building operational. Then follow the mission’s next objective to put the building to use.",
+        "Other players can construct and use qualifying buildings on your asteroid. They still need the usual permissions and resources, but they do not need to own the asteroid. Their qualifying actions can contribute to your campaign; its rewards remain with the original colonizer."
+      ],
+      "highlights": [
+        null,
+        "actionButtonPlan",
+        "actionButtonConstruct",
+        "actionButtonConstruct",
+        "actionButtonConstruct",
+        null
+      ]
+    },
+    "station_crew": {
+      "title": "Welcome your first residents",
+      "pages": [
+        "Locate the Habitat built for this campaign. Its construction must have started after the campaign’s surface scan finished, and construction must now be complete. Select its lot on the campaign asteroid.",
+        "Choose a crew that can move into the Habitat and check that it has permission to use the building. Arrange any required travel or access first. Another player’s crew can also perform the qualifying action.",
+        "Click Station Crew and review the destination carefully. Confirm the move into the qualifying Habitat and allow the action to finish. Now they can stretch their legs and get some much required rest and relaxation between suiting up and venturing outside.",
+        "Return to Missions and select the campaign asteroid. Open Build a Habitat to check that the construction and crew-stationing requirements have been recorded, then complete the mission when available."
+      ],
+      "highlights": [
+        null,
+        null,
+        "actionButtonStationCrew",
+        null
+      ]
+    },
+    "dock_ship": {
+      "title": "Receive a ship",
+      "pages": [
+        "Locate the Spaceport built for this campaign. Its construction must have started after the campaign’s surface scan finished, and the Spaceport must now be operational.",
+        "Bring a ship capable of docking to the campaign asteroid. Check that the ship and crew are ready, that the Spaceport has room, and that you have permission to dock. Resolve any scan, travel, or access requirements shown by the interface before continuing.",
+        "Select the Spaceport’s lot and click Dock Ship. Review the ship and destination, then confirm docking. Landing on an empty lot does not satisfy the Spaceport-use requirement.",
+        "Once docking completes, return to Missions and select the campaign asteroid. Check Connect the Colony for progress. Another player can perform the qualifying docking action; the campaign reward still belongs to the original colonizer."
+      ],
+      "highlights": [
+        null,
+        null,
+        "actionButtonLandShip",
+        null
+      ]
+    },
+    "trade_at_marketplace": {
+      "title": "Make the colony’s first trade",
+      "pages": [
+        "Open Marketplaces and find the Marketplace built for this campaign on the selected asteroid. Its construction must have started after the campaign’s surface scan finished, and it must now be operational.",
+        "Open that Marketplace and choose a product to trade. Find an existing sell order to buy from, or an existing buy order to sell into. Check that you have the funds or goods, inventory access, and capacity required by the trade.",
+        "Review the selected Marketplace, order, quantity, and total before confirming. Fill a quantity greater than zero. Merely placing an order or cancelling one does not satisfy this objective.",
+        "Another player’s qualifying trade at this Marketplace can count toward your campaign. The trader does not need to own the asteroid or be its original colonizer. The evidence is credited to the asteroid’s campaign, and its reward remains with the original colonizer.",
+        "After the trade completes, return to Missions and select the campaign asteroid. Open Establish Commerce to check that the trade has been recorded, then complete the mission when available."
+      ],
+      "highlights": [
+        "hudMenuMarketplaces",
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "maintain_colony": {
+      "title": "Keep your colony operational",
+      "pages": [
+        "Return to Missions, select the campaign asteroid, and open Found a Colony. Check the Habitat, Spaceport, and Marketplace objectives. Each must be backed by qualifying construction and use recorded for this asteroid.",
+        "The qualifying Habitat must have received a crew, the Spaceport must have received a docked ship, and the Marketplace must have recorded a positive buy-order or sell-order fill. Having the three buildings present is not enough on its own.",
+        "All three buildings selected by the campaign must still be operational when you claim the final reward. Avoid decommissioning them before claiming. If an objective is not ready, inspect the relevant building and its branch mission to determine what remains.",
+        "Connect as the original colonizer and make sure that account still owns the asteroid. Return to Found a Colony and complete the mission when all requirements are satisfied."
+      ],
+      "highlights": [
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  }
+}
