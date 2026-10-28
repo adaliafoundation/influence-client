@@ -48,29 +48,14 @@ Startup rejects missing required settings and malformed service URLs, naming the
 variables without logging their values. This checks configuration shape, not
 service availability, credentials, CORS, backend compatibility, or RPC chain IDs.
 
-### Starknet.js v10 rollout
+### Starknet RPC compatibility
 
-The client, AVNU SDK, and Cartridge Controller now share Starknet.js v10. Configure
-both `REACT_APP_STARKNET_PROVIDER` and `REACT_APP_STARKNET_PROVIDERBACKUP` (if set)
-with RPC 0.10 endpoints when deploying this version. For Alchemy, use the
-`/starknet/version/rpc/v0_10/` endpoint path. The client does not rewrite URLs or
+The client, AVNU SDK, and Cartridge Controller use Starknet.js v10. Both
+`REACT_APP_STARKNET_PROVIDER` and the optional backup must use RPC 0.10 endpoints.
+For Alchemy, use `/starknet/version/rpc/v0_10/`. The client does not rewrite URLs or
 negotiate an older RPC dialect. Cartridge uses its native RPCs for Mainnet and
-Sepolia sessions; custom chains still use the configured endpoint.
-
-Validate on Sepolia before production:
-
-- Ready/Braavos connection, login signing, reconnect, and account/chain changes.
-- Cartridge login, session resume, and gameplay execution.
-- Privy first-use sponsored account deployment and subsequent sponsored gameplay.
-- The end-of-sponsorship transition to STRK or supported gas-token payment.
-- AVNU swaps, bridge fee estimation/transfers, receipt polling, and balance updates.
-
-The automated transaction tests use the real Starknet.js account, signer, and
-paymaster code with mocked transports. They cover sponsorship, deployment data,
-authentication refresh, gas-token fee caps, and rejection of altered paymaster
-responses. They do not replace wallet approval and transaction checks on Sepolia.
-Paymaster URLs and the backend's RPC configuration are separate from these client
-RPC endpoints; do not replace their URLs as part of the client RPC path change.
+Sepolia sessions; custom chains use the configured endpoint. Paymaster URLs and
+the backend's RPC configuration are separate settings.
 
 ## Optional integrations
 
@@ -91,9 +76,44 @@ setup, including allowed origins/redirects. A public ID alone does not provision
 those services. Banxa's configured base URL is also used to interpret funding
 return/status URLs; checkout creation goes through the Influence API.
 
-`Url.bridge` is removed. Asset bridging opens the built-in asset portal from the
-main menu. Argent legacy API/web-wallet settings, WalletConnect's unused client
-ID, and `App.feeRewardsForAllWallets` are removed. Old env aliases are not supported.
+## Releases and deployment requests
+
+Server and client use the same release entry points:
+
+| Actions workflow | Trigger | GitHub environment | Image tags |
+| --- | --- | --- | --- |
+| Release prerelease image | Push to main or manual run on main | prerelease | stack-prerelease-COMMIT and stack-prerelease |
+| Release production image | Manual run on main with a full main-history commit SHA | production | production-COMMIT, production, latest |
+
+`docker-stack-prerelease.yaml` calls `docker-release.yaml` with `channel: prerelease`.
+The manual entry point defaults to production. Tests, image scans, smoke checks,
+and signing precede channel promotion. The same commit can be released separately
+in both channels; immutable channel/commit tags cannot be overwritten. If publication succeeded
+but the webhook failed, use the published digest and inspect the host before
+retrying deployment; a full release rerun refuses to overwrite the immutable tag.
+
+The environment job is named **Publish prerelease image and request deployment**
+or **Publish production image** in both repositories. Configure each GitHub
+environment to allow the main branch. Keep production's required reviewers;
+prerelease should have no reviewers or wait timer for automatic releases.
+
+In the prerelease environment, configure variable `STACK_PRERELEASE_WEBHOOK_URL`
+and secret `STACK_PRERELEASE_WEBHOOK_TOKEN` when the host is ready. Leave the URL
+unset during initial host preparation. Environment variables and secrets are
+available to the environment job, not the image build jobs.
+
+Only a release matching the current head of main advances the prerelease alias.
+The notification step also checks that the alias still matches its image digest.
+A blank webhook URL skips notification while still publishing the image.
+
+A green GitHub environment entry means publication and any configured deployment
+request succeeded. The webhook only acknowledges the request; it does not wait
+for the host's integration tests, backup, container updates, or health checks.
+Check the host's journal and stack status to confirm deployment completion.
+Production host deployment remains manual using the released immutable digest.
+
+See [Container vulnerability allowances](container-security.md) for scan gates and
+exception handling.
 
 ## Running a release image
 

@@ -1,9 +1,8 @@
-# Mission client integration (SDK 2.8.0)
+# Missions
 
 Starter and colonization campaigns share lifecycle operations, transaction reconciliation,
 mission lists, details, timelines, status styling, and buttons. The client uses the native
-Dispatcher observer ABI; the retired `MissionAction` wrapper and its participation toggle,
-dialog context, manager adapters, and persisted preference have been removed.
+Dispatcher observer ABI for gameplay evidence.
 
 ## Native action observation
 
@@ -97,8 +96,8 @@ Colony guidance and its return-to-details action retain the asteroid subject and
 their scopes cannot collide with crew scopes. Enrollment guidance is available before
 acceptance, including when browsing without an asteroid. Scan and docking buttons register
 coachmark targets alongside the existing construction, stationing, and marketplace controls.
-The image paths in the content file are delivery paths; runtime artwork remains governed by
-`COLONIZATION_IMAGES` and the licensed-media manifest until the new bundle is published.
+The image paths in the content file are delivery paths; runtime artwork is governed by
+`COLONIZATION_IMAGES` and the [licensed-media manifest](../src/assets/media/README.md).
 
 ## Verification
 

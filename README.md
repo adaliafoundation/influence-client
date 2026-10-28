@@ -76,3 +76,11 @@ Operator-specific service endpoints, IDs, and keys must be supplied at runtime r
 than committed to this repository. See
 [Runtime client configuration](docs/runtime-configuration.md) for the complete
 configuration and security contract.
+
+## Contributor guides
+
+- [Authorization](docs/authorization.md)
+- [Missions](docs/missions.md)
+- [Player-facing failures](docs/error-handling.md)
+- [Container vulnerability allowances](docs/container-security.md)
+- [Licensed media](src/assets/media/README.md)

@@ -22,9 +22,9 @@ grype IMAGE --config /tmp/grype-config.json --fail-on critical
 grype IMAGE --config /tmp/grype-config.json --only-fixed --fail-on high
 ```
 
-## Review of the September 15, 2026 release failure
+## Exception evidence
 
-Reviewed image:
+The existing exceptions were assessed against this image:
 `ghcr.io/adaliafoundation/influence-client@sha256:a1a40349b8becbe70883855ed51e858fde45a0f1a3e1ed169fece60cc10b13f9`
 (linux/amd64). All allowances expire **January 1, 2027**.
 
@@ -42,14 +42,6 @@ subprocess usage, or OpenSSL configuration changes.
 | [CVE-2026-12087](https://security-tracker.debian.org/tracker/CVE-2026-12087) | Perl Socket argument packing | The service does not invoke Perl Socket functions; Node networking does not use Perl. |
 | [CVE-2026-57433](https://security-tracker.debian.org/tracker/CVE-2026-57433) | Perl Storable deserialization | The service does not invoke Perl or deserialize Storable data. |
 
-No allowance was added for glibc's
-[CVE-2026-5450](https://security-tracker.debian.org/tracker/CVE-2026-5450): Node
-links glibc, and a source-wide native-code reachability assessment was not made.
-
-The production stage updates eight installed Debian packages to address glibc
-and the fixable high findings: `libc6`, `libc-bin`, `libssl3t64`,
-`openssl-provider-legacy`, `perl-base`, `gzip`, `libpcre2-8-0`, and `libsqlite3-0`.
-The OpenSSL and Perl updates also fix the allowed critical findings. Their
-allowances match only the old reviewed versions, so they do not suppress
-findings in the updated packages. The Node version and application dependencies
-are unchanged.
+Allowances match exact package versions. Updated packages are scanned normally;
+these exceptions must not be carried forward to new versions without review.
+The exception file is the source of truth for package versions and expiration.
