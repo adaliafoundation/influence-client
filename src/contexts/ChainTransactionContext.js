@@ -11,7 +11,6 @@ import { Address, Asteroid, Entity, Order, Permission, System } from '@influence
 import { isEqual, get } from 'lodash';
 import { useQueryClient } from '@tanstack/react-query';
 import { hash, num, shortString, uint256 } from 'starknet';
-import { getQuotes, quoteToCalls } from '@avnu/avnu-sdk';
 
 import { appConfig } from '~/appConfig';
 import TransactionFeePrompt from '~/components/TransactionFeePrompt';
@@ -20,14 +19,13 @@ import useCrewContext from '~/hooks/useCrewContext';
 import useSession from '~/hooks/useSession';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useStore from '~/hooks/useStore';
-import { useUsdcPerEth } from '~/hooks/useSwapQuote';
 import useWalletCrews from '~/hooks/useWalletCrews';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
 import { useSwayBalance, useUSDCBalance } from '~/hooks/useWalletTokenBalance';
 import api from '~/lib/api';
-import { executePaidTransaction } from '~/lib/transactionFees';
+import { executePaidTransaction, preparePaidTransactionFee, executeReviewedTransaction } from '~/lib/transactionFees';
 import { getCancellationRefund } from '~/lib/escrow';
-import { isPaymasterUnavailable, isSponsorshipUnavailable } from '~/lib/paymaster';
+import { createUserPaidAccount, isPaymasterUnavailable, isSponsorshipUnavailable } from '~/lib/paymaster';
 import {
   MISSION_SYSTEMS,
   assertStarterMissionOperation, getMissionCompletionCalls,
@@ -208,7 +206,7 @@ const customConfigs = {
   InitializeArvadian: { equalityTest: true },
   RecruitAdalian: {
     getPrice: async ({ crewmate }) => {
-      if (crewmate?.id > 0) return [0n, TOKEN.ETH]; // if recruiting existing crewmate, no cost
+      if (crewmate?.id > 0) return [0n, TOKEN.USDC]; // if recruiting existing crewmate, no cost
       const { ADALIAN_PURCHASE_PRICE, ADALIAN_PURCHASE_TOKEN } = await api.getConstants(['ADALIAN_PURCHASE_PRICE', 'ADALIAN_PURCHASE_TOKEN']);
       return [safeBigInt(ADALIAN_PURCHASE_PRICE), Address.toStandard(ADALIAN_PURCHASE_TOKEN)];
     },
@@ -647,7 +645,6 @@ export function ChainTransactionProvider({ children }) {
   const { data: walletSource } = useWalletPurchasableBalances();
   const { data: swayBalanceSource } = useSwayBalance();
   const { data: usdcBalanceSource } = useUSDCBalance();
-  const { data: usdcPerEth } = useUsdcPerEth();
   const simulationEnabled = useSimulationEnabled();
 
   // using a ref since execute is often called from a callback from funding (and
@@ -801,19 +798,26 @@ export function ChainTransactionProvider({ children }) {
     [blockNumber, crew?.Crew?.actionType, crew?.Crew?.actionRound, crew?._actionTypeTriggered]
   );
 
-  const executeWithAccount = useCallback(async (calls, options = {}) => {
+  const processAccountTransaction = useCallback(async (calls, options = {}) => {
     const walletAccount = walletAccountRef.current;
     if (!walletAccount) throw new Error('Account is disconnected');
-    // Deployment is shared with checkout and must complete before preparing the gameplay call.
+    const allowSponsorship = options.allowSponsorship !== false;
+    // Sponsored gameplay deployment remains separate from user-paid transactions.
     let accountIsDeployed = isDeployed;
-    if (options.usePaymaster !== false && walletCapabilities.requiresSponsoredTransactions && !accountIsDeployed) {
+    if (allowSponsorship && options.usePaymaster !== false && walletCapabilities.requiresSponsoredTransactions && !accountIsDeployed) {
       await ensureAccountDeployed();
       accountIsDeployed = true;
     }
-    const account = await getTransactionAccount(walletAccountRef.current, calls, options);
-    const paymasterConfigured = walletCapabilities.requiresSponsoredTransactions
+    const transactionAccount = await getTransactionAccount(walletAccountRef.current, calls, options);
+    const paidPrivy = !allowSponsorship && walletCapabilities.requiresSponsoredTransactions;
+    const paymasterConfigured = !paidPrivy && walletCapabilities.requiresSponsoredTransactions
       ? appConfig.get('Starknet.paymasterProxy')
       : appConfig.get('Starknet.paymaster');
+    const account = paidPrivy ? createUserPaidAccount({
+      account: transactionAccount, provider, paymasterUrl: paymasterConfigured
+    }) : transactionAccount;
+    const deploymentData = paidPrivy && !accountIsDeployed ? accountDeploymentData : undefined;
+    options.assertCurrent?.();
     const usePaymaster = options.usePaymaster !== false && !!paymasterConfigured;
 
     let paymasterAvailable = usePaymaster;
@@ -823,8 +827,50 @@ export function ChainTransactionProvider({ children }) {
       return { ...call, calldata: call.calldata.map(a => num.toHex(a)) };
     });
 
+    // Refresh spendable balances for review and confirmation; swap principal cannot pay gas.
+    const balances = options.prepareFee || options.reviewedFee
+      ? Object.fromEntries(await Promise.all(FALLBACK_FEE_TOKENS.map(async token => {
+        const [low, high] = await provider.callContract({
+          contractAddress: token, entrypoint: 'balanceOf', calldata: [accountAddress]
+        });
+        return [token, uint256.uint256ToBN({ low, high })];
+      })))
+      : { [TOKEN.USDC]: usdcRef.current || 0n, [TOKEN.SWAY]: swayRef.current || 0n };
+    if ((options.prepareFee || options.reviewedFee) && Object.entries(options.reservedAmounts || {}).some(([token, amount]) => balances[token] < amount)) {
+      throw new Error('Insufficient balance for swap. Review the swap again.');
+    }
+    const feeOptions = {
+      account,
+      assertCurrent: options.assertCurrent,
+      fee: options.reviewedFee,
+      resourceBounds: options.resourceBounds,
+      deploymentData,
+      calls: formattedCalls,
+      getStrkBalance: async () => {
+        if (deploymentData) return 0n;
+        const [low, high] = await provider.callContract({
+          contractAddress: TOKEN.STRK, entrypoint: 'balanceOf', calldata: [accountAddress]
+        });
+        return uint256.uint256ToBN({ low, high });
+      },
+      usePaymaster: usePaymaster && (accountIsDeployed || !!deploymentData),
+      feeTokens: FALLBACK_FEE_TOKENS.map((gasToken) => ({
+        address: gasToken,
+        name: Address.areEqual(gasToken, TOKEN.USDC) ? 'USDC' : 'SWAY',
+        balance: balances[gasToken] - (options.reservedAmounts?.[gasToken] || 0n),
+        enabled: getFallbackFeeTokens(gameplay, accountAddress).some((token) => Address.areEqual(token, gasToken)),
+        supported: !(paymasterTokens?.length > 0)
+          || paymasterTokens.some((token) => Address.areEqual(token.token_address, gasToken))
+      })),
+      requestFeePermission,
+      enableFeeToken: dispatchFeeTokenEnabled,
+      openTopUp: () => dispatchLauncherPage('store', 'sway')
+    };
+    if (options.reviewedFee) return executeReviewedTransaction(feeOptions);
+
     if (
       usePaymaster
+      && allowSponsorship
       && walletCapabilities.requiresSponsoredTransactions
       && !sponsorshipUnavailableRef.current
     ) {
@@ -835,9 +881,12 @@ export function ChainTransactionProvider({ children }) {
       }
 
       try {
-        return await account.executePaymasterTransaction(formattedCalls, {
-          feeMode: { mode: 'sponsored' }
-        });
+        const details = { feeMode: { mode: 'sponsored' } };
+        if (options.prepareFee) {
+          await account.estimatePaymasterTransactionFee(formattedCalls, details);
+          return { mode: 'sponsored', maxFee: 0n, details };
+        }
+        return await account.executePaymasterTransaction(formattedCalls, details);
       } catch (error) {
         if (isUserCancellation(error)) throw error;
         paymasterAvailable = !isPaymasterUnavailable(error);
@@ -846,7 +895,7 @@ export function ChainTransactionProvider({ children }) {
       }
     }
 
-    if (sponsorshipUnavailableRef.current && !useStore.getState().paidFeeAcknowledgements?.[accountAddress]) {
+    if (allowSponsorship && sponsorshipUnavailableRef.current && !useStore.getState().paidFeeAcknowledgements?.[accountAddress]) {
       if (!(await requestFeePermission('TRANSITION'))) {
         const error = new Error('Paid network fees were not acknowledged.');
         error.suppressTransactionFailure = true;
@@ -855,30 +904,11 @@ export function ChainTransactionProvider({ children }) {
       dispatchPaidFeesAcknowledged(accountAddress);
     }
 
-    return executePaidTransaction({
-      account,
-      calls: formattedCalls,
-      getStrkBalance: async () => {
-        const [low, high] = await provider.callContract({
-          contractAddress: TOKEN.STRK, entrypoint: 'balanceOf', calldata: [accountAddress]
-        });
-        return uint256.uint256ToBN({ low, high });
-      },
-      usePaymaster: paymasterAvailable && accountIsDeployed,
-      feeTokens: FALLBACK_FEE_TOKENS.map((gasToken) => ({
-        address: gasToken,
-        name: Address.areEqual(gasToken, TOKEN.USDC) ? 'USDC' : 'SWAY',
-        balance: Address.areEqual(gasToken, TOKEN.USDC) ? (usdcRef.current || 0n) : (swayRef.current || 0n),
-        enabled: getFallbackFeeTokens(gameplay, accountAddress).some((token) => Address.areEqual(token, gasToken)),
-        supported: !(paymasterTokens?.length > 0)
-          || paymasterTokens.some((token) => Address.areEqual(token.token_address, gasToken))
-      })),
-      requestFeePermission,
-      enableFeeToken: dispatchFeeTokenEnabled,
-      openTopUp: () => dispatchLauncherPage('store', 'sway')
-    });
+    feeOptions.usePaymaster = paymasterAvailable && (accountIsDeployed || !!deploymentData);
+    return options.prepareFee ? preparePaidTransactionFee(feeOptions) : executePaidTransaction(feeOptions);
   }, [
     accountAddress,
+    accountDeploymentData,
     dispatchFeeTokenEnabled,
     dispatchPaidFeesAcknowledged,
     dispatchLauncherPage,
@@ -1071,8 +1101,8 @@ export function ChainTransactionProvider({ children }) {
               if (customConfigs[runSystem]?.getPrice) {
                 const [tokenAmount, token] = (await customConfigs[runSystem].getPrice(processedVars)) || [];
 
-                if (![TOKEN.ETH, TOKEN.USDC].includes(token)) {
-                  throw new Error('Invalid pricing token (only ETH or USDC supported)');
+                if (!Address.areEqual(token, TOKEN.USDC)) {
+                  throw new Error('Store purchases require USDC.');
                 }
 
                 if (totalPriceToken && totalPriceToken !== token) {
@@ -1100,56 +1130,14 @@ export function ChainTransactionProvider({ children }) {
 
               const wallet = walletRef.current;
               if (!wallet) throw new Error('Wallet balance not loaded');
-              const totalWalletValueInToken = wallet.combinedBalance?.to(totalPriceToken);
-
-              // if don't have enough USDC + ETH to cover it, throw funds error
-              if (totalPrice > safeBigInt(totalWalletValueInToken)) {
-                console.log('EXECUTE', wallet, wallet.combinedBalance, wallet.combinedBalance, wallet.combinedBalance?.to(totalPriceToken));
-                throw createFundingError(totalPrice - safeBigInt(totalWalletValueInToken), totalPriceToken, totalPrice);
-
-              // else (do have enough USDC + ETH), but don't specifically have enough in totalPriceToken
-              // to cover tx, prepend swap calls to cover it as well
-              } else {
-                let balanceInTargetToken = wallet.tokenBalances[totalPriceToken];
-                if (totalPrice > balanceInTargetToken) {
-                  // buy enough excess to cover slippage (2.5%)
-                  const slippage = 0.025;
-                  const slippageMult = (1 / (1 - slippage));
-                  console.log({ totalPrice, balanceInTargetToken });
-                  console.log({
-                    sellTokenAddress: totalPriceToken === appConfig.get('Starknet.Address.usdcToken')
-                      ? appConfig.get('Starknet.Address.ethToken')
-                      : appConfig.get('Starknet.Address.usdcToken'),
-                    buyTokenAddress: totalPriceToken,
-                    buyAmount: safeBigInt(Math.ceil(slippageMult * parseInt(totalPrice - balanceInTargetToken))),
-                    takerAddress: accountAddress,
-                  });
-                  const quotes = await getQuotes({
-                    sellTokenAddress: totalPriceToken === appConfig.get('Starknet.Address.usdcToken')
-                      ? appConfig.get('Starknet.Address.ethToken')
-                      : appConfig.get('Starknet.Address.usdcToken'),
-                    buyTokenAddress: totalPriceToken,
-                    buyAmount: safeBigInt(Math.ceil(slippageMult * parseInt(totalPrice - balanceInTargetToken))),
-                    takerAddress: accountAddress,
-                  }, { baseUrl: appConfig.get('Api.avnu') });
-                  if (!quotes?.[0]) throw new Error('Insufficient swap liquidity');
-
-                  // prepend swap calls
-                  const swapTx = await quoteToCalls({
-                    quoteId: quotes[0].quoteId,
-                    takerAddress: accountAddress,
-                    slippage,
-                    executeApprove: true,
-                  }, { baseUrl: appConfig.get('Api.avnu') });
-
-                  console.log('prepend calls', swapTx.calls);
-                  calls.unshift(...swapTx.calls);
-                }
+              const balance = wallet.tokenBalances[TOKEN.USDC] || 0n;
+              if (totalPrice > balance) {
+                throw createFundingError(totalPrice - balance, TOKEN.USDC, totalPrice);
               }
             }
 
             console.log('execute', calls);
-            return executeWithAccount(calls, options);
+            return processAccountTransaction(calls, options);
           },
 
           onConfirmed: (event, vars) => {
@@ -1170,13 +1158,12 @@ export function ChainTransactionProvider({ children }) {
   }, [
     accountAddress,
     createAlert,
-    executeWithAccount,
+    processAccountTransaction,
     gameplay.feesInSway,
     isDeployed,
     prependEventAutoresolve,
     provider,
     sessionWallet,
-    usdcPerEth,
     walletAccount
   ]);
 
@@ -1397,8 +1384,9 @@ export function ChainTransactionProvider({ children }) {
         notifyWalletDisconnected();
         return;
       }
+      options.assertCurrent?.();
       await requireExplicitAuthorization(activeWalletAccount, options);
-      const tx = await executeWithAccount(calls, options);
+      const tx = await processAccountTransaction(calls, options);
 
       // if a tx just went through and account is not known to be deployed,
       // now is a good time to check again if it is deployed
@@ -1419,10 +1407,11 @@ export function ChainTransactionProvider({ children }) {
     } finally {
       setPromptingTransaction(false);
     }
-  }, [createAlert, executeWithAccount, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, notifyWalletDisconnected, refreshWalletConnection])
+  }, [createAlert, processAccountTransaction, handleExecutionExeption, isDeployed, requireExplicitAuthorization, upgradeInsecureSession, notifyWalletDisconnected, refreshWalletConnection])
 
   // Primary execute method for system calls (requires name of system, etc.)
   const executeSystem = useCallback(async (key, vars, meta = {}, options = {}) => {
+    if (key === 'TransferNft') options = { ...options, allowSponsorship: false, requireExplicitSignature: true };
     if (simulationEnabled) {
       if (MISSION_SYSTEMS.has(key)) {
         throw new Error('Missions are unavailable in simulation.');
@@ -1494,6 +1483,7 @@ export function ChainTransactionProvider({ children }) {
         ownsMissionSubmission = true;
         meta = { ...meta, missionAssignment: assignment };
       }
+      options.assertCurrent?.();
       await requireExplicitAuthorization(activeWalletAccount, options);
       const missionCandidates = [];
       const tx = await contractExecute(vars, { ...options, missionCandidates });
@@ -1555,6 +1545,7 @@ export function ChainTransactionProvider({ children }) {
       deployAccount,
       execute: executeSystem,
       executeCalls,
+      prepareTransactionFee: (calls, options) => processAccountTransaction(calls, { ...options, prepareFee: true }),
       getStatus,
       getPendingTx,
       promptingTransaction,

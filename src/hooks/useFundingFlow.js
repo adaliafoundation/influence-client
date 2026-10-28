@@ -1,75 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import useSession from '~/hooks/useSession';
 import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
-import usePriceHelper from '~/hooks/usePriceHelper';
 import FundingFlow from '~/game/launcher/store/FundingFlow';
 import { TOKEN } from '~/lib/priceUtils';
-import { getTokenSwapRequirements, getUsdcValue } from '~/lib/funding';
+import { getUsdcValue } from '~/lib/funding';
 
-const useFundWrapper = () => {
+const useFundingFlow = () => {
   const { accountAddress, login } = useSession();
   const { data: wallet } = useWalletPurchasableBalances();
-  const priceHelper = usePriceHelper();
+  const [funding, setFunding] = useState();
+  const close = useCallback(() => setFunding(undefined), []);
 
-  const onFunded = useRef();
-  const [isFunding, setIsFunding] = useState();
-  const [isFunded, setIsFunded] = useState();
-
-  const onVerifyFunds = useCallback((totalPrice, purchaseFn, options = {}) => {
+  const onVerifyFunds = useCallback((totalPrice, purchaseFn) => {
     if (!accountAddress) return login();
-
     if (!wallet) return;
 
-    const targetUsdcValue = getUsdcValue(totalPrice);
-    if (targetUsdcValue > wallet?.combinedBalance?.to(TOKEN.USDC)) {
-      onFunded.current = purchaseFn;
-      setIsFunding({
-        primaryAction: options.primaryAction,
-        totalPrice,
-        onClose: () => {
-          setIsFunding();
-        },
-        onFunded: () => {
-          setIsFunded(true);
-        }
-      });
-    } else if (targetUsdcValue > Number(wallet?.tokenBalances?.[TOKEN.USDC] || 0n)) {
-      setIsFunding({
-        mode: 'swap',
-        onClose: () => {
-          setIsFunding();
-        },
-        onFunded: purchaseFn,
-        swapRequirements: getTokenSwapRequirements({
-          priceHelper,
-          targetUsdcValue,
-          tokenBalances: wallet?.tokenBalances
-        }),
-        totalPrice
-      });
-    } else {
-      return purchaseFn();
+    if (BigInt(Math.ceil(getUsdcValue(totalPrice))) > wallet.tokenBalances[TOKEN.USDC]) {
+      setFunding({ accountAddress, totalPrice });
+      return;
     }
-  }, [accountAddress, login, priceHelper, wallet?.combinedBalance, wallet?.tokenBalances]);
+    return purchaseFn();
+  }, [accountAddress, login, wallet]);
 
-  useEffect(() => {
-    if (isFunded && onFunded.current) {
-      setTimeout(() => {
-        onFunded.current();
-
-        // cleanup
-        onFunded.current = null;
-        setIsFunded();
-      }, 100);
-    }
-  }, [isFunded]);
-
+  const isFunding = !!funding && funding.accountAddress === accountAddress;
   return {
-    isFunding: !!isFunding,
+    isFunding,
     onVerifyFunds,
-    fundingPrompt: isFunding ? <FundingFlow {...isFunding} /> : null
-  }
-}
+    fundingPrompt: isFunding ? (
+      <FundingFlow totalPrice={funding.totalPrice} onClose={close} onFunded={close} />
+    ) : null
+  };
+};
 
-export default useFundWrapper;
+export default useFundingFlow;

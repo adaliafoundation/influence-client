@@ -10,15 +10,17 @@ const cancelFeePayment = () => {
   throw error;
 };
 
-export const executePaidTransaction = async ({
-  account, calls, getStrkBalance, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp
+const processPaidTransaction = async ({
+  account, calls, assertCurrent, resourceBounds, deploymentData, getStrkBalance, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp, prepareOnly = false
 }) => {
   const strkBalance = await getStrkBalance();
   if (strkBalance > 0n) {
-    const estimate = await account.estimateInvokeFee(calls, { skipValidate: true });
+    const estimate = resourceBounds ? { resourceBounds } : await account.estimateInvokeFee(calls, { skipValidate: true });
     const maxFee = stark.resourceBoundsToEstimateFeeResponse(estimate.resourceBounds).overall_fee;
     if (strkBalance >= maxFee) {
+      if (prepareOnly) return { mode: 'native', name: 'STRK', decimals: 18, maxFee, resourceBounds: estimate.resourceBounds };
       // Once submitted, never retry through another payment method on an ambiguous failure.
+      assertCurrent?.();
       return account.execute(calls, { resourceBounds: estimate.resourceBounds });
     }
   }
@@ -30,7 +32,7 @@ export const executePaidTransaction = async ({
     if (!paymasterAvailable) break;
     if (!token.supported || token.balance <= 0n) continue;
 
-    const details = { feeMode: { mode: 'default', gasToken: token.address } };
+    const details = { feeMode: { mode: 'default', gasToken: token.address }, ...(deploymentData ? { deploymentData } : {}) };
     let fees;
     try {
       fees = await account.estimatePaymasterTransactionFee(calls, details);
@@ -46,7 +48,11 @@ export const executePaidTransaction = async ({
       enableFeeToken(token.address);
     }
 
+    if (prepareOnly) return { mode: 'default', address: token.address, name: token.name, decimals: 6,
+      maxFee: BigInt(fees.suggested_max_fee_in_gas_token), details };
+
     try {
+      assertCurrent?.();
       return await account.executePaymasterTransaction(calls, details);
     } catch (error) {
       if (isUserRejection(error)) throw error;
@@ -61,4 +67,24 @@ export const executePaidTransaction = async ({
   const error = new Error('Insufficient balance for network fees.');
   error.suppressTransactionFailure = true;
   throw error;
+};
+
+export const preparePaidTransactionFee = (options) => processPaidTransaction({ ...options, prepareOnly: true });
+export const executePaidTransaction = (options) => processPaidTransaction(options);
+
+// A reviewed transaction never switches fee tokens or retries another payment method.
+export const executeReviewedTransaction = async ({ account, calls, fee, assertCurrent, getStrkBalance, feeTokens, usePaymaster }) => {
+  if (fee.mode === 'native') {
+    if (await getStrkBalance() < fee.maxFee) throw new Error('Insufficient STRK. Review the swap again.');
+    assertCurrent?.();
+    return account.execute(calls, { resourceBounds: fee.resourceBounds });
+  }
+  if (!usePaymaster) throw new Error('Paymaster unavailable. Review the swap again.');
+  if (fee.mode === 'default') {
+    const token = feeTokens.find(token => token.address === fee.address);
+    if (!token?.enabled || !token.supported) throw new Error('Fee preferences changed. Review the swap again.');
+    if (token.balance < fee.maxFee) throw new Error('Insufficient balance for swap and fees. Review the swap again.');
+  }
+  assertCurrent?.();
+  return account.executePaymasterTransaction(calls, fee.details, fee.maxFee);
 };

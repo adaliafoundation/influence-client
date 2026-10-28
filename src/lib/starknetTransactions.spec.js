@@ -9,7 +9,7 @@ jest.mock('~/hooks/useStore', () => ({
 }), { virtual: true });
 
 const { RpcProvider, WalletAccount, hash, outsideExecution, typedData } = require('starknet');
-const { createAuthenticatedPaymasterRpc } = require('./paymaster');
+const { createAuthenticatedPaymasterRpc, createUserPaidAccount } = require('./paymaster');
 const { createPrivyReadyAccount } = require('./privyWallet');
 
 const chainId = '0x534e5f5345504f4c4941';
@@ -61,7 +61,7 @@ async function setupPaymaster({ legacy = false, deploy = false, deployOnly = fal
     if (request.method === 'paymaster_executeTransaction') return { json: async () => ({ result: { transaction_hash: '0xabc' } }) };
     throw new Error(`Unexpected paymaster request: ${request.method}`);
   });
-  return { ...details, signRawHash, message, parameters, paymasterDetails: {
+  return { ...details, provider, signRawHash, message, parameters, paymasterDetails: {
     feeMode: paid ? { mode: 'default', gasToken } : { mode: 'sponsored' },
     ...(deploy ? { deploymentData: details.deploymentData } : {})
   } };
@@ -144,5 +144,21 @@ test('standalone sponsored deployment uses deploy requests without a gameplay in
   expect(requests.map(request => request.method)).toEqual(['paymaster_buildTransaction', 'paymaster_executeTransaction']);
   for (const request of requests) {
     expect(request.params.transaction).toEqual({ type: 'deploy', deployment: deploymentData });
+  }
+});
+
+
+test.each([false, true])('Privy user-paid transactions go directly to the public paymaster without Influence authentication (deployment: %s)', async deploy => {
+  const { account, provider, paymasterDetails } = await setupPaymaster({ paid: true, deploy });
+  const sponsoredPaymaster = account.paymaster;
+  const paidAccount = createUserPaidAccount({ account, provider, paymasterUrl: 'https://public-paymaster.example' });
+  await expect(paidAccount.executePaymasterTransaction(calls, paymasterDetails, 10n)).resolves.toEqual({ transaction_hash: '0xabc' });
+  expect(account.paymaster).toBe(sponsoredPaymaster);
+  expect(paidAccount.signer).toBe(account.signer);
+  expect(global.fetch).toHaveBeenCalledTimes(2);
+  for (const [url, options] of global.fetch.mock.calls) {
+    expect(String(url)).toBe('https://public-paymaster.example');
+    expect(options.headers.Authorization).toBeUndefined();
+    expect(JSON.parse(options.body).params.parameters.fee_mode.mode).toBe('default');
   }
 });

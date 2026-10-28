@@ -84,12 +84,21 @@ A receipt confirms execution; indexed lifecycle state clears mission pending con
 Claim events also refresh SWAY balances. Colony queries refresh from third-party evidence
 messages in the asteroid room, independently of the active crew.
 
-## Existing starter guidance
+## Mission guidance
 
 Starter briefings remain in `starterMissionStories.js`; reusable gameplay guidance remains
 in `missionGuidance.js`. HUD objectives and their existing guidance links retain starter
 progress presentation. Colony details reuse the mission timeline with their own objectives
 and ownership explanation, without starter-only recipes, samples or crew warnings.
+
+`colonizationMissionContent.json` contains the authored colony briefs, reusable guidance
+pages, and objective-to-topic mappings. The shared tutorial message renders both campaigns.
+Colony guidance and its return-to-details action retain the asteroid subject and campaign;
+their scopes cannot collide with crew scopes. Enrollment guidance is available before
+acceptance, including when browsing without an asteroid. Scan and docking buttons register
+coachmark targets alongside the existing construction, stationing, and marketplace controls.
+The image paths in the content file are delivery paths; runtime artwork remains governed by
+`COLONIZATION_IMAGES` and the licensed-media manifest until the new bundle is published.
 
 ## Verification
 
@@ -101,3 +110,21 @@ subject-scoped pending reconciliation, and capstone operational readiness.
 Live Sepolia wallet transactions are a separate end-to-end check: enroll an unscanned owned
 asteroid, scan it, start qualifying construction, then fill a buy and sell order with another
 account and confirm commerce evidence and rewards remain on the original asteroid assignment.
+
+## On-chain campaign visibility
+
+The Missions page uses `useMissionCampaigns` to read the indexed
+`STARTER_MISSION_CAMPAIGN` and `COLONIZATION_CAMPAIGN` constants and their registered
+campaign definitions. A missing/zero ID or missing definition hides the campaign.
+The definition must contain the expected number of missions (eight starter, five
+colonization); starter also requires `STARTER_MISSION_CUTOFF`, matching the summary API.
+This lookup is independent of crew eligibility and asteroid ownership, so an active
+colony campaign can still be browsed before purchasing an asteroid.
+
+Campaign status refreshes when Missions opens and on window focus, using the normal
+query lifecycle without a polling timer. Changes become visible after server indexing
+and the next refresh. Setting a campaign
+constant to zero disables its visibility; restoring the same registered ID restores it
+without creating a different campaign. This uses the actual contract configuration,
+not a display-only flag: disabling the ID also affects contract mission operations.
+Lookup failures show a retry state instead of claiming that campaigns are inactive.

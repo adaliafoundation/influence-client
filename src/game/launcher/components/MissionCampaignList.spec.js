@@ -1,3 +1,4 @@
+jest.mock('~/hooks/useMissionCampaigns', () => jest.fn(() => ({ data: { starter: true, colonization: true } })), { virtual: true });
 jest.mock('~/hooks/useColonizationAsteroids', () => jest.fn(), { virtual: true });
 jest.mock('react-popper', () => jest.requireActual('../../../compat/react-popper'), { virtual: true });
 jest.mock('~/components/Dropdown', () => jest.requireActual('../../../components/Dropdown'), { virtual: true });
@@ -64,6 +65,7 @@ const useStarter = require('~/hooks/actionManagers/useStarterMissionManager').de
 const { ColonizationMission, Entity } = require('@influenceth/sdk');
 const manager = { canManage: true, getPending: () => null, accept: jest.fn(), complete: jest.fn() };
 beforeEach(() => {
+  require('~/hooks/useMissionCampaigns').mockReturnValue({ data: { starter: true, colonization: true } });
   sessionStorage.clear();
   require('~/hooks/useColonizationAsteroids').mockImplementation(asteroids => ({ data: asteroids }));
   useStore.mockImplementation(selector => selector({ asteroids: { origin: 99 } }));
@@ -164,7 +166,7 @@ test('only eligible or enrolled asteroids appear, and an excluded saved selectio
 });
 
 test('every colonization preview displays its supplied brief without the starter crew warning', () => {
-  const stories = require('../../../lib/colonizationMissionStories.json');
+  const stories = Object.fromEntries(require('../../../lib/colonizationMissionContent.json').missions.map(mission => [mission.key, mission.brief]));
   open();
   fireEvent.click(screen.getByRole('button', { name: /Campaign.*Colonization/i }));
   const rows = screen.getAllByRole('listitem');
@@ -176,4 +178,23 @@ test('every colonization preview displays its supplied brief without the starter
     expect(within(dialog).queryByText(require('../../../lib/starterCampaign').STARTER_CAMPAIGN_CREW_REQUIREMENT)).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: /close/i }));
   }
+});
+
+test('on-chain activation controls campaign visibility independently of asteroid ownership', () => {
+  const useCampaigns = require('~/hooks/useMissionCampaigns');
+  useWalletAsteroids.mockReturnValue({ data: [] });
+  useStore.mockImplementation(selector => selector({ asteroids: {} }));
+  useCampaigns.mockReturnValue({ data: { starter: false, colonization: false } });
+  const { rerender } = open();
+  expect(screen.getByText('No active campaigns')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Campaign.*Colonization/i })).not.toBeInTheDocument();
+  useCampaigns.mockReturnValue({ data: { starter: false, colonization: true } });
+  rerender(<ThemeProvider theme={theme}><Missions /></ThemeProvider>);
+  fireEvent.click(screen.getByRole('button', { name: /Campaign.*Colonization/i }));
+  expect(screen.getAllByRole('listitem')).toHaveLength(5);
+  expect(screen.queryByText('No active campaigns')).not.toBeInTheDocument();
+  useCampaigns.mockReturnValue({ data: { starter: true, colonization: false } });
+  rerender(<ThemeProvider theme={theme}><Missions /></ThemeProvider>);
+  expect(screen.queryByRole('button', { name: /Campaign.*Colonization/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Your foothold/i })).toBeInTheDocument();
 });

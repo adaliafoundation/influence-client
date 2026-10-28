@@ -118,3 +118,60 @@ test.each([
   expect(result.calls[1]).toEqual(System.getRunSystemCall(system, { ...vars, caller_crew: crew }, dispatcher));
   expect(result.candidates).toEqual(candidates);
 });
+
+// These bindings represent work already started before the observer cutover.
+// Finishing it must reuse the existing campaign/crew scope and native arguments.
+test.each([
+  ['ConstructionFinish', { building: exchange }, [{ kind: 'Built', entity: exchange }]],
+  ['SampleDepositFinish', { deposit: entity(Entity.IDS.DEPOSIT, '102') },
+    [{ kind: 'Sample', entity: entity(Entity.IDS.DEPOSIT, '102') }]],
+  ['ExtractResourceFinish', { extractor: exchange, extractor_slot: 1 },
+    [{ kind: 'Built', entity: exchange }, { kind: 'Extraction', entity: exchange, slot: 1 }]],
+  ['ProcessProductsFinish', { processor: exchange, processor_slot: 2 },
+    [{ kind: 'Built', entity: exchange }, { kind: 'Process', entity: exchange, slot: 2 }]],
+  ['ReceiveDelivery', { delivery: entity(Entity.IDS.DELIVERY, '103') },
+    [{ kind: 'Delivery', entity: entity(Entity.IDS.DELIVERY, '103') }]]
+])('%s finishes previously bound starter work through the observer without restarting or accepting again', async (system, args, bindings) => {
+  const { Building } = require('@influenceth/sdk');
+  const service = api();
+  const starter = { campaign: '321', subject: crew, mission: 0 };
+  service.getMissionObservationCandidates.mockResolvedValue({ candidates: [starter] });
+  service.getStarterMissions.mockResolvedValue({ active: true, eligible: true, campaign: '321', missions: [{ accepted: true }] });
+  service.getMissionBinding.mockResolvedValue({ status: 'matched' });
+  service.getEntityById.mockResolvedValue({ Control: { controller: crew }, Building: { status: Building.CONSTRUCTION_STATUSES.OPERATIONAL } });
+  const vars = { ...args, caller_crew: crew };
+  const result = await direct(system, vars, service);
+  expect(service.getMissionBinding.mock.calls.map(([request]) => request)).toEqual(bindings.map(binding => ({
+    campaign: '321', subject: crew, ...binding
+  })));
+  expect(result.calls.map(call => call.entrypoint)).toEqual(['begin_observation', 'run_system', 'end_observation']);
+  expect(result.calls[1]).toEqual(System.getRunSystemCall(system, vars, dispatcher));
+  expect(result.calls[0].calldata.slice(5)).toEqual(MissionObservation.encodeMissionTargets([starter]));
+});
+
+test.each(['unknown', 'mismatched'])('pre-cutover process with %s provenance blocks submission', async status => {
+  const service = api();
+  const starter = { campaign: '321', subject: crew, mission: 4 };
+  service.getMissionObservationCandidates.mockResolvedValue({ candidates: [starter, ...candidates] });
+  service.getStarterMissions.mockResolvedValue({ active: true, eligible: true, campaign: '321', missions: [{ accepted: true }] });
+  service.getMissionBinding.mockResolvedValue({ status });
+  await expect(direct('ProcessProductsFinish', { processor: exchange, processor_slot: 1, caller_crew: crew }, service)).rejects.toThrow();
+});
+
+test('unbound starter work retains another player’s colony observation', async () => {
+  const service = api();
+  const starter = { campaign: '321', subject: crew, mission: 0 };
+  service.getMissionObservationCandidates.mockResolvedValue({ candidates: [starter, ...candidates] });
+  service.getStarterMissions.mockResolvedValue({ active: true, eligible: true, campaign: '321', missions: [{ accepted: true }] });
+  service.getMissionBinding.mockResolvedValue({ status: 'unbound' });
+  const result = await direct('ConstructionFinish', { building: exchange, caller_crew: crew }, service);
+  expect(result.candidates).toEqual(candidates);
+  expect(result.calls[0].calldata.slice(5)).toEqual(MissionObservation.encodeMissionTargets(candidates));
+});
+
+test('a changed campaign definition blocks stale starter candidates', async () => {
+  const service = api();
+  service.getMissionObservationCandidates.mockResolvedValue({ candidates: [{ campaign: '321', subject: crew, mission: 3 }] });
+  service.getStarterMissions.mockResolvedValue({ active: true, eligible: true, campaign: '322', missions: [{ accepted: true }] });
+  await expect(direct('FillSellOrder', sell, service)).rejects.toThrow('Campaign state changed');
+});

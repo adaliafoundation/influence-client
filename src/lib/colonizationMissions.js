@@ -1,5 +1,5 @@
 import { Address, Entity, ColonizationMission } from '@influenceth/sdk';
-import stories from './colonizationMissionStories.json';
+import content from './colonizationMissionContent.json';
 import { canonicalEntityId } from './starterMissions';
 
 export const colonizationMissionsQueryKey = (chainId, apiUrl, asteroidId) => [
@@ -30,9 +30,11 @@ export const assertColonizationMissionOperation = (view, assignment, operation, 
 };
 
 export const COLONIZATION_IMAGES = {
-  0: 'stories/foothold/1.jpg', 1: 'stories/the-cake-is-a-half-truth/1.jpg',
-  2: 'stories/establish-storage/1.jpg', 3: 'stories/close-the-production-loop/1.jpg',
-  4: 'stories/manufacture-goods/1.png'
+  0: 'stories/claim-a-new-world/1.jpg',
+  1: 'stories/build-a-habitat/1.jpg',
+  2: 'stories/connect-the-colony/1.jpg',
+  3: 'stories/establish-commerce/1.jpg',
+  4: 'stories/found-a-colony/1.jpg'
 };
 
 export const getColonizationObjectives = (mission, progress) => {
@@ -53,7 +55,7 @@ export const getColonizationObjectives = (mission, progress) => {
 };
 
 export const colonizationPresentation = {
-  stories,
+  stories: Object.fromEntries(content.missions.map(mission => [mission.key, mission.brief])),
   name: 'Colonization', images: COLONIZATION_IMAGES,
   description: 'Claim a new world and grow a working colony. Anyone can contribute to its construction and use.',
   warning: 'Enroll before starting the first surface scan. Rewards belong to the original colonizer and can only be claimed while they own the asteroid. Other players can build and use the colony’s buildings.',

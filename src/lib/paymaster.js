@@ -1,4 +1,4 @@
-import { LibraryError, PaymasterRpc } from 'starknet';
+import { Account, LibraryError, PaymasterRpc } from 'starknet';
 
 import { getApiAuthHeaders } from './apiAuth';
 
@@ -58,3 +58,12 @@ export const createAuthenticatedPaymasterRpc = (options) => createPaymasterRpc({
   getAuthHeaders: getApiAuthHeaders,
   ...options
 });
+
+export const createUserPaidAccount = ({ account, provider, paymasterUrl }) => {
+  const paidAccount = new Account({
+    provider, address: account.address, signer: account.signer, cairoVersion: '1'
+  });
+  // Keep the sponsored account untouched: concurrent gameplay still uses its proxy.
+  paidAccount.paymaster = paymasterUrl ? createPaymasterRpc({ nodeUrl: paymasterUrl }) : undefined;
+  return paidAccount;
+};

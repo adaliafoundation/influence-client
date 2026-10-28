@@ -1,3 +1,4 @@
+jest.mock('~/hooks/useMissionCampaigns', () => jest.fn(() => ({ data: { starter: true, colonization: true } })), { virtual: true });
 jest.mock('./ColonizationMissions', () => () => null);
 jest.mock('~/components/WarningAlert', () => jest.requireActual('../../../components/WarningAlert'), { virtual: true });
 jest.mock('~/theme', () => jest.requireActual('../../../theme'), { virtual: true });
@@ -185,11 +186,15 @@ test('requirement guidance closes the modal and passes the chosen requirement wi
   expect(manager.accept).not.toHaveBeenCalled();
 });
 
-test('unaccepted missions do not expose guidance even when a guide handler is available', () => {
-  setup({}, jest.fn());
+test('unaccepted missions expose guidance without accepting the mission', () => {
+  const onGuide = jest.fn();
+  const manager = setup({}, onGuide);
   fireEvent.click(screen.getByRole('button', { name: /Your foothold/i }));
   fireEvent.click(screen.getByRole('button', { name: /Make Landfall: Ready/ }));
-  expect(screen.queryByRole('button', { name: 'Show me how' })).not.toBeInTheDocument();
+  fireEvent.load(screen.getByRole('dialog').querySelector('img'));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Show me how' })[0]);
+  expect(onGuide).toHaveBeenCalledWith(expect.objectContaining({ id: 0 }), 0);
+  expect(manager.accept).not.toHaveBeenCalled();
 });
 
 test('the starter invitation can open the campaign already expanded', () => {

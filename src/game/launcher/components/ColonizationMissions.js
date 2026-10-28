@@ -7,6 +7,7 @@ import Dropdown from '~/components/Dropdown';
 import Loader from '~/components/Loader';
 import useStore from '~/hooks/useStore';
 import useColonizationAsteroids from '~/hooks/useColonizationAsteroids';
+import useMissionGuidance from '~/hooks/useMissionGuidance';
 import useWalletAsteroids from '~/hooks/useWalletAsteroids';
 import useColonizationMissionManager from '~/hooks/actionManagers/useColonizationMissionManager';
 import { colonizationPresentation } from '~/lib/colonizationMissions';
@@ -52,6 +53,9 @@ const ColonizationMissions = () => {
   const manager = useColonizationMissionManager(asteroidId);
   const showProgress = !!(asteroidId && manager.data?.active && !manager.isError);
   const subjectName = choices.find(asteroid => asteroid.id === asteroidId)?.name;
+  const startGuidance = useMissionGuidance(manager.data?.campaign, {
+    kind: 'colonization', subject: { label: Entity.IDS.ASTEROID, id: asteroidId || null }, subjectName
+  });
   const headerControl = <Dropdown aria-label="Colony asteroid" initialSelection={asteroidId || ''}
     options={[{ id: '', name: 'Select asteroid' }, ...choices]} labelKey="name" valueKey="id"
     triggerComponent={AsteroidTrigger} menuZIndex={10002}
@@ -59,7 +63,7 @@ const ColonizationMissions = () => {
       setSelection(option.id);
       sessionStorage.setItem('colonizationAsteroid', option.id);
     }} />;
-  return <MissionCampaign heading="Colonization of" headerControl={headerControl} subjectName={subjectName} view={showProgress ? { ...manager.data, eligible: true } : campaignPreview}
+  return <MissionCampaign onGuide={startGuidance} heading="Colonization of" headerControl={headerControl} subjectName={subjectName} view={showProgress ? { ...manager.data, eligible: true } : campaignPreview}
     manager={{ ...manager, canManage: showProgress && manager.canManage }} campaignImage={AsteroidsHeroImage} presentation={colonizationPresentation} initiallyExpanded={initiallyExpanded} showProgress={showProgress}>
     {(isLoading || eligibility.isLoading) && <Loader />}
     {eligibility.isError && <div role="alert"><Muted>Unable to check eligibility for some asteroids.</Muted><Button onClick={eligibility.refetch}>Retry</Button></div>}

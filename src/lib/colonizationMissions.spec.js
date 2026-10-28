@@ -48,3 +48,13 @@ test('pending reconciliation distinguishes asteroid and crew subjects with the s
   expect(colonizationMissionsQueryKey('SN', 'api', '0x63')).toEqual(['colonizationMissions', 'SN', 'api', '99']);
   expect(Object.values(ColonizationMission.TYPES).reduce((sum, m) => sum + m.reward, 0)).toBe(1500000);
 });
+
+test('every colony mission uses its authored image path registered in the media manifest', () => {
+  const { COLONIZATION_IMAGES } = require('./colonizationMissions');
+  const content = require('./colonizationMissionContent.json');
+  const { assets } = require('../assets/media/licensedMedia.v1.json');
+  content.missions.forEach(mission => {
+    expect(COLONIZATION_IMAGES[mission.id]).toBe(mission.image);
+    expect(assets[mission.image]).toMatchObject({ path: mission.image, kind: 'story-image' });
+  });
+});

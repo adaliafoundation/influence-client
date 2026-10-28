@@ -8,6 +8,7 @@ import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useStarterMissionManager from '~/hooks/actionManagers/useStarterMissionManager';
+import useMissionCampaigns from '~/hooks/useMissionCampaigns';
 import useMissionGuidance from '~/hooks/useMissionGuidance';
 import { isStarterCampaignVisible } from '~/lib/missionPresentation';
 import { Muted } from './MissionStyles';
@@ -21,18 +22,23 @@ const StarterMissionsContent = () => {
   const { crew } = useCrewContext();
   const { authenticated, login } = useSession();
   const simulation = useSimulationEnabled();
+  const campaigns = useMissionCampaigns();
   const manager = useStarterMissionManager();
   const { data: view, isLoading, isError, refetch } = manager;
   const startGuidance = useMissionGuidance(view?.campaign);
   let content;
   if (!authenticated) content = <Empty><h2>Your next chapter starts here</h2><Muted>Sign in to discover missions for your crew.</Muted><Button onClick={login}>Sign in</Button></Empty>;
   else if (simulation) content = <Empty><h2>Campaigns await in Adalia</h2><Muted>Starter missions are available outside training.</Muted></Empty>;
+  else if (campaigns.isError) content = <Empty role="alert"><h2>Unable to load campaigns</h2><Button onClick={() => campaigns.refetch()}>Retry</Button></Empty>;
+  else if (!campaigns.data) content = <Empty aria-label="Loading campaigns"><Loader /></Empty>;
+  else if (!campaigns.data.starter && !campaigns.data.colonization) content = <Empty><h2>No active campaigns</h2><Muted>There are no active campaigns available right now.</Muted></Empty>;
+  else if (!campaigns.data.starter) content = null;
   else if (!crew?.id) content = <Empty><h2>Select your crew</h2><Muted>Select a crew to see its starter missions.</Muted></Empty>;
   else if (!view && isLoading) content = <Empty aria-label="Loading missions"><Loader /></Empty>;
   else if (!view && isError) content = <Empty role="alert"><h2>Unable to load missions</h2><Muted>Please try again.</Muted><Button onClick={() => refetch()}>Retry</Button></Empty>;
   else if (isStarterCampaignVisible(view)) content = <MissionCampaign key={`${view.campaign}:${view.subject.id}`} view={view} manager={manager} onGuide={startGuidance} initiallyExpanded={expandStarter} />;
   else content = <Empty><h2>No starter missions available</h2><Muted>{view?.active ? `This crew is not eligible for ${STARTER_CAMPAIGN_NAME}. Select another crew to check its missions.` : 'There are no active campaigns available right now.'}</Muted></Empty>;
-  return <MissionPage title="Missions" description="Find your next objective. Make your mark on Adalia."><CampaignList>{content}{authenticated && !simulation && <ColonizationMissions />}</CampaignList></MissionPage>;
+  return <MissionPage title="Missions" description="Find your next objective. Make your mark on Adalia."><CampaignList>{content}{authenticated && !simulation && !campaigns.isError && campaigns.data?.colonization && <ColonizationMissions />}</CampaignList></MissionPage>;
 };
 
 const StarterMissions = () => (

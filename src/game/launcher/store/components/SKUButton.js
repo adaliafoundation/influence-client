@@ -14,18 +14,18 @@ const StyledPurchaseButtonInner = styled(PurchaseButtonInner)`
   }
 `;
 
-const SKUButton = ({ usdcPrice, onClick, isPurchasing, isSway, ...props }) => {
+const SKUButton = ({ usdcPrice, onClick, isPurchasing, isSway, label = 'Purchase', disabled = false, ...props }) => {
   const { isLaunched } = useCrewContext();
   return (
     <Button
-      disabled={nativeBool(isPurchasing || !isLaunched)}
+      disabled={nativeBool(disabled || isPurchasing || !isLaunched)}
       isTransaction
       loading={reactBool(isPurchasing)}
       onClick={onClick}
       size="large"
       {...props}>
       <StyledPurchaseButtonInner>
-        Purchase{usdcPrice ? (<>: {(
+        {label}{usdcPrice ? (<>: {(
           <UsdPrice
             price={usdcPrice}
             priceToken={TOKEN.USDC}

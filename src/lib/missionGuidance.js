@@ -1,5 +1,8 @@
+import colonizationContent from './colonizationMissionContent.json';
+
 // Topic IDs are shared by mission requirements and the Help topic index.
 export const gameplayGuides = {
+  ...colonizationContent.guidance,
   land: {
     title: "Choose your foothold",
     pages: [
@@ -120,6 +123,7 @@ export const gameplayGuides = {
 };
 
 const missionTopics = {
+  ...Object.fromEntries(colonizationContent.missions.map(mission => [mission.key, mission.guidanceByObjective])),
   MAKE_LANDFALL: ['land'],
   PROSPECT_THE_SURFACE: ['sample'],
   BEGIN_EXTRACTION: ['construct', 'extract'],

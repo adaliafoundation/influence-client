@@ -148,7 +148,7 @@ const MissionTimeline = ({ mission, objectives, eligible, disabled, pending, onA
           <ObjectiveTitle $done={objective.complete}>{objective.label}</ObjectiveTitle>
           {!presentation && <MissionObjectiveAssets mission={mission} objectiveIndex={index} routeId={routeId} />}
         </div>
-        {onGuide && mission.accepted && !objective.complete && <GuidanceLink aria-label="Show me how"
+        {onGuide && !objective.complete && <GuidanceLink aria-label="Show me how"
           data-tooltip-id="detailsTooltip" data-tooltip-content="Show me how"
           data-tooltip-place="top" data-tooltip-delay-show={0}
           onClick={() => onGuide(index)}><HelpIcon /></GuidanceLink>}

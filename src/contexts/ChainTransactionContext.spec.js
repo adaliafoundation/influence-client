@@ -6,15 +6,18 @@ import ChainTransactionContext, { ChainTransactionProvider } from './ChainTransa
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import useWalletCrews from '~/hooks/useWalletCrews';
+import useWalletPurchasableBalances from '~/hooks/useWalletPurchasableBalances';
+import api from '~/lib/api';
 import TransactionFeePrompt from '~/components/TransactionFeePrompt';
-import { executePaidTransaction } from '~/lib/transactionFees';
+import { executePaidTransaction, preparePaidTransactionFee, executeReviewedTransaction } from '~/lib/transactionFees';
+import { createUserPaidAccount } from '~/lib/paymaster';
 import { isWalletAccountLocked } from '~/lib/walletLock';
 
 jest.mock('@influenceth/sdk', () => ({
   Address: { areEqual: (a, b) => a === b, toStandard: value => value }, Entity: { IDS: {} },
-  System: { getFormattedCall: jest.fn(), Systems: { ChangeName: {} }, getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
+  System: { getFormattedCall: jest.fn(), Systems: { ChangeName: {}, PurchaseAdalian: {} }, getApproveErc20Call: (amount, token, spender) => ({ contractAddress: token, entrypoint: 'approve', calldata: [spender, String(amount), '0'] }), getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
 }));
-jest.mock('starknet', () => ({ num: { toHex: value => value } }));
+jest.mock('starknet', () => ({ num: { toHex: value => value }, uint256: { uint256ToBN: ({ low }) => BigInt(low) } }));
 jest.mock('@avnu/avnu-sdk', () => ({}));
 jest.mock('@tanstack/react-query', () => {
   const client = { invalidateQueries: jest.fn() };
@@ -35,12 +38,12 @@ jest.mock('~/hooks/useCrewContext', () => {
 }, { virtual: true });
 jest.mock('~/hooks/useSwapQuote', () => ({ useUsdcPerEth: () => ({ data: 1 }) }), { virtual: true });
 jest.mock('~/hooks/useWalletCrews', () => jest.fn(), { virtual: true });
-jest.mock('~/hooks/useWalletPurchasableBalances', () => () => ({ data: {} }), { virtual: true });
+jest.mock('~/hooks/useWalletPurchasableBalances', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useWalletTokenBalance', () => ({ useSwayBalance: () => ({ data: 0n }), useUSDCBalance: () => ({ data: 0n }) }), { virtual: true });
-jest.mock('~/lib/api', () => ({}), { virtual: true });
-jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn() }), { virtual: true });
+jest.mock('~/lib/api', () => ({ getConstants: jest.fn(), getSwapQuote: jest.fn() }), { virtual: true });
+jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn(), preparePaidTransactionFee: jest.fn(), executeReviewedTransaction: jest.fn() }), { virtual: true });
 jest.mock('~/lib/escrow', () => ({}), { virtual: true });
-jest.mock('~/lib/paymaster', () => ({ isPaymasterUnavailable: () => false, isSponsorshipUnavailable: error => error?.code === 'SPONSORSHIP_NOT_ELIGIBLE' }), { virtual: true });
+jest.mock('~/lib/paymaster', () => ({ createUserPaidAccount: jest.fn(), isPaymasterUnavailable: () => false, isSponsorshipUnavailable: error => error?.code === 'SPONSORSHIP_NOT_ELIGIBLE' }), { virtual: true });
 jest.mock('~/lib/deliveryAuthorization', () => ({}), { virtual: true });
 jest.mock('~/lib/missionObservation', () => ({ observeNativeMissionCall: async ({ call }) => ({ calls: [call], candidates: [] }) }), { virtual: true });
 jest.mock('~/lib/colonizationMissions', () => ({}), { virtual: true });
@@ -57,6 +60,7 @@ const tree = () => <ChainTransactionProvider><Probe /></ChainTransactionProvider
 const account = { address: '0x123' };
 beforeEach(() => {
   jest.clearAllMocks();
+  useWalletPurchasableBalances.mockReturnValue({ data: {} });
   useWalletCrews.mockReturnValue({ data: [] });
   appConfig.get.mockReset();
   session = {
@@ -408,4 +412,147 @@ test.each([true, false])('shows the sponsorship expiry notice until acknowledged
       expect.objectContaining({ name: 'SWAY', enabled: true })
     ])
   }));
+});
+
+
+test('purchase with insufficient USDC requests funding without converting other assets', async () => {
+  session.walletAccount = account;
+  api.getConstants.mockResolvedValue({ ADALIAN_PURCHASE_PRICE: '5', ADALIAN_PURCHASE_TOKEN: '0x1' });
+  useWalletPurchasableBalances.mockReturnValue({ data: { tokenBalances: { '0x1': 2n, eth: 999999n } } });
+  render(tree());
+  await act(async () => { await chain.execute('PurchaseAdalian', {}); });
+  expect(chain.fundingRequirement).toBeTruthy();
+  expect(api.getSwapQuote).not.toHaveBeenCalled();
+  expect(executePaidTransaction).not.toHaveBeenCalled();
+});
+
+test('funded USDC purchase contains only its payment approval and game call', async () => {
+  session.walletAccount = account;
+  api.getConstants.mockResolvedValue({ ADALIAN_PURCHASE_PRICE: '5', ADALIAN_PURCHASE_TOKEN: '0x1' });
+  useWalletPurchasableBalances.mockReturnValue({ data: { tokenBalances: { '0x1': 5n } } });
+  render(tree());
+  await act(async () => { await chain.execute('PurchaseAdalian', {}); });
+  expect(api.getSwapQuote).not.toHaveBeenCalled();
+  expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ calls: [
+    expect.objectContaining({ entrypoint: 'approve' }),
+    expect.objectContaining({ entrypoint: 'run_system' })
+  ] }));
+});
+
+
+describe('reviewed swap fees', () => {
+  const calls = [{ contractAddress: '0x3', entrypoint: 'swap', calldata: [] }];
+  beforeEach(() => {
+    session.isDeployed = true;
+    session.walletAccount = { ...account, estimatePaymasterTransactionFee: jest.fn().mockResolvedValue({}) };
+    session.provider = { callContract: jest.fn().mockResolvedValue(['100', '0']), getNonceForAddress: jest.fn().mockResolvedValue(0) };
+    state.gameplay.feeTokens = ['0x1'];
+    appConfig.get.mockImplementation(key => key.includes('paymaster') ? 'https://paymaster.example' : undefined);
+    preparePaidTransactionFee.mockResolvedValue({ mode: 'default', name: 'USDC', maxFee: 10n });
+    executeReviewedTransaction.mockResolvedValue({ transaction_hash: '0xabc' });
+  });
+
+  test('reserves swap principal and passes account fee preferences to fee preparation', async () => {
+    render(tree());
+    await act(async () => {
+      await chain.prepareTransactionFee(calls, { requireExplicitSignature: true, reservedAmounts: { '0x1': 95n } });
+    });
+    expect(preparePaidTransactionFee).toHaveBeenCalledWith(expect.objectContaining({
+      usePaymaster: true,
+      feeTokens: [expect.objectContaining({ name: 'USDC', balance: 5n, enabled: true }),
+        expect.objectContaining({ name: 'SWAY', balance: 100n, enabled: false })]
+    }));
+    expect(session.getTransactionAccount).toHaveBeenCalledWith(session.walletAccount, calls, expect.objectContaining({ requireExplicitSignature: true }));
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+  });
+
+  test('prepares sponsorship without submitting a transaction', async () => {
+    session.walletCapabilities = { requiresSponsoredTransactions: true };
+    render(tree());
+    let fee;
+    await act(async () => { fee = await chain.prepareTransactionFee(calls, { requireExplicitSignature: true }); });
+    expect(fee).toEqual({ mode: 'sponsored', maxFee: 0n, details: { feeMode: { mode: 'sponsored' } } });
+    expect(session.walletAccount.estimatePaymasterTransactionFee).toHaveBeenCalledWith(calls, fee.details);
+    expect(preparePaidTransactionFee).not.toHaveBeenCalled();
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+  });
+
+  test('confirmation uses the reviewed fee and refreshed remaining balances', async () => {
+    session.provider.callContract.mockResolvedValue(['105', '0']);
+    const fee = { mode: 'default', address: '0x1', maxFee: 10n };
+    render(tree());
+    await act(async () => { await chain.executeCalls(calls, {
+      requireExplicitSignature: true, reviewedFee: fee, reservedAmounts: { '0x1': 100n }
+    }); });
+    expect(executeReviewedTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      fee, feeTokens: expect.arrayContaining([expect.objectContaining({ name: 'USDC', balance: 5n })])
+    }));
+    expect(executePaidTransaction).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('user-paid Privy actions', () => {
+  let paidAccount;
+  const swapCalls = [{ contractAddress: '0x9', entrypoint: 'swap', calldata: [] }];
+  beforeEach(() => {
+    session.isDeployed = true;
+    session.walletCapabilities = { requiresSponsoredTransactions: true };
+    session.walletAccount = { ...account, executePaymasterTransaction: jest.fn(), estimatePaymasterTransactionFee: jest.fn() };
+    session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0), callContract: jest.fn().mockResolvedValue(['100', '0']) };
+    session.accountDeploymentData = { address: account.address };
+    paidAccount = { address: account.address };
+    createUserPaidAccount.mockReturnValue(paidAccount);
+    appConfig.get.mockImplementation(key => ({
+      'Starknet.paymaster': 'https://public-paymaster.example',
+      'Starknet.paymasterProxy': 'https://influence.example/v2/paymaster'
+    }[key]));
+    state.gameplay.feeTokens = ['0x1'];
+  });
+
+  test.each([false, true])('swap fee review bypasses sponsorship (deployed: %s)', async deployed => {
+    session.isDeployed = deployed;
+    render(tree());
+    await act(async () => { await chain.prepareTransactionFee(swapCalls, {
+      allowSponsorship: false, requireExplicitSignature: true, reservedAmounts: { '0x1': 90n }
+    }); });
+    expect(createUserPaidAccount).toHaveBeenCalledWith({ account: session.walletAccount, provider: session.provider, paymasterUrl: 'https://public-paymaster.example' });
+    expect(preparePaidTransactionFee).toHaveBeenCalledWith(expect.objectContaining({
+      account: paidAccount, usePaymaster: true,
+      deploymentData: deployed ? undefined : session.accountDeploymentData,
+      feeTokens: expect.arrayContaining([expect.objectContaining({ name: 'USDC', enabled: true, balance: 10n })])
+    }));
+    expect(session.walletAccount.estimatePaymasterTransactionFee).not.toHaveBeenCalled();
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+  });
+
+  test('reviewed swap submission uses the public account', async () => {
+    render(tree());
+    const fee = { mode: 'default', address: '0x1', maxFee: 10n };
+    await act(async () => { await chain.executeCalls(swapCalls, {
+      allowSponsorship: false, requireExplicitSignature: true, reviewedFee: fee
+    }); });
+    expect(executeReviewedTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: paidAccount, fee }));
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+  });
+
+  test('NFT transfers enforce user-paid fees even if a caller requests sponsorship', async () => {
+    require('@influenceth/sdk').System.getFormattedCall.mockImplementation((contractAddress, entrypoint) => ({ contractAddress, entrypoint, calldata: [] }));
+    render(tree());
+    await act(async () => { await chain.execute('TransferNft', {
+      tokenAddress: '0xc', tokenId: 12, from: account.address, to: '0xb'
+    }, {}, { allowSponsorship: true }); });
+    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: paidAccount, usePaymaster: true }));
+    expect(session.getTransactionAccount).toHaveBeenCalledWith(session.walletAccount, expect.any(Array), expect.objectContaining({ allowSponsorship: false, requireExplicitSignature: true }));
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+    expect(TransactionFeePrompt).not.toHaveBeenCalled();
+  });
+
+  test('missing public paymaster never falls back to the sponsorship proxy', async () => {
+    appConfig.get.mockImplementation(key => key === 'Starknet.paymasterProxy' ? 'https://influence.example/v2/paymaster' : undefined);
+    render(tree());
+    await act(async () => { await chain.executeCalls(swapCalls, { allowSponsorship: false, requireExplicitSignature: true }); });
+    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: paidAccount, usePaymaster: false }));
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+  });
 });

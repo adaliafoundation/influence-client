@@ -107,11 +107,16 @@ test('real transaction pipeline preserves sell payments and registers another pl
   }));
 });
 
+const buy = {
+  buyer_crew: crew(60), caller_crew: crew(50), exchange: entity(70), product: 1, amount: 5, price: 10,
+  storage: entity(71), storage_slot: 2, origin: entity(72), origin_slot: 2,
+  makerFee: 0, depositCaller: '0x555', seller_account: '0x123', exchange_owner_account: '0x666',
+  payments: { toPlayer: 49, toExchange: 1 }
+};
+
 test('real Escrow pipeline hashes the stored hook, fill data and payments rather than the withdraw entrypoint calldata', async () => {
   render(tree());
-  const vars = { buyer_crew: crew(60), caller_crew: crew(50), exchange: entity(70), product: 1, amount: 5, price: 10,
-    storage: entity(71), storage_slot: 2, origin: entity(72), origin_slot: 2,
-    makerFee: 0, depositCaller: '0x555', seller_account: '0x123', exchange_owner_account: '0x666', payments: { toPlayer: 49, toExchange: 1 } };
+  const vars = buy;
   await act(async () => { await chain.execute('EscrowWithdrawalAndFillBuyOrders', [vars]); });
   expect(executePaidTransaction).toHaveBeenCalledTimes(1);
   const calls = submittedCalls();
@@ -128,6 +133,54 @@ test('candidate failure never opens the wallet or retries a fill without mission
   api.getMissionObservationCandidates.mockRejectedValue(new Error('Candidates unavailable'));
   render(tree());
   await act(async () => { await chain.execute('BulkFillSellOrder', [sell]); });
+  expect(executePaidTransaction).not.toHaveBeenCalled();
+  expect(state.dispatchPendingTransaction).not.toHaveBeenCalled();
+});
+
+test('batched third-party buy fills preserve each escrow withdrawal and route evidence to each exchange colony', async () => {
+  const otherColony = { ...colony, subject: { ...colony.subject, id: '1000' } };
+  const vars = [buy, { ...buy, exchange: entity(80), amount: 2, payments: { toPlayer: 19, toExchange: 1 } }];
+  render(tree());
+  // Capture the ordinary escrow calls as a baseline for payment and hook preservation.
+  api.getMissionObservationCandidates.mockResolvedValue({ candidates: [] });
+  await act(async () => { await chain.execute('EscrowWithdrawalAndFillBuyOrders', vars); });
+  const nativeCalls = submittedCalls();
+  executePaidTransaction.mockClear();
+  api.getMissionObservationCandidates.mockClear();
+  api.getMissionObservationCandidates.mockResolvedValueOnce({ candidates: [colony] })
+    .mockResolvedValueOnce({ candidates: [otherColony] });
+  await act(async () => { await chain.execute('EscrowWithdrawalAndFillBuyOrders', vars); });
+  const calls = submittedCalls();
+  expect(calls.map(call => call.entrypoint)).toEqual([
+    'begin_observation', 'withdraw', 'end_observation', 'begin_observation', 'withdraw', 'end_observation'
+  ]);
+  expect([calls[1], calls[4]]).toEqual(nativeCalls);
+  [colony, otherColony].forEach((candidate, index) => {
+    const begin = calls[index * 3];
+    expect(begin.calldata.slice(5).map(BigInt)).toEqual(MissionObservation.encodeMissionTargets([candidate]).map(BigInt));
+    expect(BigInt(begin.calldata[3])).toBe(3n);
+    const native = System.formatSystemCalldata('FillBuyOrder', vars[index],
+      ['buyer_crew', 'exchange', 'product', 'price', 'storage', 'storage_slot', 'amount', 'origin', 'origin_slot', 'caller_crew']);
+    expect(BigInt(begin.calldata[2])).toBe(BigInt(hash.computePoseidonHashOnElements([
+      ...native, account.address, 2, '0x2', 2, '0x123', vars[index].payments.toPlayer, 0, '0x666', 1, 0
+    ])));
+  });
+  expect(api.getMissionObservationCandidates.mock.calls.map(([request]) => request.targetUuid))
+    .toEqual([70, 80].map(id => String(Entity.packEntity(entity(id)))));
+  expect(api.getStarterMissions).not.toHaveBeenCalled();
+  expect(state.dispatchPendingTransaction).toHaveBeenLastCalledWith(expect.objectContaining({
+    meta: expect.objectContaining({ missionCandidates: [colony, otherColony] })
+  }));
+});
+
+test.each([
+  ['BulkFillSellOrder', sell], ['EscrowWithdrawalAndFillBuyOrders', buy]
+])('%s never submits a partial batch when a later candidate lookup fails', async (key, vars) => {
+  api.getMissionObservationCandidates.mockResolvedValueOnce({ candidates: [colony] })
+    .mockRejectedValueOnce(new Error('Candidate index unavailable'));
+  render(tree());
+  await act(async () => { await chain.execute(key, [vars, { ...vars, exchange: entity(80) }]); });
+  expect(api.getMissionObservationCandidates).toHaveBeenCalledTimes(2);
   expect(executePaidTransaction).not.toHaveBeenCalled();
   expect(state.dispatchPendingTransaction).not.toHaveBeenCalled();
 });

@@ -84,7 +84,7 @@ RPC endpoints; do not replace their URLs as part of the client RPC path change.
 | `REACT_APP_API_CLIENTID_GOOGLE` | All YouTube-powered help tabs are hidden; the wiki remains available. |
 | `REACT_APP_API_CLIENTID_GTM` | Google Tag Manager is disabled. |
 | `REACT_APP_STARKNET_PROVIDERBACKUP` | Only the primary Starknet RPC is used. |
-| `REACT_APP_STARKNET_PAYMASTER` | External wallets use ordinary transactions rather than paymaster fee payment. They need native gas funds. |
+| `REACT_APP_STARKNET_PAYMASTER` | User-paid transactions require native STRK on a deployed account. Set this to the public AVNU paymaster URL to enable fee-token payment, including Privy swaps and NFT transfers; those actions never use the sponsorship proxy. |
 
 Third-party integrations also require compatible backend services and provider
 setup, including allowed origins/redirects. A public ID alone does not provision
