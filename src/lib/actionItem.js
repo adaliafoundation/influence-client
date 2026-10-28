@@ -482,6 +482,13 @@ const formatAsTx = (item) => {
       };
       break;
     }
+    case 'BulkSampleDepositStart': {
+      const firstLot = item.vars?.samplingCalls?.[0]?.vars?.lot;
+      formatted.icon = <NewCoreSampleIcon />;
+      formatted.label = `${item.vars?.samplingCalls?.length || 0} Core Samples`;
+      formatted.asteroidId = firstLot ? Lot.toPosition(firstLot.id)?.asteroidId : undefined;
+      break;
+    }
     case 'PurchaseDepositAndImprove':
     case 'SampleDepositImprove': {
       formatted.icon = <ImproveCoreSampleIcon />;

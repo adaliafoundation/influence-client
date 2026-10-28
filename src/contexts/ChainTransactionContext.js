@@ -250,6 +250,11 @@ const customConfigs = {
     isBatchable: true,
     isVirtual: true
   },
+  BulkSampleDepositStart: {
+    multisystemCalls: ({ samplingCalls }) => samplingCalls.map(({ key, vars }) => ({ system: key, vars })),
+    equalityTest: true,
+    isVirtual: true
+  },
   FinishAllReady: {
     multisystemCalls: ({ finishCalls }) => finishCalls.map(({ key, vars }) => ({ system: key, vars })),
     equalityTest: true,
