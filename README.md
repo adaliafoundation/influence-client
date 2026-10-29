@@ -18,6 +18,41 @@ distributed to operators, contributors, or participants.
 
 ## Local development
 
+For isolated development with Docker Desktop, use `compose.dev.yaml`:
+
+```sh
+npm run docker-up
+```
+
+Create `.env.container` with the public `REACT_APP_*` settings described in
+`.env.example`, using prerelease service endpoints. This Compose configuration
+always selects prerelease. Do not put private credentials in this file.
+Open http://localhost:3000 after compilation finishes. Edit source files on your
+Mac as usual; Compose Watch copies `src` and `public` changes into the container.
+Press Ctrl+C to stop, or run `npm run docker-down` from another terminal.
+These npm shortcuts only launch Docker Compose; they require no host dependency
+installation. Dependency installation and the development server run in Docker.
+
+This development image installs dependencies with lifecycle scripts disabled and
+explicitly applies the repository's patches with networking disabled. It runs as
+an unprivileged user without host bind mounts, Docker socket access, or forwarded
+SSH credentials. Existing `.env` files and host `node_modules` are excluded from
+the build. Outbound networking is still available, and the browser still executes
+the built client code. This is isolation, not a dependency trust guarantee.
+
+Run commands inside Docker, for example:
+
+```sh
+docker compose --env-file /dev/null -f compose.dev.yaml exec client npm test -- --watchAll=false
+```
+
+Package changes trigger a rebuild. Files generated inside the container do not
+sync back to your Mac; dependency updates must explicitly export and review the
+changed package manifest and lockfile. Do not run host npm commands to work around
+this boundary. The API and Cairo projects require their own development setup.
+
+Alternatively, for development directly on the host:
+
 1. Use Node.js 22 and run `npm ci`.
 2. Copy `.env.example` to `.env` and fill in the required public service endpoints.
 3. Set `REACT_APP_CONFIG_ENV=prerelease` or `production` explicitly.

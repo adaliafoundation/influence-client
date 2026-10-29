@@ -1,0 +1,40 @@
+name: influence-client-dev
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    init: true
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - path: .env.container
+        required: false
+    environment:
+      REACT_APP_CONFIG_ENV: prerelease
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+          initial_sync: true
+        - action: sync
+          path: ./public
+          target: /app/public
+          initial_sync: true
+        - action: rebuild
+          path: package.json
+        - action: rebuild
+          path: package-lock.json
+        - action: rebuild
+          path: patches
+        - action: rebuild
+          path: config-overrides.js
+        - action: rebuild
+          path: .babelrc
+        - action: rebuild
+          path: .npmrc

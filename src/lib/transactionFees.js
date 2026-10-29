@@ -11,11 +11,12 @@ const cancelFeePayment = () => {
 };
 
 const processPaidTransaction = async ({
-  account, calls, assertCurrent, resourceBounds, deploymentData, getStrkBalance, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp, prepareOnly = false
+  account, calls, assertCurrent, resourceBounds, deploymentData, validateAccount = false, getStrkBalance, usePaymaster, feeTokens, requestFeePermission, enableFeeToken, openTopUp, prepareOnly = false
 }) => {
   const strkBalance = await getStrkBalance();
   if (strkBalance > 0n) {
-    const estimate = resourceBounds ? { resourceBounds } : await account.estimateInvokeFee(calls, { skipValidate: true });
+    // Raw-signing accounts need validation included; browser wallets sign only when submitting.
+    const estimate = resourceBounds ? { resourceBounds } : await account.estimateInvokeFee(calls, { skipValidate: !validateAccount });
     const maxFee = stark.resourceBoundsToEstimateFeeResponse(estimate.resourceBounds).overall_fee;
     if (strkBalance >= maxFee) {
       if (prepareOnly) return { mode: 'native', name: 'STRK', decimals: 18, maxFee, resourceBounds: estimate.resourceBounds };
