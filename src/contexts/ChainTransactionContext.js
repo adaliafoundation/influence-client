@@ -845,6 +845,7 @@ export function ChainTransactionProvider({ children }) {
       fee: options.reviewedFee,
       resourceBounds: options.resourceBounds,
       deploymentData,
+      validateAccount: !!walletCapabilities.usesClientRawSigning,
       calls: formattedCalls,
       getStrkBalance: async () => {
         if (deploymentData) return 0n;
@@ -919,7 +920,8 @@ export function ChainTransactionProvider({ children }) {
     isDeployed,
     paymasterTokens,
     requestFeePermission,
-    walletCapabilities.requiresSponsoredTransactions
+    walletCapabilities.requiresSponsoredTransactions,
+    walletCapabilities.usesClientRawSigning
   ]);
 
   const contracts = useMemo(() => {

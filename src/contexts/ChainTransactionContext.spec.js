@@ -497,8 +497,8 @@ describe('user-paid Privy actions', () => {
   const swapCalls = [{ contractAddress: '0x9', entrypoint: 'swap', calldata: [] }];
   beforeEach(() => {
     session.isDeployed = true;
-    session.walletCapabilities = { requiresSponsoredTransactions: true };
-    session.walletAccount = { ...account, executePaymasterTransaction: jest.fn(), estimatePaymasterTransactionFee: jest.fn() };
+    session.walletCapabilities = { requiresSponsoredTransactions: true, usesClientRawSigning: true };
+    session.walletAccount = { ...account, signMessage: jest.fn().mockResolvedValue([]), executePaymasterTransaction: jest.fn(), estimatePaymasterTransactionFee: jest.fn() };
     session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0), callContract: jest.fn().mockResolvedValue(['100', '0']) };
     session.accountDeploymentData = { address: account.address };
     paidAccount = { address: account.address };
@@ -518,7 +518,7 @@ describe('user-paid Privy actions', () => {
     }); });
     expect(createUserPaidAccount).toHaveBeenCalledWith({ account: session.walletAccount, provider: session.provider, paymasterUrl: 'https://public-paymaster.example' });
     expect(preparePaidTransactionFee).toHaveBeenCalledWith(expect.objectContaining({
-      account: paidAccount, usePaymaster: true,
+      account: paidAccount, usePaymaster: true, validateAccount: true,
       deploymentData: deployed ? undefined : session.accountDeploymentData,
       feeTokens: expect.arrayContaining([expect.objectContaining({ name: 'USDC', enabled: true, balance: 10n })])
     }));
@@ -542,7 +542,7 @@ describe('user-paid Privy actions', () => {
     await act(async () => { await chain.execute('TransferNft', {
       tokenAddress: '0xc', tokenId: 12, from: account.address, to: '0xb'
     }, {}, { allowSponsorship: true }); });
-    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: paidAccount, usePaymaster: true }));
+    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account: paidAccount, usePaymaster: true, validateAccount: true }));
     expect(session.getTransactionAccount).toHaveBeenCalledWith(session.walletAccount, expect.any(Array), expect.objectContaining({ allowSponsorship: false, requireExplicitSignature: true }));
     expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
     expect(TransactionFeePrompt).not.toHaveBeenCalled();

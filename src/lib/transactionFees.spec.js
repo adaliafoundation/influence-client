@@ -44,6 +44,41 @@ test.each([24n, 100n])('prefers STRK when it covers all resource bounds (%s)', a
   expect(options.requestFeePermission).not.toHaveBeenCalled();
 });
 
+test.each(['execute', 'review'])('uses validation-inclusive gas bounds for native %s', async mode => {
+  options.validateAccount = true;
+  const validatedBounds = {
+    ...bounds,
+    l2_gas: { max_amount: 5045337n, max_price_per_unit: 5n }
+  };
+  options.getStrkBalance.mockResolvedValue(100000000n);
+  options.account.estimateInvokeFee.mockImplementation(async (calls, { skipValidate }) => ({
+    resourceBounds: skipValidate ? bounds : validatedBounds
+  }));
+
+  if (mode === 'review') {
+    const fee = await preparePaidTransactionFee(options);
+    expect(fee).toMatchObject({ mode: 'native', maxFee: 25226699n, resourceBounds: validatedBounds });
+    expect(options.account.execute).not.toHaveBeenCalled();
+    await executeReviewedTransaction({ ...options, fee });
+  } else {
+    await executePaidTransaction(options);
+  }
+
+  expect(options.account.estimateInvokeFee).toHaveBeenCalledTimes(1);
+  expect(options.account.execute).toHaveBeenCalledWith(options.calls, { resourceBounds: validatedBounds });
+});
+
+test.each([executePaidTransaction, preparePaidTransactionFee])('stops when signing the fee estimate is rejected (%p)', async process => {
+  options.validateAccount = true;
+  const error = new Error('User rejected transaction');
+  options.account.estimateInvokeFee.mockRejectedValue(error);
+  await expect(process(options)).rejects.toBe(error);
+  expect(options.account.execute).not.toHaveBeenCalled();
+  expect(options.account.estimatePaymasterTransactionFee).not.toHaveBeenCalled();
+  expect(options.account.executePaymasterTransaction).not.toHaveBeenCalled();
+  expect(options.requestFeePermission).not.toHaveBeenCalled();
+});
+
 test.each([0n, 23n])('uses enabled USDC only when STRK is insufficient (%s)', async balance => {
   options.getStrkBalance.mockResolvedValue(balance);
   await expect(executePaidTransaction(options)).resolves.toEqual(tx);
@@ -224,4 +259,35 @@ test('includes account deployment in the reviewed user-paid fee', async () => {
   expect(fee.details).toEqual({ feeMode: { mode: 'default', gasToken: '0x2' }, deploymentData });
   await executeReviewedTransaction({ ...options, fee });
   expect(options.account.executePaymasterTransaction).toHaveBeenCalledWith(options.calls, fee.details, 10n);
+});
+
+
+test.each([false, true])('SDK fee estimation signs only for raw-signing accounts (%s)', async validateAccount => {
+  const { Account, WalletAccount } = require('starknet');
+  const { PrivyStarknetSigner } = require('./privyWallet');
+  const signRawHash = jest.fn().mockResolvedValue(`0x${'1'.padStart(64, '0')}${'2'.padStart(64, '0')}`);
+  const accountOptions = {
+    provider: { nodeUrl: 'https://rpc.example/rpc/v0_10' }, address: '0x123', cairoVersion: '1'
+  };
+  const account = validateAccount
+    ? new Account({ ...accountOptions, signer: new PrivyStarknetSigner({ publicKey: '0x123', signRawHash }) })
+    : new WalletAccount({ ...accountOptions, walletProvider: { on: jest.fn() } });
+  const sign = jest.spyOn(account.signer, 'signTransaction');
+  if (!validateAccount) sign.mockRejectedValue(new Error('Browser wallets cannot sign fee estimates'));
+  jest.spyOn(account, 'getNonce').mockResolvedValue('0x0');
+  jest.spyOn(account.provider, 'getChainId').mockResolvedValue('0x534e5f4d41494e');
+  jest.spyOn(account.provider, 'getEstimateTip').mockResolvedValue({ recommendedTip: 0n });
+  const estimate = jest.spyOn(account.provider, 'getEstimateFeeBulk').mockResolvedValue([{ resourceBounds: bounds }]);
+
+  const fee = await preparePaidTransactionFee({ ...options, account, validateAccount });
+  expect(fee).toMatchObject({ mode: 'native', resourceBounds: bounds });
+  expect(sign).toHaveBeenCalledTimes(validateAccount ? 1 : 0);
+  expect(signRawHash).toHaveBeenCalledTimes(validateAccount ? 1 : 0);
+  if (validateAccount) {
+    expect(sign).toHaveBeenCalledWith(options.calls, expect.objectContaining({ version: '0x100000000000000000000000000000003' }));
+  }
+  expect(estimate).toHaveBeenCalledWith(
+    expect.arrayContaining([expect.objectContaining({ signature: validateAccount ? ['0x1', '0x2'] : [] })]),
+    expect.objectContaining({ skipValidate: !validateAccount })
+  );
 });

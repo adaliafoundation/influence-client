@@ -85,6 +85,8 @@
     "zustand": "^3.5.7"
   },
   "scripts": {
+    "docker-up": "docker compose --env-file /dev/null -f compose.dev.yaml up --build --watch",
+    "docker-down": "docker compose --env-file /dev/null -f compose.dev.yaml down",
     "audit:security": "npm audit --omit=dev --audit-level=critical",
     "analyze": "source-map-explorer 'build/static/js/*.js'",
     "start": "react-app-rewired start",
