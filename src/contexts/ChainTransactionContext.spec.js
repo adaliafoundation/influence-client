@@ -347,6 +347,22 @@ describe('automatic sponsored account deployment', () => {
   });
 });
 
+test('Ready session accounts retain unsigned fee estimation', async () => {
+  const sessionAccount = { address: account.address };
+  session.walletAccount = account;
+  session.isDeployed = true;
+  session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0) };
+  session.walletCapabilities = { supportsSessionKeys: true };
+  session.getTransactionAccount.mockResolvedValue(sessionAccount);
+  render(tree());
+  await act(async () => {
+    await chain.executeCalls([{ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }]);
+  });
+  expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({
+    account: sessionAccount, validateAccount: false
+  }));
+});
+
 test('NFT transfers call the token contract directly and register a pending transaction', async () => {
   require('@influenceth/sdk').System.getFormattedCall.mockImplementation((contractAddress, entrypoint, fields) => ({ contractAddress, entrypoint, calldata: [] }));
   session.walletAccount = account;

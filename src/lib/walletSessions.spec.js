@@ -143,6 +143,35 @@ test('the real SDK signs a Starknet 10 V3 transaction using the cosigner', async
   await expect(account.signer.signTransaction(calls, details)).rejects.toThrow('not authorized');
 });
 
+test('session fee estimates skip signing because x-sessions rejects query versions', async () => {
+  mockCosigner();
+  const { session, wallet } = setup();
+  const account = await session.getAccount(calls);
+  const savedSession = session.session;
+  account.cairoVersion = '1';
+  jest.spyOn(account, 'getNonce').mockResolvedValue('0x0');
+  jest.spyOn(account.provider, 'getEstimateTip').mockResolvedValue({ recommendedTip: 0n });
+  const fee = { resourceBounds: {
+    l1_gas: { max_amount: 0n, max_price_per_unit: 1n },
+    l1_data_gas: { max_amount: 1n, max_price_per_unit: 1n },
+    l2_gas: { max_amount: 10000000n, max_price_per_unit: 1n }
+  } };
+  const estimate = jest.spyOn(account.provider, 'getEstimateFeeBulk').mockResolvedValue([fee]);
+
+  await expect(account.estimateInvokeFee(calls, { skipValidate: true })).resolves.toEqual(fee);
+  expect(estimate).toHaveBeenCalledWith(
+    expect.arrayContaining([expect.objectContaining({ signature: [] })]),
+    expect.objectContaining({ skipValidate: true })
+  );
+  await expect(account.estimateInvokeFee(calls, { skipValidate: false }))
+    .rejects.toThrow('unsupported signTransaction version');
+  expect(estimate).toHaveBeenCalledTimes(1);
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(wallet.request).toHaveBeenCalledTimes(1);
+  expect(session.session).toBe(savedSession);
+  expect(session.ready).toBe(true);
+});
+
 test('signs allowed outside executions but asks the wallet for paymaster fee transfers', async () => {
   mockCosigner();
   const { session, account: walletAccount } = setup();

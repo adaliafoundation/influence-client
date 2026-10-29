@@ -845,6 +845,7 @@ export function ChainTransactionProvider({ children }) {
       fee: options.reviewedFee,
       resourceBounds: options.resourceBounds,
       deploymentData,
+      // x-sessions 10 only signs V3, not the query version used by validated fee estimates.
       validateAccount: !!walletCapabilities.usesClientRawSigning,
       calls: formattedCalls,
       getStrkBalance: async () => {
