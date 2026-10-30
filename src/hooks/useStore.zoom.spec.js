@@ -107,6 +107,62 @@ test('live navigation still animates but is not persisted', () => {
   expect(JSON.parse(localStorage.getItem(STORE_NAME)).state.asteroids).toBeUndefined();
 });
 
+test('persists mapped lot highlight settings across sessions', async () => {
+  const highlight = { field: 'category', colorMap: { 1: '#ff0000', 2: '#00ff00' } };
+  useStore.getState().dispatchHighlightUpdated('lotsMapped')(highlight);
+
+  const serialized = localStorage.getItem(STORE_NAME);
+  expect(JSON.parse(serialized).state.assetSearch?.lotsMapped?.highlight).toEqual(highlight);
+
+  useStore.setState(initialState, true);
+  localStorage.setItem(STORE_NAME, serialized);
+  await useStore.persist.rehydrate();
+
+  expect(useStore.getState().assetSearch.lotsMapped.highlight).toEqual(highlight);
+});
+
+test('persists sort settings across sessions', async () => {
+  useStore.getState().dispatchSortUpdated('lotsMapped')(['id', 'desc']);
+
+  const serialized = localStorage.getItem(STORE_NAME);
+  expect(JSON.parse(serialized).state.assetSearch?.lotsMapped?.sort).toEqual(['id', 'desc']);
+
+  useStore.setState(initialState, true);
+  localStorage.setItem(STORE_NAME, serialized);
+  await useStore.persist.rehydrate();
+
+  expect(useStore.getState().assetSearch.lotsMapped.sort).toEqual(['id', 'desc']);
+});
+
+test('does not persist search filters', () => {
+  useStore.getState().dispatchFiltersUpdated('lotsMapped')({ category: ['1'] });
+  useStore.getState().dispatchFiltersUpdated('lots')({ id: ['0x1'] });
+
+  const stored = JSON.parse(localStorage.getItem(STORE_NAME)).state.assetSearch;
+  expect(stored.lotsMapped).toEqual({ sort: ['id', 'asc'], highlight: null });
+  expect(stored.lots).toEqual({ sort: ['id', 'asc'] });
+});
+
+test('rehydrating a broad legacy assetSearch save keeps only highlight and sort', async () => {
+  const highlight = { field: 'category', colorMap: { 1: '#ff0000' } };
+  const saved = {
+    assetSearch: {
+      lots: { filters: { id: ['0x1'] }, sort: ['id', 'desc'] },
+      lotsMapped: { filters: { category: ['2'] }, sort: ['id', 'desc'], highlight }
+    }
+  };
+  localStorage.setItem(STORE_NAME, JSON.stringify({ state: saved, version: 11 }));
+  await useStore.persist.rehydrate();
+
+  const { assetSearch } = useStore.getState();
+  expect(assetSearch.lotsMapped.highlight).toEqual(highlight);
+  expect(assetSearch.lotsMapped.sort).toEqual(['id', 'desc']);
+  expect(assetSearch.lots.sort).toEqual(['id', 'desc']);
+  expect(assetSearch.lots.filters).toEqual(initialState.assetSearch.lots.filters);
+  expect(assetSearch.lotsMapped.filters).toEqual(initialState.assetSearch.lotsMapped.filters);
+  expect(assetSearch.crews).toEqual(initialState.assetSearch.crews);
+});
+
 test.each([
   [[], []],
   [['0x2'], ['0x2']],
