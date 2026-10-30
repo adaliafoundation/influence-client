@@ -76,14 +76,20 @@ const GenericDialog = ({
   onConfirm,
   confirmButtonProps = {},
   alignActionsRight = false,
+  hideActions = false,
+  blocking = false,
   onReject,
   rejectButtonProps = {},
   isTransaction,
   title,
   ...props
 }) => (
-  <Dialog>
-    <Wrapper {...props}>
+  <Dialog blocking={blocking} aria-label={blocking ? props['aria-label'] : undefined}>
+    <Wrapper
+      {...props}
+      role={blocking ? undefined : props.role}
+      aria-label={blocking ? undefined : props['aria-label']}
+      aria-modal={blocking ? undefined : props['aria-modal']}>
       {title && (
         <Title>
           <NavIcon
@@ -97,7 +103,7 @@ const GenericDialog = ({
       <Body>
         {loading && !isTransaction ? <Loader /> : children}
       </Body>
-      <Buttons $alignRight={alignActionsRight}>
+      {!hideActions && <Buttons $alignRight={alignActionsRight}>
         {onReject
           ? (
             <Button
@@ -117,7 +123,7 @@ const GenericDialog = ({
           {...confirmButtonProps}>
           {props.confirmText || 'Ok'}
         </Button>
-      </Buttons>
+      </Buttons>}
     </Wrapper>
   </Dialog>
 );

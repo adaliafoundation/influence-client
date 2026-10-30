@@ -1,3 +1,4 @@
+import MaintenanceDialog from './components/MaintenanceDialog';
 import { features } from '~/appConfig/features';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
@@ -304,6 +305,7 @@ const Game = () => {
           </PrivyWalletProvider>
         </WagmiContextProvider>
       )}
+      <MaintenanceDialog />
     </ThemeProvider>
   );
 };

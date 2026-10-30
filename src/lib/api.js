@@ -2,6 +2,7 @@ import { inventoryCandidateQuery } from './inventoryCandidates';
 import { collectInventoryCandidates } from './authorizationData';
 import { missionBindingUrl } from './missionBindings';
 import axios from 'axios';
+import { checkMaintenance } from './maintenance';
 import { Address, Asteroid, Building, Deposit, Entity, Inventory, Order, Ship } from '@influenceth/sdk';
 import esb from 'elastic-builder';
 import { getQuotes } from '@avnu/avnu-sdk';
@@ -19,6 +20,10 @@ const apiVersion = 'v2';
 const config = { baseURL: appConfig.get('Api.influence'), headers: {} };
 config.headers = getApiAuthHeaders();
 const instance = axios.create(config);
+instance.interceptors.response.use(response => response, error => {
+  if (!axios.isCancel(error)) checkMaintenance();
+  return Promise.reject(error);
+});
 
 // subscribe to changes relevant to the config
 useStore.subscribe(

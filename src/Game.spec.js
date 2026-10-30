@@ -1,3 +1,4 @@
+jest.mock('./components/MaintenanceDialog', () => () => null);
 const React = require('react');
 const { render, screen, fireEvent } = require('@testing-library/react');
 require('@testing-library/jest-dom');
