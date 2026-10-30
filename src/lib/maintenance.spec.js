@@ -48,13 +48,31 @@ test.each([status(false), { data: {} }])('does not poll when maintenance is unco
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('an unreachable endpoint leaves normal failures alone and retains confirmed maintenance', async () => {
-  axios.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(status(true)).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(status(false));
+test('an unavailable endpoint leaves normal failures alone', async () => {
+  axios.get.mockRejectedValue(new Error('offline'));
+  const changed = jest.fn();
+  maintenance.subscribeMaintenance(changed);
   await maintenance.checkMaintenance();
+  expect(maintenance.isMaintenanceActive()).toBe(false);
+  expect(changed).not.toHaveBeenCalled();
   expect(jest.getTimerCount()).toBe(0);
+});
+
+test.each([
+  ['network failure', () => Promise.reject(new Error('offline'))],
+  ['timeout', () => Promise.reject(Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }))],
+  ['404', () => Promise.reject({ response: { status: 404 } })],
+  ['invalid response', () => Promise.resolve({ data: {} })]
+])('clears maintenance and stops polling after %s', async (_, response) => {
+  axios.get.mockResolvedValueOnce(status(true)).mockImplementationOnce(response);
+  const changed = jest.fn();
+  maintenance.subscribeMaintenance(changed);
   await maintenance.checkMaintenance();
-  await advance(60000);
   expect(maintenance.isMaintenanceActive()).toBe(true);
   await advance(60000);
   expect(maintenance.isMaintenanceActive()).toBe(false);
+  expect(changed).toHaveBeenCalledTimes(2);
+  expect(jest.getTimerCount()).toBe(0);
+  await advance(180000);
+  expect(axios.get).toHaveBeenCalledTimes(2);
 });

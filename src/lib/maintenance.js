@@ -12,6 +12,12 @@ export const subscribeMaintenance = (listener) => {
   return () => listeners.delete(listener);
 };
 
+const setMaintenanceActive = (nextActive) => {
+  if (nextActive === active) return;
+  active = nextActive;
+  listeners.forEach(listener => listener());
+};
+
 const checkStatus = () => {
   if (pending) return pending;
   // Use a separate request so maintenance failures cannot trigger the API interceptor.
@@ -19,11 +25,9 @@ const checkStatus = () => {
     baseURL: appConfig.get('Api.influence'),
     timeout: 10000
   }).then(({ data }) => {
-    if (typeof data?.active !== 'boolean' || data.active === active) return;
-    active = data.active;
-    listeners.forEach(listener => listener());
+    setMaintenanceActive(data?.active === true);
   }).catch(() => {
-    // An unreachable endpoint does not establish or clear maintenance.
+    setMaintenanceActive(false);
   }).finally(() => {
     pending = undefined;
     if (active) pollTimer = setTimeout(() => {
@@ -38,4 +42,3 @@ export const checkMaintenance = () => {
   if (active || pollTimer) return;
   return checkStatus();
 };
-
