@@ -19,6 +19,7 @@ import marketplaceHeader from '~/assets/images/modal_headers/Marketplace.png';
 import { getBuildingIcon, getProductIcon } from '~/lib/assetUtils';
 import formatters from '~/lib/formatters';
 import useCrewOrders from '~/hooks/useCrewOrders';
+import useOrderList from '~/hooks/useOrderList';
 import useOrderSummaryByProduct from '~/hooks/useOrderSummaryByProduct';
 import api from '~/lib/api';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
@@ -116,12 +117,14 @@ const Marketplace = () => {
     return q.get('back');
   }, [search]);
 
-  const { crew } = useCrewContext();
+  const { crew, crewControls } = useCrewContext();
   const { data: asteroid } = useAsteroid(Number(asteroidId));
   const { data: lot } = useLot(lotId);
   const { data: marketplaceOwner } = useCrew(lot?.building?.Control?.controller?.id);
 
   const { data: myOpenOrders } = useCrewOrders(crew?.id);
+  const isMarketplaceAdmin = !!lot?.building?.Exchange && crewControls(lot.building);
+  const { data: marketplaceOrders } = useOrderList(isMarketplaceAdmin ? lot.building.id : undefined, null);
   const { data: orderSummary } = useOrderSummaryByProduct(lotIndex === 'all' ? { label: Entity.IDS.ASTEROID, id: Number(asteroidId) } : { label: Entity.IDS.LOT, id: Number(lotId) });
 
   const [marketplaceTally, setMarketplaceTally] = useState(0);
@@ -184,6 +187,10 @@ const Marketplace = () => {
     return orderAsteroidId === Number(asteroidId) && (lotIndex === 'all' || Number(lot?.id) === orderLotId);
   }), [asteroidId, lot?.id, lotIndex, myOpenOrders]);
 
+  const visibleOrders = useMemo(() => isMarketplaceAdmin
+    ? (marketplaceOrders || []).map(order => ({ ...order, marketplace }))
+    : myLocalOrders, [isMarketplaceAdmin, marketplaceOrders, marketplace, myLocalOrders]);
+
   const goBack = useCallback(() => {
     if (backOverride === 'all') {
       history.push(`/marketplace/${asteroidId}/all/${product || ''}`);
@@ -222,7 +229,7 @@ const Marketplace = () => {
               asteroid={asteroid}
               marketplace={marketplace}
               marketplaceOwner={marketplaceOwner}
-              orders={myLocalOrders} />
+              orders={visibleOrders} />
           )}
           {discriminator && discriminator !== 'orders' && marketplace && (
             <MarketplaceDepthChart
@@ -262,10 +269,10 @@ const Marketplace = () => {
                 )}
               </FooterLeft>
               <OrderTally>
-              {myLocalOrders.length > 0 && (
+              {visibleOrders.length > 0 && (
                 <>
-                <OpenOrdersButton onClick={goToMyOrders} ><OrderIcon />My Open Limit Orders</OpenOrdersButton>
-                <span>{myLocalOrders.length} {marketplace ? 'at this Marketplace' : 'on this Asteroid'}</span>
+                <OpenOrdersButton onClick={goToMyOrders} ><OrderIcon />{isMarketplaceAdmin ? 'Marketplace Open Limit Orders' : 'My Open Limit Orders'}</OpenOrdersButton>
+                <span>{visibleOrders.length} {marketplace ? 'at this Marketplace' : 'on this Asteroid'}</span>
                 </>
               )}
               </OrderTally>

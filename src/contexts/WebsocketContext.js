@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { checkMaintenance, isMaintenanceActive, subscribeMaintenance } from '../lib/maintenance';
 
 import { appConfig } from '~/appConfig';
 import useSession from '~/hooks/useSession';
@@ -110,11 +111,20 @@ export function WebsocketProvider({ children }) {
       });
       handleConnection(true);
     });
-    socket.current.on('disconnect', () => handleConnection(false));
+    socket.current.on('disconnect', () => {
+      handleConnection(false);
+      checkMaintenance();
+    });
+    socket.current.on('connect_error', checkMaintenance);
+    const unsubscribeMaintenance = subscribeMaintenance(() => {
+      if (!isMaintenanceActive()) socket.current.connect();
+    });
     setWsReady(true);
 
     return () => {
+      unsubscribeMaintenance();
       if (socket.current) {
+        socket.current.off('disconnect');
         console.log('disconnect socket');
         socket.current.disconnect();
         socket.current.off(); // removes all listeners for all events
