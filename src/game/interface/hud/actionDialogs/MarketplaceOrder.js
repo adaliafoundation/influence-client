@@ -206,7 +206,7 @@ const MarketplaceOrder = ({
 
   const { data: swayBalance } = useSwayBalance();
 
-  const { createBuyOrder, createSellOrder, cancelBuyOrder, cancelSellOrder, fillBuyOrders, fillSellOrders, currentOrder = {} } = manager;
+  const { createBuyOrder, createSellOrder, cancelBuyOrder, cancelSellOrder, cancellationAuthorization, fillBuyOrders, fillSellOrders, currentOrder = {} } = manager;
   const { crew, crewCan } = useCrewContext();
   const { data: orders, refetch } = useOrderList(exchange?.id, resourceId);
 
@@ -461,7 +461,7 @@ const MarketplaceOrder = ({
       if (mode === 'buy') {
         return cancelBuyOrder({
           amount: quantityToUnits(quantity),
-          buyer: { id: crew?.id, label: crew?.label },
+          buyer: { id: orderCrew?.id, label: orderCrew?.label },
           price: limitPrice,
           product: resourceId,
           destination: { id: storage?.id, label: storage?.label },
@@ -472,7 +472,7 @@ const MarketplaceOrder = ({
       } else {
         return cancelSellOrder({
           amount: quantityToUnits(quantity),
-          seller: { id: crew?.id, label: crew?.label },
+          seller: { id: orderCrew?.id, label: orderCrew?.label },
           product: resourceId,
           price: limitPrice,
           origin: { id: storage?.id, label: storage?.label },
@@ -517,8 +517,8 @@ const MarketplaceOrder = ({
       }
     }
   }, [
-    cancelBuyOrder, cancelSellOrder, cancellationInitialCaller, cancellationMakerFee,
-    createBuyOrder, createSellOrder, crew?.id, crew?.label, feeTotal, fillBuyOrders, fillSellOrders,
+    cancelBuyOrder, cancelSellOrder, cancellationInitialCaller, cancellationMakerFee, orderCrew,
+    createBuyOrder, createSellOrder, feeTotal, fillBuyOrders, fillSellOrders,
     isCancellation, limitPrice, marketFills, mode, quantity, quantityToUnits, resourceId,
     storage, storageInventory, type
   ]);
@@ -865,7 +865,11 @@ const MarketplaceOrder = ({
                     <div>
                       <label>{mode === 'buy' ? 'Sway Escrow' : 'Escrow of Goods'} </label>
                       <span>
-                        {mode === 'buy'
+                        {isCancellation
+                          ? (mode === 'buy'
+                            ? 'The remaining escrow is refunded to the original buyer crew’s current delegated account.'
+                            : 'The unsold goods return to the original storage, under its current administrator.')
+                          : mode === 'buy'
                           ? `The specified buy total is deducted from your wallet and held in escrow until the order is filled or cancelled.`
                           : `The specified quantity of goods will be held at the marketplace until the order is filled or cancelled.`
                         }
@@ -896,7 +900,7 @@ const MarketplaceOrder = ({
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
         disabled={
-          (isCancellation && orderCrew?.id !== crew?.id) ||
+          (isCancellation && cancellationAuthorization(orderCrew, storage).status !== 'allowed') ||
           (!isCancellation && (
             !storageSelection || !quantity || !total
             || exceedsOtherSide || insufficientAssets || insufficientCapacity
@@ -906,7 +910,7 @@ const MarketplaceOrder = ({
         goLabel={goLabel}
         onGo={onSubmitOrder}
         stage={stage}
-        waitForCrewReady={type === 'limit'}
+        waitForCrewReady={!isCancellation && type === 'limit'}
         wide
         {...props} />
 

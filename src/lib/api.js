@@ -536,13 +536,13 @@ const api = {
     queryBuilder.filter(esb.termQuery('entity.id', exchangeId));
 
     // product
-    queryBuilder.filter(esb.termQuery('product', productId));
+    if (productId != null) queryBuilder.filter(esb.termQuery('product', productId));
 
     // status
     queryBuilder.filter(esb.termQuery('status', Order.STATUSES.OPEN));
 
     // valid
-    queryBuilder.filter(esb.rangeQuery('validTime').lte(Math.floor(Date.now() / 1000)));
+    if (productId != null) queryBuilder.filter(esb.rangeQuery('validTime').lte(Math.floor(Date.now() / 1000)));
 
     const q = esb.requestBodySearch();
     q.query(queryBuilder);

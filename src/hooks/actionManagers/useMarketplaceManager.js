@@ -3,6 +3,8 @@ import { Entity, Order } from '@influenceth/sdk';
 
 import ChainTransactionContext from '~/contexts/ChainTransactionContext';
 import useCrewContext from '~/hooks/useCrewContext';
+import useFailureReporter from '~/hooks/useFailureReporter';
+import { getOrderCancellationAuthorization } from '~/lib/orderCancellation';
 import useEntity from '../useEntity';
 import useHydratedCrew from '../useHydratedCrew';
 import api from '~/lib/api';
@@ -11,7 +13,8 @@ import { TOKEN, TOKEN_SCALE } from '~/lib/priceUtils';
 // TODO: product could probably be incorporated into props + payload
 const useMarketplaceManager = (buildingId) => {
   const { execute } = useContext(ChainTransactionContext);
-  const { crew, pendingTransactions } = useCrewContext();
+  const { crew, pendingTransactions, authorize, recheckAuthorization, recheckActingCrew } = useCrewContext();
+  const reportBlocked = useFailureReporter();
   const { data: exchange } = useEntity({ id: buildingId, label: Entity.IDS.BUILDING });
   const { data: exchangeController } = useHydratedCrew(exchange?.Control?.controller?.id);
 
@@ -93,7 +96,7 @@ const useMarketplaceManager = (buildingId) => {
         fillOrders.map((order) => ({
           isCancellation: !!isCancellation,
           depositCaller: isCancellation ? order.initialCaller : (order.initialCaller || crew?.Crew?.delegatedTo),
-          seller_account: crew?.Crew?.delegatedTo,
+          seller_account: isCancellation ? order.refundRecipient : crew?.Crew?.delegatedTo,
           exchange_owner_account: exchangeController?.Crew?.delegatedTo,
           makerFee: order.makerFee / Order.FEE_SCALE,
           payments: {
@@ -104,7 +107,7 @@ const useMarketplaceManager = (buildingId) => {
           origin: { id: origin?.id, label: origin?.label },
           origin_slot: originSlot,
           product: order.product,
-          amount: order.fillAmount,
+          amount: isCancellation ? 0 : order.fillAmount,
           buyer_crew: { id: order.crew?.id, label: order.crew?.label },
           price: Math.round(order.price * TOKEN_SCALE[TOKEN.SWAY]),
           storage: { id: order.storage?.id, label: order.storage?.label },
@@ -115,6 +118,7 @@ const useMarketplaceManager = (buildingId) => {
         {
           lotId: exchange?.Location?.location?.id,
           isCancellation,
+          ...(isCancellation ? { amount: fillOrders[0].fillAmount } : {}),
         },
       );
     },
@@ -156,8 +160,29 @@ const useMarketplaceManager = (buildingId) => {
     [exchangeController, execute, payload]
   );
 
+  const cancellationAuthorization = useCallback((orderCrew, storage) => getOrderCancellationAuthorization(
+    crew, orderCrew,
+    authorize('controls', [crew, storage], [crew, storage]),
+    authorize('controls', [crew, exchange], [crew, exchange])
+  ), [authorize, crew, exchange]);
+
+  const recheckCancellation = useCallback(async (orderCrew, storage) => {
+    const prerequisites = await recheckActingCrew({ requireReady: false });
+    if (prerequisites.status !== 'allowed') return prerequisites;
+    const [storageControl, exchangeControl] = await Promise.all([
+      recheckAuthorization('controls', [crew, storage], [crew, storage]),
+      recheckAuthorization('controls', [crew, exchange], [crew, exchange])
+    ]);
+    return getOrderCancellationAuthorization(crew, orderCrew, storageControl, exchangeControl);
+  }, [crew, exchange, recheckActingCrew, recheckAuthorization]);
+
   const cancelBuyOrder = useCallback(
-    ({ amount, buyer, price, product, destination, destinationSlot, initialCaller, makerFee }) => {
+    async ({ amount, buyer, price, product, destination, destinationSlot, initialCaller, makerFee }) => {
+      const decision = await recheckCancellation(buyer, destination);
+      if (decision.status !== 'allowed') return reportBlocked(decision);
+      const [buyerCrew] = await api.getEntities({ ids: [buyer.id], label: Entity.IDS.CREW, components: ['Crew'] });
+      const refundRecipient = buyerCrew?.Crew?.delegatedTo;
+      if (!refundRecipient) throw new Error('Unable to resolve the buyer refund account');
       return fillBuyOrders({
         isCancellation: true,
         origin: destination,
@@ -165,6 +190,7 @@ const useMarketplaceManager = (buildingId) => {
         fillOrders: [
           {
             initialCaller,
+            refundRecipient,
             makerFee,
             paymentsUnscaled: {
               toExchange: 0,
@@ -180,30 +206,35 @@ const useMarketplaceManager = (buildingId) => {
         ]
       });
     },
-    [fillBuyOrders]
+    [fillBuyOrders, recheckCancellation, reportBlocked]
   );
   const cancelSellOrder = useCallback(
-    ({ amount, seller, product, price, origin, originSlot }) => execute(
-      'CancelSellOrder',
-      {
-        seller_crew: { id: seller?.id, label: seller?.label },
-        product,
-        price: Math.round(price * TOKEN_SCALE[TOKEN.SWAY]),
-        storage: { id: origin?.id, label: origin?.label },
-        storage_slot: originSlot,
-        ...payload
-      },
-      {
-        amount,
-        lotId: exchange?.Location?.location?.id,
-      },
-    ),
-    [execute, payload]
+    async ({ amount, seller, product, price, origin, originSlot }) => {
+      const decision = await recheckCancellation(seller, origin);
+      if (decision.status !== 'allowed') return reportBlocked(decision);
+      return execute(
+        'CancelSellOrder',
+        {
+          seller_crew: { id: seller?.id, label: seller?.label },
+          product,
+          price: Math.round(price * TOKEN_SCALE[TOKEN.SWAY]),
+          storage: { id: origin?.id, label: origin?.label },
+          storage_slot: originSlot,
+          ...payload
+        },
+        {
+          amount,
+          lotId: exchange?.Location?.location?.id,
+        },
+      );
+    },
+    [execute, payload, exchange?.Location?.location?.id, recheckCancellation, reportBlocked]
   );
 
   return {
     createBuyOrder,
     createSellOrder,
+    cancellationAuthorization,
     cancelBuyOrder,
     cancelSellOrder,
     fillBuyOrders,

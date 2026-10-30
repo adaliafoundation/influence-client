@@ -294,6 +294,7 @@ const formatAsTx = (item) => {
           resourceId: item.vars.product,
           isCancellation: true,
           preselect: {
+            crew: item.vars.seller_crew,
             limitPrice: item.vars.price / 1e6,
             quantity: item.meta?.amount,
             storage: item.vars.storage,
@@ -374,8 +375,9 @@ const formatAsTx = (item) => {
             cancellationMakerFee: item.vars[0].makerFee * Order.FEE_SCALE,
             cancellationInitialCaller: item.vars[0].depositCaller,
             preselect: {
+              crew: item.vars[0].buyer_crew,
               limitPrice: item.vars[0].price / 1e6,
-              quantity: item.vars.reduce((acc, o) => acc + o.amount, 0),
+              quantity: item.meta.amount,
               storage: item.vars[0].origin,
               storageSlot: item.vars[0].origin_slot
             }
