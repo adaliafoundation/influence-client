@@ -739,7 +739,17 @@ export function ChainTransactionProvider({ children }) {
     }
   }, [upgradeInsecureSession]);
 
-  const ensureAccountDeployed = useCallback(async () => {
+  const acknowledgePaidFees = useCallback(async (promptType = 'TRANSITION') => {
+    if (useStore.getState().paidFeeAcknowledgements?.[accountAddress]) return;
+    if (!(await requestFeePermission(promptType))) {
+      const error = new Error('Paid network fees were not acknowledged.');
+      error.suppressTransactionFailure = true;
+      throw error;
+    }
+    dispatchPaidFeesAcknowledged(accountAddress);
+  }, [accountAddress, dispatchPaidFeesAcknowledged, requestFeePermission]);
+
+  const ensureAccountDeployed = useCallback(async ({ allowSponsorship } = {}) => {
     if (isDeployed) return { deployed: true, transaction: null };
     const account = walletAccountRef.current;
     if (!account) throw new Error('Account is disconnected');
@@ -748,14 +758,25 @@ export function ChainTransactionProvider({ children }) {
       error.userMessage = errorMessages.setupRequired;
       throw error;
     }
-    if (!appConfig.get('Starknet.paymasterProxy')) {
+    if (allowSponsorship === undefined) {
+      allowSponsorship = appConfig.get('Starknet.paymasterProxy')
+        ? (await api.getPaymasterEligibility()).deployment : false;
+    }
+    if (allowSponsorship && !appConfig.get('Starknet.paymasterProxy')) {
       const error = new Error('Privy sponsorship requires the Influence paymaster proxy.');
       error.userMessage = errorMessages.serviceUnavailable;
       throw error;
     }
     return deploymentManager.current({
-      chainId, address: accountAddress, account, provider, deploymentData: accountDeploymentData,
+      chainId, address: accountAddress, account, provider, deploymentData: accountDeploymentData, allowSponsorship,
       refreshSession: requireSessionUpgrade,
+      getStrkBalance: async () => {
+        const [low, high] = await provider.callContract({
+          contractAddress: TOKEN.STRK, entrypoint: 'balanceOf', calldata: [accountAddress]
+        });
+        return uint256.uint256ToBN({ low, high });
+      },
+      requestPaidDeployment: () => acknowledgePaidFees('PAID_SETUP'),
       assertCurrent: () => {
         const current = deploymentIdentity.current;
         if (!current.authenticated || current.accountAddress !== accountAddress || current.chainId !== chainId) {
@@ -764,7 +785,7 @@ export function ChainTransactionProvider({ children }) {
       }
     });
   }, [accountAddress, accountDeploymentData, chainId, isDeployed, provider, requireSessionUpgrade,
-    walletCapabilities.requiresSponsoredTransactions]);
+    acknowledgePaidFees, walletCapabilities.requiresSponsoredTransactions]);
 
   const requireExplicitAuthorization = useCallback(async (account, options = {}) => {
     if (!options.requireExplicitSignature || !walletCapabilities.usesClientRawSigning) return;
@@ -801,11 +822,16 @@ export function ChainTransactionProvider({ children }) {
   const processAccountTransaction = useCallback(async (calls, options = {}) => {
     const walletAccount = walletAccountRef.current;
     if (!walletAccount) throw new Error('Account is disconnected');
-    const allowSponsorship = options.allowSponsorship !== false;
-    // Sponsored gameplay deployment remains separate from user-paid transactions.
+    const checkSponsorship = options.allowSponsorship !== false
+      && options.usePaymaster !== false && walletCapabilities.requiresSponsoredTransactions;
+    const eligibility = checkSponsorship && appConfig.get('Starknet.paymasterProxy')
+      ? await api.getPaymasterEligibility() : null;
+    const allowSponsorship = options.allowSponsorship !== false
+      && (!walletCapabilities.requiresSponsoredTransactions || !!eligibility?.invoke);
+    // Standalone setup confirms deployment before gameplay begins.
     let accountIsDeployed = isDeployed;
-    if (allowSponsorship && options.usePaymaster !== false && walletCapabilities.requiresSponsoredTransactions && !accountIsDeployed) {
-      await ensureAccountDeployed();
+    if (checkSponsorship && !accountIsDeployed) {
+      await ensureAccountDeployed({ allowSponsorship: !!eligibility?.deployment });
       accountIsDeployed = true;
     }
     const transactionAccount = await getTransactionAccount(walletAccountRef.current, calls, options);
@@ -897,22 +923,21 @@ export function ChainTransactionProvider({ children }) {
       }
     }
 
-    if (allowSponsorship && sponsorshipUnavailableRef.current && !useStore.getState().paidFeeAcknowledgements?.[accountAddress]) {
-      if (!(await requestFeePermission('TRANSITION'))) {
-        const error = new Error('Paid network fees were not acknowledged.');
-        error.suppressTransactionFailure = true;
-        throw error;
-      }
-      dispatchPaidFeesAcknowledged(accountAddress);
-    }
+    if (checkSponsorship && (!allowSponsorship || sponsorshipUnavailableRef.current)) await acknowledgePaidFees();
 
-    feeOptions.usePaymaster = paymasterAvailable && (accountIsDeployed || !!deploymentData);
+    if (allowSponsorship && walletCapabilities.requiresSponsoredTransactions) {
+      const paymasterUrl = appConfig.get('Starknet.paymaster');
+      feeOptions.account = createUserPaidAccount({ account: transactionAccount, provider, paymasterUrl });
+      feeOptions.usePaymaster = options.usePaymaster !== false && !!paymasterUrl && accountIsDeployed;
+    } else {
+      feeOptions.usePaymaster = paymasterAvailable && (accountIsDeployed || !!deploymentData);
+    }
     return options.prepareFee ? preparePaidTransactionFee(feeOptions) : executePaidTransaction(feeOptions);
   }, [
     accountAddress,
     accountDeploymentData,
     dispatchFeeTokenEnabled,
-    dispatchPaidFeesAcknowledged,
+    acknowledgePaidFees,
     dispatchLauncherPage,
     gameplay,
     provider,

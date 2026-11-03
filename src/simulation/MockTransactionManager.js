@@ -47,13 +47,15 @@ const MockTransactionManager = () => {
           findTally: 4
         });
 
-        const lotDetails = { leaseTerm: tx.vars.term, leaseRate: Math.floor(tx.vars.termPrice / tx.vars.term) };
+        // Simulation balances are numbers; agreement payments arrive as bigint microsway.
+        const termPrice = Number(tx.vars.termPrice);
+        const lotDetails = { leaseTerm: tx.vars.term, leaseRate: Math.floor(termPrice * 3600 / tx.vars.term) };
         const lotsLeased = { [tx.vars.target.id]: { ...lotDetails } };
         closest.forEach((lotIndex) => {
           lotsLeased[Lot.toId(asteroidId, lotIndex)] = { ...lotDetails };
         });
         dispatchSimulationState('lots', lotsLeased);
-        dispatchSimulationState('sway', SIMULATION_CONFIG.startingSway - 5 * tx.vars.termPrice);
+        dispatchSimulationState('sway', SIMULATION_CONFIG.startingSway - 5 * termPrice);
 
         // mimic event
         events.push({

@@ -1,3 +1,6 @@
+import { stark } from 'starknet';
+import { isSponsorshipUnavailable } from './paymaster';
+
 import { cleanseTxHash } from '~/lib/utils';
 
 const isContractNotFound = error => Number(error?.code) === 20 || /Contract not found/i.test(error?.message || '');
@@ -7,7 +10,10 @@ const isReverted = receipt => receipt?.execution_status === 'REVERTED';
 export const createAccountDeployment = () => {
   const deployments = new Map();
 
-  return ({ chainId, address, account, provider, deploymentData, refreshSession, assertCurrent }) => {
+  return ({
+    chainId, address, account, provider, deploymentData, refreshSession, assertCurrent,
+    getStrkBalance, requestPaidDeployment, allowSponsorship = true
+  }) => {
     const key = `${chainId}:${BigInt(address).toString(16)}`;
     let deployment = deployments.get(key);
     if (!deployment) {
@@ -31,16 +37,42 @@ export const createAccountDeployment = () => {
         if (deployment.unknownSubmission) throw deployment.unknownSubmission;
         if (!deployment.transaction) {
           if (!deploymentData) throw new Error('Missing account deployment data.');
-          try {
-            deployment.transaction = await account.executePaymasterTransaction([], {
-              feeMode: { mode: 'sponsored' },
-              deploymentData
-            });
-          } catch (error) {
-            // A lost execution response can hide a successful submission. Only recheck chain state.
-            if (error?.paymasterMethod === 'paymaster_executeTransaction'
-              && (!error.status || error.status >= 500)) deployment.unknownSubmission = error;
-            throw error;
+          let deployWithStrk = !allowSponsorship;
+          if (allowSponsorship) {
+            try {
+              deployment.transaction = await account.executePaymasterTransaction([], {
+                feeMode: { mode: 'sponsored' }, deploymentData
+              });
+            } catch (error) {
+              // A lost execution response can hide a successful submission. Only recheck chain state.
+              if (error?.paymasterMethod === 'paymaster_executeTransaction'
+                && (!error.status || error.status >= 500)) deployment.unknownSubmission = error;
+              if (deployment.unknownSubmission || !isSponsorshipUnavailable(error)) throw error;
+              deployWithStrk = true;
+            }
+          }
+          if (deployWithStrk) {
+            const payload = {
+              classHash: deploymentData.class_hash,
+              constructorCalldata: deploymentData.calldata,
+              addressSalt: deploymentData.salt,
+              contractAddress: address
+            };
+            const { resourceBounds } = await account.estimateAccountDeployFee(payload);
+            const maxFee = stark.resourceBoundsToEstimateFeeResponse(resourceBounds).overall_fee;
+            if (await getStrkBalance() < maxFee) {
+              const fundingError = new Error('Add STRK to your Influence Account to cover account setup and network fees, then retry.');
+              fundingError.userMessage = fundingError.message;
+              throw fundingError;
+            }
+            await requestPaidDeployment();
+            assertCurrent();
+            try {
+              deployment.transaction = await account.deployAccount(payload, { resourceBounds });
+            } catch (submissionError) {
+              deployment.unknownSubmission = submissionError;
+              throw submissionError;
+            }
           }
           if (!deployment.transaction?.transaction_hash && !deployment.transaction?.transactionHash) {
             deployment.unknownSubmission = new Error('Account deployment returned no transaction hash.');
