@@ -17,7 +17,7 @@ jest.mock('@influenceth/sdk', () => ({
   Address: { areEqual: (a, b) => a === b, toStandard: value => value }, Entity: { IDS: {} },
   System: { getFormattedCall: jest.fn(), Systems: { ChangeName: {}, PurchaseAdalian: {} }, getApproveErc20Call: (amount, token, spender) => ({ contractAddress: token, entrypoint: 'approve', calldata: [spender, String(amount), '0'] }), getRunSystemCall: () => ({ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }) }
 }));
-jest.mock('starknet', () => ({ num: { toHex: value => value }, uint256: { uint256ToBN: ({ low }) => BigInt(low) } }));
+jest.mock('starknet', () => ({ stark: { resourceBoundsToEstimateFeeResponse: () => ({ overall_fee: 24n }) }, num: { toHex: value => value }, uint256: { uint256ToBN: ({ low }) => BigInt(low) } }));
 jest.mock('@avnu/avnu-sdk', () => ({}));
 jest.mock('@tanstack/react-query', () => {
   const client = { invalidateQueries: jest.fn() };
@@ -40,7 +40,7 @@ jest.mock('~/hooks/useSwapQuote', () => ({ useUsdcPerEth: () => ({ data: 1 }) })
 jest.mock('~/hooks/useWalletCrews', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useWalletPurchasableBalances', () => jest.fn(), { virtual: true });
 jest.mock('~/hooks/useWalletTokenBalance', () => ({ useSwayBalance: () => ({ data: 0n }), useUSDCBalance: () => ({ data: 0n }) }), { virtual: true });
-jest.mock('~/lib/api', () => ({ getConstants: jest.fn(), getSwapQuote: jest.fn() }), { virtual: true });
+jest.mock('~/lib/api', () => ({ getConstants: jest.fn(), getSwapQuote: jest.fn(), getPaymasterEligibility: jest.fn() }), { virtual: true });
 jest.mock('~/lib/transactionFees', () => ({ executePaidTransaction: jest.fn(), preparePaidTransactionFee: jest.fn(), executeReviewedTransaction: jest.fn() }), { virtual: true });
 jest.mock('~/lib/escrow', () => ({}), { virtual: true });
 jest.mock('~/lib/paymaster', () => ({ createUserPaidAccount: jest.fn(), isPaymasterUnavailable: () => false, isSponsorshipUnavailable: error => error?.code === 'SPONSORSHIP_NOT_ELIGIBLE' }), { virtual: true });
@@ -63,6 +63,7 @@ beforeEach(() => {
   useWalletPurchasableBalances.mockReturnValue({ data: {} });
   useWalletCrews.mockReturnValue({ data: [] });
   appConfig.get.mockReset();
+  api.getPaymasterEligibility.mockResolvedValue({ deployment: true, invoke: true });
   session = {
     accountAddress: '0x123', authenticated: true, walletReadyForTransactions: true, walletCapabilities: {}, walletId: 'argentX',
     login: jest.fn().mockResolvedValue(),
@@ -293,6 +294,28 @@ describe('automatic sponsored account deployment', () => {
     expect(executePaidTransaction).not.toHaveBeenCalled();
   });
 
+  test('a funded account without a starter pack can deploy and continue gameplay', async () => {
+    api.getPaymasterEligibility.mockResolvedValue({ deployment: false, invoke: false });
+    session.walletAccount.executePaymasterTransaction.mockReset();
+    session.walletAccount.estimateAccountDeployFee = jest.fn().mockResolvedValue({ resourceBounds: {} });
+    session.walletAccount.deployAccount = jest.fn().mockResolvedValue({ transaction_hash: '0xpaidDeploy' });
+    session.provider.callContract = jest.fn().mockResolvedValue(['100', '0']);
+    createUserPaidAccount.mockReturnValue(account);
+    render(tree());
+    let pending;
+    await act(async () => { pending = chain.executeCalls(calls); });
+    const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
+    expect(prompt.type).toBe('PAID_SETUP');
+    expect(session.walletAccount.deployAccount).not.toHaveBeenCalled();
+    await act(async () => { prompt.onConfirm(); });
+    await pending;
+    expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+    expect(session.walletAccount.deployAccount).toHaveBeenCalledTimes(1);
+    expect(session.provider.waitForTransaction).toHaveBeenCalledWith('0xpaidDeploy', { retryInterval: 5000 });
+    expect(session.upgradeInsecureSession).toHaveBeenCalled();
+    expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account, usePaymaster: false }));
+  });
+
   test('checkout and gameplay share an in-flight deployment', async () => {
     let confirm, notifyWaiting;
     const waiting = new Promise(resolve => { notifyWaiting = resolve; });
@@ -313,10 +336,10 @@ describe('automatic sponsored account deployment', () => {
 
   test('deployment failure stops gameplay and permits retry', async () => {
     session.walletAccount.executePaymasterTransaction.mockReset()
-      .mockRejectedValueOnce(new Error('Sponsorship unavailable'))
+      .mockRejectedValueOnce(new Error('RPC unavailable'))
       .mockResolvedValue({ transaction_hash: '0xretry' });
     render(tree());
-    await act(async () => { await expect(chain.executeCalls(calls)).rejects.toThrow('Sponsorship unavailable'); });
+    await act(async () => { await expect(chain.executeCalls(calls)).rejects.toThrow('RPC unavailable'); });
     expect(executePaidTransaction).not.toHaveBeenCalled();
     await act(async () => { await chain.executeCalls(calls); });
     expect(session.walletAccount.executePaymasterTransaction.mock.calls.map(([submitted]) => submitted)).toEqual([[], [], calls]);
@@ -385,12 +408,29 @@ test('recognizes existing starter-pack crews when applying account defaults', ()
   expect(state.dispatchStarterPackFeeDefaults).toHaveBeenCalledWith('0x123');
 });
 
+test('an ineligible deployed account goes directly to user-paid fees', async () => {
+  appConfig.get.mockImplementation(key => key.includes('paymaster') ? 'https://paymaster.example' : undefined);
+  api.getPaymasterEligibility.mockResolvedValue({ deployment: false, invoke: false });
+  session.walletCapabilities = { requiresSponsoredTransactions: true };
+  session.isDeployed = true;
+  session.walletAccount = { ...account, executePaymasterTransaction: jest.fn() };
+  session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0) };
+  createUserPaidAccount.mockReturnValue(account);
+  state.paidFeeAcknowledgements = { '0x123': true };
+  render(tree());
+  await act(async () => { await chain.executeCalls([{ contractAddress: '0x1', entrypoint: 'run_system', calldata: [] }]); });
+  expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
+  expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({ account, usePaymaster: true }));
+});
+
 test.each([true, false])('shows the sponsorship expiry notice until acknowledged (accept: %s)', async accepted => {
-  appConfig.get.mockImplementation(key => key === 'Starknet.paymasterProxy' ? 'https://paymaster.example' : undefined);
+  appConfig.get.mockImplementation(key => key.includes('paymaster') ? 'https://paymaster.example' : undefined);
   session.walletAccount = {
     ...account,
     executePaymasterTransaction: jest.fn().mockRejectedValue(Object.assign(new Error('Sponsorship expired'), { code: 'SPONSORSHIP_NOT_ELIGIBLE' }))
   };
+  const paidAccount = { address: '0x123' };
+  createUserPaidAccount.mockReturnValue(paidAccount);
   session.walletCapabilities = { requiresSponsoredTransactions: true };
   session.isDeployed = true;
   session.provider = { getNonceForAddress: jest.fn().mockResolvedValue(0) };
@@ -421,7 +461,11 @@ test.each([true, false])('shows the sponsorship expiry notice until acknowledged
   await act(async () => { await chain.executeCalls(calls); });
   expect(TransactionFeePrompt).not.toHaveBeenCalled();
   expect(session.walletAccount.executePaymasterTransaction).toHaveBeenCalledTimes(1);
+  expect(createUserPaidAccount).toHaveBeenCalledWith({
+    account: session.walletAccount, provider: session.provider, paymasterUrl: 'https://paymaster.example'
+  });
   expect(executePaidTransaction).toHaveBeenCalledWith(expect.objectContaining({
+    account: paidAccount,
     usePaymaster: true,
     feeTokens: expect.arrayContaining([
       expect.objectContaining({ name: 'USDC', enabled: true }),

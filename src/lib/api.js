@@ -787,6 +787,11 @@ const api = {
     return getEntities({ match: { 'Name.name': name }, label, components: [] });
   },
 
+  getPaymasterEligibility: async () => {
+    const response = await instance.get(`/${apiVersion}/paymaster/eligibility`);
+    return response.data;
+  },
+
   getOwnedCrews: async (account) => {
     return getEntities({ match: { 'Crew.delegatedTo': account }, label: Entity.IDS.CREW });
   },
