@@ -1,4 +1,3 @@
-import { features } from '~/appConfig/features';
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
@@ -14,6 +13,7 @@ import SceneBanner from './hud/SceneBanner';
 import WelcomeSimulation from './hud/WelcomeSimulation';
 import useStore from '~/hooks/useStore';
 import useSession from '~/hooks/useSession';
+import useRecruitmentDestination from '~/hooks/useRecruitmentDestination';
 import InfluenceLogo from '~/components/InfluenceLogo';
 import { headerHeight } from '~/game/uiConstants';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
@@ -92,7 +92,8 @@ export const Rule = styled.div`
 
 const SimulationRedirector = ({ simulationEnabled }) => {
   const history = useHistory();
-  const { accountAddress, walletCapabilities } = useSession(false);
+  const { accountAddress } = useSession(false);
+  const recruitmentDestination = useRecruitmentDestination();
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
   const simulationActions = useStore((s) => s.simulationActions);
 
@@ -106,15 +107,15 @@ const SimulationRedirector = ({ simulationEnabled }) => {
   }, [simulationEnabled, simulationActions]);
 
   useEffect(() => {
-    if (readyToRedirect && !!accountAddress) {
-      if (features.stripe && walletCapabilities?.preferredForStarterPacks) {
+    if (readyToRedirect && !!accountAddress && recruitmentDestination) {
+      if (recruitmentDestination === 'packs') {
         dispatchLauncherPage('store', 'packs', { menuCollapsed: true });
       } else {
         history.push('/recruit/0');
       }
       setReadyToRedirect(false);
     }
-  }, [accountAddress, dispatchLauncherPage, history, readyToRedirect, walletCapabilities?.preferredForStarterPacks])
+  }, [accountAddress, dispatchLauncherPage, recruitmentDestination, history, readyToRedirect])
 
   return null;
 };

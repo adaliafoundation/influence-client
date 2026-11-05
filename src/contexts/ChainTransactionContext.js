@@ -830,7 +830,8 @@ export function ChainTransactionProvider({ children }) {
       && (!walletCapabilities.requiresSponsoredTransactions || !!eligibility?.invoke);
     // Standalone setup confirms deployment before gameplay begins.
     let accountIsDeployed = isDeployed;
-    if (checkSponsorship && !accountIsDeployed) {
+    if (walletCapabilities.requiresSponsoredTransactions && !accountIsDeployed
+      && (checkSponsorship || options.usePaymaster === false)) {
       await ensureAccountDeployed({ allowSponsorship: !!eligibility?.deployment });
       accountIsDeployed = true;
     }

@@ -1,5 +1,6 @@
 import { stark } from 'starknet';
 import { isSponsorshipUnavailable } from './paymaster';
+import { errorMessages } from './errorMessages';
 
 import { cleanseTxHash } from '~/lib/utils';
 
@@ -61,7 +62,7 @@ export const createAccountDeployment = () => {
             const { resourceBounds } = await account.estimateAccountDeployFee(payload);
             const maxFee = stark.resourceBoundsToEstimateFeeResponse(resourceBounds).overall_fee;
             if (await getStrkBalance() < maxFee) {
-              const fundingError = new Error('Add STRK to your Influence Account to cover account setup and network fees, then retry.');
+              const fundingError = new Error(errorMessages.accountSetupFunding);
               fundingError.userMessage = fundingError.message;
               throw fundingError;
             }

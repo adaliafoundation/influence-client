@@ -6,6 +6,7 @@ const { TextDecoder, TextEncoder } = require('util');
 global.TextDecoder = TextDecoder;
 global.TextEncoder = TextEncoder;
 
+jest.mock('~/contexts/ChainTransactionContext', () => ({ __esModule: true, default: require('react').createContext({}) }), { virtual: true });
 jest.mock('~/hooks/useSession', () => ({ __esModule: true, default: jest.fn() }), { virtual: true });
 jest.mock('~/hooks/useSimulationEnabled', () => ({ __esModule: true, default: () => false }), { virtual: true });
 jest.mock('~/game/launcher/store/components/StripeEmbeddedCheckout', () => ({ stripePromise: {} }), { virtual: true });
@@ -25,7 +26,11 @@ const paidPurchase = (id, status = 'paid_pending_customization') => ({
   id, status, purchaser: '0x123', recipient: '0x123', stripeCheckoutSessionId: `cs_${id}`
 });
 let queryClient;
-const wrapper = ({ children }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+const ChainTransactionContext = require('~/contexts/ChainTransactionContext').default;
+const deployAccount = jest.fn();
+const wrapper = ({ children }) => <QueryClientProvider client={queryClient}>
+  <ChainTransactionContext.Provider value={{ deployAccount }}>{children}</ChainTransactionContext.Provider>
+</QueryClientProvider>;
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -168,4 +173,51 @@ test('automatic submission failure is exposed and requires explicit retry', asyn
   expect(api.submitCrewmatePurchaseCustomization).toHaveBeenLastCalledWith({
     purchaseId: 'one', grantRequest: { name: 'Reviewed Ada' }
   });
+});
+
+
+test('deploys a Privy account before granting a recovered paid purchase', async () => {
+  useSession.mockReturnValue({ accountAddress: '0x123', authenticated: true, walletCapabilities: { requiresSponsoredTransactions: true } });
+  api.getCrewmatePurchaseCheckout.mockResolvedValue({ purchase: paidPurchase('one') });
+  let finishSetup;
+  deployAccount.mockImplementation(() => new Promise(resolve => { finishSetup = resolve; }));
+  api.submitCrewmatePurchaseCustomization.mockResolvedValue({ purchase: paidPurchase('one', 'grant_submitted') });
+  const { result } = renderHook(() => useCrewmatePurchaseCheckout('cs_one'), { wrapper });
+  await waitFor(() => expect(result.current.data?.purchase.id).toBe('one'));
+  let submission;
+  act(() => { submission = result.current.submitCustomization({ name: 'Ada' }); });
+  expect(deployAccount).toHaveBeenCalledTimes(1);
+  expect(api.submitCrewmatePurchaseCustomization).not.toHaveBeenCalled();
+  await act(async () => { finishSetup({ deployed: true }); await submission; });
+  expect(api.submitCrewmatePurchaseCustomization).toHaveBeenCalledTimes(1);
+});
+
+test('deployment failure preserves a paid purchase for retry', async () => {
+  useSession.mockReturnValue({ accountAddress: '0x123', authenticated: true, walletCapabilities: { requiresSponsoredTransactions: true } });
+  api.getCrewmatePurchaseCheckout.mockResolvedValue({ purchase: paidPurchase('one') });
+  deployAccount.mockRejectedValue(new Error('Add STRK'));
+  const { result } = renderHook(() => useCrewmatePurchaseCheckout('cs_one'), { wrapper });
+  await waitFor(() => expect(result.current.data?.purchase.id).toBe('one'));
+  await act(async () => { await expect(result.current.submitCustomization({ name: 'Ada' })).rejects.toThrow('Add STRK'); });
+  expect(api.submitCrewmatePurchaseCustomization).not.toHaveBeenCalled();
+  expect(result.current.data.purchase.status).toBe('paid_pending_customization');
+});
+
+
+test('does not grant to a different account after waiting for deployment', async () => {
+  useSession.mockReturnValue({ accountAddress: '0x123', authenticated: true, walletCapabilities: { requiresSponsoredTransactions: true } });
+  api.getCrewmatePurchaseCheckout.mockResolvedValue({ purchase: paidPurchase('one') });
+  let finishSetup;
+  deployAccount.mockImplementation(() => new Promise(resolve => { finishSetup = resolve; }));
+  const { result, rerender } = renderHook(() => useCrewmatePurchaseCheckout('cs_one'), { wrapper });
+  await waitFor(() => expect(result.current.data?.purchase.id).toBe('one'));
+  let submission;
+  act(() => { submission = result.current.submitCustomization({ name: 'Ada' }); });
+  useSession.mockReturnValue({ accountAddress: '0x456', authenticated: true, walletCapabilities: { requiresSponsoredTransactions: true } });
+  rerender();
+  await act(async () => {
+    finishSetup({ deployed: true });
+    await expect(submission).rejects.toThrow('Account or purchase changed');
+  });
+  expect(api.submitCrewmatePurchaseCustomization).not.toHaveBeenCalled();
 });

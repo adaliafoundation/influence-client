@@ -1,4 +1,3 @@
-import { features } from '~/appConfig/features';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
@@ -9,6 +8,7 @@ import CrewLocationCompactLabel from '~/components/CrewLocationCompactLabel';
 import LiveFoodStatus from '~/components/LiveFoodStatus';
 import { FastForwardIcon, PlusIcon } from '~/components/Icons';
 import useSession from '~/hooks/useSession';
+import useRecruitmentDestination from '~/hooks/useRecruitmentDestination';
 import useCrewContext from '~/hooks/useCrewContext';
 import formatters from '~/lib/formatters';
 import theme, { hexToRGB } from '~/theme';
@@ -187,7 +187,8 @@ const ButtonWrapper = styled.div`
 `;
 
 const AvatarMenu = () => {
-  const { authenticated, walletCapabilities } = useSession();
+  const { authenticated } = useSession();
+  const recruitmentDestination = useRecruitmentDestination();
   const { captain, crew, loading: crewIsLoading } = useCrewContext();
   const history = useHistory();
   const setCoachmarkRef = useCoachmarkRefSetter();
@@ -228,13 +229,13 @@ const AvatarMenu = () => {
       return history.push(`/crewmate/${crewmateId}`);
     }
 
-    if (!crewmateId && !crew?._crewmates?.length && features.stripe && walletCapabilities?.preferredForStarterPacks) {
+    if (!crewmateId && !crew?._crewmates?.length && recruitmentDestination === 'packs') {
       dispatchLauncherPage('store', 'packs', { menuCollapsed: true });
       return;
     }
 
     return history.push(!crewmateId && !crew?._crewmates?.length ? '/recruit/0' : '/crew');
-  }, [crew?._crewmates?.length, dispatchLauncherPage, history, simulation, simulationActions, walletCapabilities?.preferredForStarterPacks]);
+  }, [crew?._crewmates?.length, recruitmentDestination, dispatchLauncherPage, history, simulation, simulationActions]);
 
   useEffect(() => {
     const { canFastForward, crewReadyAt, taskReadyAt } = simulation || {};
