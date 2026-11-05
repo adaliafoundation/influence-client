@@ -12,6 +12,7 @@ const TransactionFeePrompt = ({ accountAddress, onConfirm, onReject, type, busy 
 
   return (
     <GenericDialog
+      blocking
       role="dialog"
       aria-modal="true"
       aria-label={prompt.title}

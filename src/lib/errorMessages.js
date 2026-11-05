@@ -37,6 +37,7 @@ export const errorMessages = {
   missionUnavailable: 'Mission progress unavailable. Please try again.',
   loginFailed: 'Login unsuccessful. Please reconnect and try again.',
   serviceUnavailable: 'This service is temporarily unavailable. Please try again later.',
+  accountSetupFunding: 'Add STRK to your Influence Account to cover account setup and network fees, then retry.',
   setupRequired: 'Account setup is incomplete. Please reconnect to finish setting up.',
   fundingUnavailable: 'Adding funds is temporarily unavailable. Please try another option.',
   checkoutFailed: 'Purchase was not completed. Please try again.',

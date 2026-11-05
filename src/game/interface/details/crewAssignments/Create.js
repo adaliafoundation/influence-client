@@ -1165,7 +1165,7 @@ export const CrewmateDesigner = ({
 const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, crewmateId, locationId, pendingCrewmate }) => {
   const history = useHistory();
   const queryClient = useQueryClient();
-  const { accountAddress, authenticated, login } = useSession();
+  const { accountAddress, authenticated, login, walletCapabilities } = useSession();
 
   const simulationEnabled = useSimulationEnabled();
   const dispatchSimulationState = useStore((s) => s.dispatchSimulationState);
@@ -1175,7 +1175,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
   const isNameValid = useNameAvailability({ id: crewmateId, label: Entity.IDS.CREWMATE });
   const { purchaseAndOrInitializeCrewmate } = useCrewManager();
   const { crew, crewmateMap, adalianRecruits, arvadianRecruits } = useCrewContext();
-  const { promptingTransaction } = useContext(ChainTransactionContext);
+  const { deployAccount, promptingTransaction } = useContext(ChainTransactionContext);
   const { data: priceConstants } = usePriceConstants();
   const priceHelper = usePriceHelper();
   const { data: usdcBalance = 0n } = useUSDCBalance();
@@ -1705,6 +1705,7 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
 
     setStripeSubmitting(true);
     try {
+      if (walletCapabilities?.requiresSponsoredTransactions) await deployAccount();
       const grantRequest = buildCrewmatePurchaseGrantRequestFromCrewmate(crewmate);
       const response = await api.createCrewmatePurchaseCheckout({
         productId: crewmatePurchaseProduct.productId,
@@ -1732,6 +1733,8 @@ const CrewAssignmentCreate = ({ backLocation, bookSession, coverImage, crewId, c
     createAlert,
     crewmate,
     crewmatePurchaseProduct,
+    deployAccount,
+    walletCapabilities?.requiresSponsoredTransactions,
     login
   ]);
 

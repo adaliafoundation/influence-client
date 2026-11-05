@@ -102,3 +102,12 @@ test('handles a circular wallet error cause without reporting a timeout', () => 
   error.cause = error;
   expect(classifyFailure(error)).toBe('actionFailed');
 });
+
+
+test('shows the actionable STRK setup warning', () => {
+  const notify = jest.fn();
+  reportFailure(notify, Object.assign(new Error(errorMessages.accountSetupFunding), {
+    userMessage: errorMessages.accountSetupFunding
+  }));
+  expect(notify.mock.calls[0][0].data.content).toBe(errorMessages.accountSetupFunding);
+});

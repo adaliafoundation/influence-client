@@ -294,7 +294,7 @@ describe('automatic sponsored account deployment', () => {
     expect(executePaidTransaction).not.toHaveBeenCalled();
   });
 
-  test('a funded account without a starter pack can deploy and continue gameplay', async () => {
+  test.each([{}, { usePaymaster: false }])('a funded account deploys before user-paid execution (%j)', async options => {
     api.getPaymasterEligibility.mockResolvedValue({ deployment: false, invoke: false });
     session.walletAccount.executePaymasterTransaction.mockReset();
     session.walletAccount.estimateAccountDeployFee = jest.fn().mockResolvedValue({ resourceBounds: {} });
@@ -303,7 +303,7 @@ describe('automatic sponsored account deployment', () => {
     createUserPaidAccount.mockReturnValue(account);
     render(tree());
     let pending;
-    await act(async () => { pending = chain.executeCalls(calls); });
+    await act(async () => { pending = chain.executeCalls(calls, options); });
     const prompt = TransactionFeePrompt.mock.calls.at(-1)[0];
     expect(prompt.type).toBe('PAID_SETUP');
     expect(session.walletAccount.deployAccount).not.toHaveBeenCalled();
@@ -354,6 +354,8 @@ describe('automatic sponsored account deployment', () => {
   });
 
   test('respects an explicit paymaster opt-out', async () => {
+    session.isDeployed = true;
+    session.provider.getNonceForAddress = jest.fn().mockResolvedValue(1);
     render(tree());
     await act(async () => { await chain.executeCalls(calls, { usePaymaster: false }); });
     expect(session.walletAccount.executePaymasterTransaction).not.toHaveBeenCalled();
