@@ -1,3 +1,4 @@
+import { useProspecting } from '../../prospecting/store';
 import { useEffect, useMemo, useRef } from 'react';
 import {
   // AxesHelper,
@@ -190,6 +191,7 @@ const Telemetry = ({
   spectralType
 }) => {
   const { controls } = useThree();
+  const prospecting = useProspecting((s) => s.active);
   const getTime = useGetTime();
 
   const group = useRef();
@@ -544,6 +546,9 @@ const Telemetry = ({
 
   const lastRotation = useRef();
   useFrame(() => {
+    if (rotationalAxis.current) rotationalAxis.current.visible = !prospecting;
+    if (rotationalMarkersGroup.current) rotationalMarkersGroup.current.visible = !prospecting;
+    if (trajectory.current) trajectory.current.visible = !prospecting;
     const position = getPosition();
     const rotation = getRotation();
     if (position) {

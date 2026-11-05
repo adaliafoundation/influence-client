@@ -12,6 +12,7 @@ import {
   ChatIcon,
   CloseIcon,
   CompositionIcon,
+  CoreSampleIcon,
   DetailIcon,
   DockedShipsIcon,
   FavoriteIcon,
@@ -38,6 +39,8 @@ import useSession from '~/hooks/useSession';
 import useShip from '~/hooks/useShip';
 import useStore from '~/hooks/useStore';
 import hudMenus from './hudMenus';
+import ProspectingHUD from '../../prospecting/ProspectingHUD';
+import { prospectingEnabled } from '../../prospecting/store';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
@@ -474,6 +477,14 @@ const HudMenu = () => {
           Component: hudMenus.Resources,
           noDetail: true,
           isVisible: scope === 'asteroid' || scope === 'lot'
+        },
+        {
+          key: 'LOT_PROSPECTING',
+          label: 'Prospecting',
+          icon: <CoreSampleIcon />,
+          Component: ProspectingHUD,
+          noDetail: true,
+          isVisible: prospectingEnabled() && scope === 'lot'
         },
         {
           key: 'LOT_INVENTORY',

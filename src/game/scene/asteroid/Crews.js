@@ -113,7 +113,7 @@ const applyCrewMarkerTexture = async (crewMarker, crewmate, textureLoader, shoul
   material.needsUpdate = true;
 };
 
-const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius }) => {
+const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius, hidden = false }) => {
   const blockTime = useBlockTime();
   const getActivityConfig = useGetActivityConfig();
   const queryClient = useQueryClient();
@@ -555,7 +555,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius 
   }, [accountAddress]);
 
   useEffect(() => {
-    if (hovered || selected) {
+    if (!hidden && (hovered || selected)) {
       const onMouseEvent = (e) => {
         if (e.type === 'pointerdown') {
           clickStatus.current = new Vector2(e.clientX, e.clientY);
@@ -579,7 +579,7 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius 
         gl.domElement.removeEventListener('pointerup', onMouseEvent, true);
       };
     }
-  }, [cardHovered, hovered, selected]);
+  }, [cardHovered, hovered, selected, hidden]);
 
   const shouldBeActiveCrewHopperIndex = useMemo(() =>
     Object.keys(ongoingTravel).filter((c) => !ongoingTravel[c].hideHopper).findIndex((c) => Number(c) === crew?.id),
@@ -599,6 +599,8 @@ const Crews = ({ attachTo: overrideAttachTo, asteroidId, getLotPosition, radius 
   //   console.log(`over ${timing.current.tally} iterations: ${(timing.current.total / timing.current.tally).toFixed(3)}ms`);
   // }, 1000);
   useFrame((state) => {
+    if (main.current) main.current.visible = !hidden;
+    if (hidden) return;
     if (!Object.keys(ongoingTravel).length && !activeCrewStationPosition) return;
     if (!hoppersMesh.current) return;
 

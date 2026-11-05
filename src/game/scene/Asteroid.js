@@ -654,7 +654,7 @@ const AsteroidComponent = () => {
     if (!config?.radius) return;
     applyingZoomLimits.current = true;
     setTimeout(() => {
-      if (automatingCamera.current) {
+      if (automatingCamera.current || controls.prospectingAnchor) {
         applyingZoomLimits.current = false;
         return;
       }
@@ -1020,7 +1020,7 @@ const AsteroidComponent = () => {
         // lock to surface if within "lock" radius OR lot is selected
         // TODO: consider automatically deselecting lot if zoom out enough
         lockToSurface.current = (controls.object.position.length() < 1.1 * config.radius) || selectedLot;
-        if (lockToSurface.current && !automatingCamera.current) {
+        if (lockToSurface.current && !automatingCamera.current && !controls.prospectingAnchor) {
           controls.object.up.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.position.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.updateProjectionMatrix();
@@ -1109,7 +1109,7 @@ const AsteroidComponent = () => {
     // control dynamic zoom limit (zoom out if too low... else, just update boundary)
     if (frameTimeLeft(frameStart, chunkSwapThisCycle.current) <= 0) return;
     if (controls && Object.values(geometry.current?.chunks).length) {
-      if (automatingCamera.current) {
+      if (automatingCamera.current || controls.prospectingAnchor) {
         applyingZoomLimits.current = false;
       } else if (applyingZoomLimits.current) {
         if (applyingZoomLimits.current !== true) {

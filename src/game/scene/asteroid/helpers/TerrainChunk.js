@@ -66,6 +66,17 @@ class TerrainChunk {
 
     // initialize mesh
     this._plane = new Mesh(this._geometry, this._material);
+    this._plane.userData.isAsteroidTerrain = true;
+    this._plane.userData.terrainResolution = resolution;
+    this._plane.userData.createSurfaceGeometry = () => {
+      const geometry = this._geometry.clone();
+      applyDisplacementToGeometry(geometry, this._resolution, this._config.radius, this._stretch, this._material);
+      // Skirts hide LOD seams; they are not part of the ground surface.
+      geometry.setDrawRange(0, this._resolution * this._resolution * 6);
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+      return geometry;
+    };
 
     // add customDepthMaterial
     if (shadowsEnabled) {
