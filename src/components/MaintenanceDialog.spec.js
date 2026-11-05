@@ -12,11 +12,6 @@ jest.mock('~/components/Loader', () => () => null, { virtual: true });
 jest.mock('~/components/NavIcon', () => () => null, { virtual: true });
 jest.mock('~/lib/utils', () => ({ nativeBool: Boolean }), { virtual: true });
 
-beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = jest.fn(function () { this.setAttribute('open', ''); });
-  HTMLDialogElement.prototype.close = jest.fn(function () { this.removeAttribute('open'); });
-});
-
 test('shows a non-dismissible maintenance dialog and refreshes queries on recovery', () => {
   const listeners = new Set();
   subscribeMaintenance.mockImplementation(listener => {
