@@ -1041,10 +1041,22 @@ const useStore = create(
       version: 11,
       partialize: selectPersistedState,
       // Filter on read too: older saves include navigation and other transient state.
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...selectPersistedState(persistedState)
-      }),
+      merge: (persistedState, currentState) => {
+        const { assetSearch, ...persisted } = selectPersistedState(persistedState);
+        return {
+          ...currentState,
+          ...persisted,
+          // assetSearch persists only highlight/sort per asset type; keep defaults for the rest.
+          ...(assetSearch ? {
+            assetSearch: {
+              ...currentState.assetSearch,
+              ...Object.fromEntries(Object.entries(assetSearch).map(([assetType, settings]) => [
+                assetType, { ...currentState.assetSearch[assetType], ...settings }
+              ]))
+            }
+          } : {})
+        };
+      },
       migrate: (persistedState, oldVersion) => {
         const migrations = [
           (state, version) => {
