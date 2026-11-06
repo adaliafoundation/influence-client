@@ -32,6 +32,7 @@ ENV NODE_ENV=production
 ENV REQUIRE_RUNTIME_CONFIG=true
 RUN apt-get update \
   && apt-get install -y --no-install-recommends --only-upgrade \
+    apt libapt-pkg7.0 \
     libc6 libc-bin libssl3t64 openssl-provider-legacy perl-base gzip libpcre2-8-0 libsqlite3-0 \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /usr/local/lib/node_modules/npm /opt/yarn-* \
