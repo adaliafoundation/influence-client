@@ -22,6 +22,7 @@ import theme, { hexToRGB } from '~/theme';
 import AssembleShip from './actionDialogs/AssembleShip';
 import ClaimArrivalReward from './actionDialogs/ClaimArrivalReward';
 import ClaimPrepareReward from './actionDialogs/ClaimPrepareReward';
+import CoreSampling from './actionDialogs/CoreSampling';
 import Construct from './actionDialogs/Construct';
 import ControlAsteroid from './actionDialogs/ControlAsteroid';
 import ControlShip from './actionDialogs/ControlShip';
@@ -251,6 +252,7 @@ const ActionDialogContent = ({ type, params }) => {
         {type === 'ASSEMBLE_SHIP' && <AssembleShip {...allProps} />}
         {type === 'CLAIM_ARRIVAL_REWARD' && <ClaimArrivalReward {...allProps} />}
         {type === 'CLAIM_PREPARE_REWARD' && <ClaimPrepareReward {...allProps} />}
+        {type === 'CORE_SAMPLING' && <CoreSampling {...allProps} />}
         {type === 'CONTROL_ASTEROID' && <ControlAsteroid {...allProps} />}
         {type === 'CONTROL_SHIP' && <ControlShip {...allProps} />}
         {type === 'PLAN_BUILDING' && <PlanBuilding {...allProps} />}
