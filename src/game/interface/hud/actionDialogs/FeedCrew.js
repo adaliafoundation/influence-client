@@ -5,6 +5,7 @@ import styled from 'styled-components';
 import { AddRationsIcon, ForwardIcon, InventoryIcon, RouteIcon, WarningIcon, StopwatchIcon, FoodIcon } from '~/components/Icons';
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useCrewContext from '~/hooks/useCrewContext';
+import useClosestAccessibleInventory from '~/hooks/useClosestAccessibleInventory';
 import useLot from '~/hooks/useLot';
 import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed } from '~/lib/utils';
 import { ItemSelectionSection, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, formatMass, formatVolume, getBonusDirection, TimeBonusTooltip, FlexSectionSpacer, ActionDialogBody, FlexSection, TransferSelectionDialog, ProgressBarSection, ActionDialogTabs, InventoryChangeCharts, TransferDistanceDetails, FlexSectionBlock, FlexSectionInputBlock, InventorySelectionDialog, CrewInputBlock, MiniBarChart, formatResourceMass, MultiSourceInputBlock, OrderSelectionDialog, formatTimeRequirements } from './components';
@@ -109,6 +110,9 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
   const [exchangeSelectorOpen, setExchangeSelectorOpen] = useState();
   const [transferSelectorOpen, setTransferSelectorOpen] = useState();
   const [selectedItems, setSelectedItems] = useState(props.preselect?.selectedItems || {});
+  const [hasUserSelectedSource, setHasUserSelectedSource] = useState(false);
+  const preselectedFoodAmount = props.preselect?.selectedItems?.[Product.IDS.FOOD];
+  const closestFoodInventory = useClosestAccessibleInventory(asteroid?.id, Product.IDS.FOOD, crew?._location);
 
   // get origin* data
   const [inventorySelection, setInventorySelection] = useState(
@@ -128,6 +132,11 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
       fillPaymentTotal: (currentFeeding.vars?.payments?.toExchange || 0) + (currentFeeding.vars?.payments?.toPlayer || 0),
     }) || undefined
   );
+
+  const handleInventorySelection = useCallback((selection) => {
+    setInventorySelection(selection);
+    setHasUserSelectedSource(true);
+  }, []);
 
   const originId = useMemo(() => {
     if (exchangeSelection) return exchangeSelection.entity;
@@ -149,6 +158,7 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
   const handleExchangeSelection = useCallback((selection) => {
     setExchangeSelection(selection);
     setSelectedItems(selection ? { [Product.IDS.FOOD]: selection?.fillAmount || 0 } : {});
+    setHasUserSelectedSource(true);
   }, []);
 
   const [transportDistance, transportTime] = useMemo(() => {
@@ -215,6 +225,7 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
     setExchangeSelection();
     setInventorySelection();
     setSelectedItems({});
+    setHasUserSelectedSource(true);
   }, []);
 
   const { data: exchangeOwnerCrew } = useCrew(exchangeSelection ? origin?.Control?.controller?.id : undefined);
@@ -284,13 +295,29 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
         [Product.IDS.FOOD]: Math.floor(Math.max(0, foodStats.maxFood - foodStats.currentFood))
       });
     } else if (originInventory) {
-      const inferredAmount = Math.min(
+      const availableAmount = Math.min(
         originInventory.contents.find((c) => c.product === Product.IDS.FOOD)?.amount || 0,
         foodStats.maxFood - foodStats.currentFood
       );
+      const inferredAmount = !hasUserSelectedSource && preselectedFoodAmount !== undefined
+        ? Math.min(preselectedFoodAmount, availableAmount)
+        : availableAmount;
       setSelectedItems({ [Product.IDS.FOOD]: inferredAmount });
     }
-  }, [foodStats.currentFood, foodStats.maxFood, hasFoodSupplyEntitlement, originInventory, stage]);
+  }, [foodStats.currentFood, foodStats.maxFood, hasFoodSupplyEntitlement, hasUserSelectedSource, originInventory, preselectedFoodAmount, stage]);
+
+  useEffect(() => {
+    if (
+      stage !== actionStages.NOT_STARTED
+      || usingFoodSupplyEntitlement
+      || exchangeSelection
+      || inventorySelection
+      || hasUserSelectedSource
+      || !closestFoodInventory
+    ) return;
+
+    setInventorySelection(closestFoodInventory);
+  }, [closestFoodInventory, exchangeSelection, hasUserSelectedSource, inventorySelection, stage, usingFoodSupplyEntitlement]);
 
   const disabled = useMemo(() => {
     if (hasFoodSupplyEntitlement) return totalMass === 0;
@@ -554,7 +581,7 @@ const FeedCrew = ({ asteroid, feedCrewManager, stage, ...props }) => {
             itemIds={[Product.IDS.FOOD]}
             otherEntity={crew}
             onClose={() => setInventorySelectorOpen(false)}
-            onSelected={setInventorySelection}
+            onSelected={handleInventorySelection}
             open={inventorySelectorOpen}
             requirePresenceOfItemIds
           />
