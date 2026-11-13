@@ -1,10 +1,10 @@
-import { Asteroid } from '@influenceth/sdk';
+import { Asteroid, Prospecting } from '@influenceth/sdk';
 import { BufferGeometry, Float32BufferAttribute, Vector3 } from 'three';
 
 export const SURFACE_INSET = 25;
 export const FLOOR_CLEARANCE = 2;
-export const REACH = 3500;
-export const DEPTHS = [100, 200, 300, 400, 500];
+export const REACH = Prospecting.MAX_ORIGIN_DISTANCE_METRES;
+export const DEPTHS = Prospecting.DEPTH_BANDS_METRES;
 export const surfaceDistance = (a, b, radius) => a.angleTo(b) * radius;
 
 // Spherical bisectors keep cells disjoint even when a small asteroid's whole

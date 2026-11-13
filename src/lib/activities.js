@@ -1487,7 +1487,7 @@ const activities = {
     getInvalidations: ({ event: { returnValues, version } }, { extractor = {} }) => {
       const { asteroidId, lotId } = locationsArrToObj(extractor?.Location?.locations || []) || {};
       return [
-        {
+        ...(returnValues.deposit ? [{
           ...returnValues.deposit,
           newGroupEval: {
             updatedValues: { isDepleted: true }, // optimistic
@@ -1498,7 +1498,7 @@ const activities = {
               lotId
             }
           }
-        },
+        }] : []),
         { ...returnValues.extractor },
         { ...returnValues.destination },
         ['actionItems'],
@@ -2460,6 +2460,15 @@ export const hydrateActivities = async (newActivities, queryClient) => {
     })
   );
 };
+
+for (const name of ['ProspectingCampaignStarted', 'ProspectingSampleCommitted', 'ProspectingCampaignFinalized', 'ProspectingCampaignAbandoned']) {
+  activities[name] = {
+    requiresCrewTime: name === 'ProspectingSampleCommitted',
+    getInvalidations: ({ event: { returnValues } }) => [returnValues.origin, returnValues.lot,
+      returnValues.deposit, returnValues.callerCrew].filter(Boolean).concat([['actionItems'], ['starterMissions'], ['prospectingHistory']]),
+    getPrepopEntities: () => ({})
+  };
+}
 
 export const typesWithLogContent = Object.keys(activities).filter((type) => !!activities[type].getLogContent);
 

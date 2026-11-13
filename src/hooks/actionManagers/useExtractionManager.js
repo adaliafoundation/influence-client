@@ -52,7 +52,8 @@ const useExtractionManager = (lotId, slot = 1) => {
       ));
       if (actionItem) {
         current._cachedData = actionItem.data;
-        current.depositId = actionItem.event.returnValues.deposit.id;
+        current.depositId = actionItem.event.returnValues.deposit?.id;
+        current.isBaseline = actionItem.event.returnValues.mode === 0;
         current.startTime = actionItem._startTime || actionItem.event.timestamp;
         current._isAccessible = !!crew;
       }
@@ -75,9 +76,11 @@ const useExtractionManager = (lotId, slot = 1) => {
         stage = current.startTime > blockTime ? actionStages.SCHEDULED : actionStages.IN_PROGRESS;
       }
     } else {
-      const startTx = getPendingTx('FlexibleExtractResourceStart', payload) || getPendingTx('ExtractResourceStart', payload);
+      const startTx = getPendingTx('FlexibleExtractResourceStart', payload) || getPendingTx('ExtractResourceStart', payload)
+        || getPendingTx('BaselineExtractResourceStart', payload);
       if (startTx) {
-        current.depositId = startTx.vars.deposit.id;
+        current.depositId = startTx.vars.deposit?.id;
+        current.isBaseline = startTx.key === 'BaselineExtractResourceStart' || !!startTx.vars.baselineResource;
         current.destination = startTx.vars.destination;
         current.destinationSlot = startTx.vars.destination_slot;
         current.resourceId = startTx.meta.resourceId;
@@ -120,8 +123,15 @@ const useExtractionManager = (lotId, slot = 1) => {
     return execute('ExtractResourceFinish', payload, { lotId });
   }, [execute, payload]);
 
+  const startBaselineExtraction = useCallback((amount, resource, destination, destinationSlot, lease) => execute(
+    'FlexibleExtractResourceStart', { ...payload, yield: amount, baselineResource: resource, resource,
+      destination: { id: destination.id, label: destination.label }, destination_slot: destinationSlot, lease },
+    { resourceId: resource, lotId }
+  ), [execute, payload, lotId]);
+
   return {
     startExtraction,
+    startBaselineExtraction,
     finishExtraction,
     extractionStatus,
     currentExtraction,

@@ -223,7 +223,7 @@ const useStore = create(
 
 
 
-        dmPrivateKey: null,
+        privateDataKey: null,
 
         //
         // DISPATCHERS
@@ -682,6 +682,7 @@ const useStore = create(
 
         // Starts a session and sets it as the current session
         dispatchSessionStarted: (session) => set(produce(state => {
+          if (!state.currentSession?.accountAddress || !Address.areEqual(state.currentSession.accountAddress, session.accountAddress)) state.privateDataKey = null;
           state.currentSession = session;
           state.lastConnectedWalletId = session.walletId;
           state.sessions[session.accountAddress] = session;
@@ -698,10 +699,12 @@ const useStore = create(
         // Unsets the current session but keeps it in the sessions list
         dispatchSessionSuspended: () => set(produce(state => {
           state.currentSession = {};
+          state.privateDataKey = null;
         })),
 
         // Resumes a session that was suspended
         dispatchSessionResumed: (session) => set(produce(state => {
+          if (!state.currentSession?.accountAddress || !Address.areEqual(state.currentSession.accountAddress, session.accountAddress)) state.privateDataKey = null;
           state.currentSession = session;
           state.lastConnectedWalletId = session.walletId;
           state.simulationEnabled = false;
@@ -711,7 +714,7 @@ const useStore = create(
         dispatchSessionEnded: () => set(produce(state => {
           delete state.sessions[state.currentSession?.accountAddress];
           state.currentSession = {};
-          state.dmPrivateKey = null;
+          state.privateDataKey = null;
         })),
 
         dispatchSimulationEnabled: (which) => set(produce(state => {
@@ -1001,8 +1004,8 @@ const useStore = create(
           state.hudMenuState[menu] = { ...menuState };
         })),
 
-        dispatchDmPrivateKey: (key) => set(produce(state => {
-          state.dmPrivateKey = key;
+        dispatchPrivateDataKey: (key) => set(produce(state => {
+          state.privateDataKey = key;
         })),
 
         //
@@ -1038,7 +1041,7 @@ const useStore = create(
 
     }), {
       name: STORE_NAME,
-      version: 11,
+      version: 12,
       partialize: selectPersistedState,
       // Filter on read too: older saves include navigation and other transient state.
       merge: (persistedState, currentState) => ({
@@ -1092,7 +1095,10 @@ const useStore = create(
           persistedState = migrations[i](persistedState, oldVersion);
         }
 
-        return persistedState;
+        // Rewriting version 11 removes the legacy plaintext key from localStorage.
+        delete persistedState.dmPrivateKey;
+        delete persistedState.privateDataKey;
+        return selectPersistedState(persistedState);
       },
       // accomodate bigint's
       serialize: (state) => {

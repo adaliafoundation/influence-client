@@ -12,6 +12,8 @@ import useAsteroid from '~/hooks/useAsteroid';
 import useCrewContext from '~/hooks/useCrewContext';
 import useLot from '~/hooks/useLot';
 import useStore from '~/hooks/useStore';
+import Prospect from '../../actionButtons/Prospect';
+import { prospectingEnabled, prospectingOnchain } from '~/game/prospecting/store';
 import { formatFixed, formatPrice, keyify } from '~/lib/utils';
 import theme, { hexToRGB } from '~/theme';
 import actionButtons from '../../actionButtons';
@@ -293,7 +295,7 @@ const DepositSection = ({ deposits = [], selected, onSelect, title, type }) => {
   return (
     <HudMenuCollapsibleSection
       titleText={title}
-      titleLabel={`${deposits.length} Sample${deposits.length === 1 ? '' : 's'}`}
+      titleLabel={`${deposits.length} ${prospectingOnchain() ? 'Claim' : 'Sample'}${deposits.length === 1 ? '' : 's'}`}
       collapsed={!(deposits.length > 0) || (selected?.type !== type)}>
       {usedDepositsExist && (
         <ShowAllRow showAll={showAll} onClick={() => setShowAll((e) => !e)} style={{ paddingTop: 0 }}>
@@ -496,7 +498,7 @@ const LotResources = () => {
         </HudMenuCollapsibleSection>
 
         <DepositSection
-          title="My Deposits"
+          title={prospectingOnchain() ? "My Claims" : "My Deposits"}
           type="sample"
           deposits={ownedSamples}
           onSelect={setSelected}
@@ -513,7 +515,10 @@ const LotResources = () => {
       {(currentSamplingActions?.length || selectedResource || selectedSample || currentExtraction) && (
         <Tray>
           <>
-            {(currentSamplingActions?.length || selectedResource || selectedSample) && (
+            {prospectingEnabled() && selectedResource && (
+              <Prospect asteroidId={asteroidId} lotId={lotId} resourceId={Number(selectedResource.i)} />
+            )}
+            {(currentSamplingActions?.length || selectedSample || (selectedResource && !prospectingEnabled())) && (
               <actionButtons.CoreSample.Component {...actionProps} {...extraSampleParams} />
             )}
             {/* TODO: list sample for sale */}

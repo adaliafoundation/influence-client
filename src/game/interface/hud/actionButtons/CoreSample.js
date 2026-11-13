@@ -10,6 +10,7 @@ import ActionButton, { getCrewDisabledReason } from './ActionButton';
 import ActionButtonStack from './ActionButtonStack';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
+import { prospectingOnchain } from '~/game/prospecting/store';
 
 const labelDict = {
   READY: 'Start Core Sample',
@@ -66,6 +67,7 @@ const NewCoreSample = ({ asteroid, crew, lot, onSetAction, overrideResourceId, i
   }, [improveSample, onSetAction, resourceId]);
 
   const disabledReason = useMemo(() => {
+    if (prospectingOnchain()) return 'replaced by prospecting campaigns';
     if (_disabled) return 'loading...';
     if (improveSample && improveSample?.Deposit?.status === Deposit.STATUSES.USED) return 'already used';
     if (improveSample && improveSample?.Deposit?.status !== Deposit.STATUSES.SAMPLED) return 'not yet analyzed';
@@ -94,14 +96,14 @@ const NewCoreSample = ({ asteroid, crew, lot, onSetAction, overrideResourceId, i
           stack={currentSamplingStack}
           stackLabel={
             currentSamplingStack.length > 1
-            ? `${currentSamplingStack.length} Core Samples Started`
-            : `${labelDict[currentSamplingStack[0].status]} (${Product.TYPES[currentSamplingStack[0]?.action?.resourceId]?.name})`
+            ? `${currentSamplingStack.length} ${prospectingOnchain() ? 'Earlier Samples' : 'Core Samples Started'}`
+            : currentSamplingStack[0].label
           }
           icon={stackIsImprovement ? <ImproveCoreSampleIcon /> : <NewCoreSampleIcon />}
         />
       )}
 
-      {(!simulation || currentSamplingStack.length === 0) && (
+      {!prospectingOnchain() && (!simulation || currentSamplingStack.length === 0) && (
         <ActionButton
           ref={setCoachmarkRef(COACHMARK_IDS.actionButtonCoreSample)}
           label={label}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import useStore from '~/hooks/useStore';
+import { useProspecting } from '../../../prospecting/store';
 import LotResources from './components/LotResources';
 import AsteroidResources from './components/AsteroidResources';
 
@@ -11,9 +12,10 @@ const Resources = (props) => {
 
   useEffect(() => {
     return () => {
-      dispatchResourceMapToggle(false);
+      // Hand the same surface map to prospecting when switching panes.
+      if (!useProspecting.getState().active) dispatchResourceMapToggle(false);
     };
-  }, [])
+  }, [dispatchResourceMapToggle])
 
   if (asteroidId) {
     if (lotId) {

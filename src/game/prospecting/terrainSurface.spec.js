@@ -61,3 +61,41 @@ it('matches full terrain raycasts across a displaced chunk, including edges', ()
   geometry.dispose();
   mesh.material.dispose();
 });
+
+it('reads newly revealed sections after LOD replacement and mesh reuse', () => {
+  const root = new Group();
+  const makeChunk = (height) => {
+    const geometry = new PlaneGeometry(10, 10);
+    geometry.translate(0, 0, height);
+    const mesh = new Mesh(geometry, new MeshBasicMaterial());
+    mesh.userData.isAsteroidTerrain = true;
+    mesh.userData.terrainResolution = 1;
+    mesh.userData.createSurfaceGeometry = () => mesh.geometry.clone();
+    return mesh;
+  };
+  const old = makeChunk(5);
+  root.add(old);
+  const surface = createTerrainSurface(root);
+  expect(surface.height(new Vector3(0, 0, 1))).toBeCloseTo(5);
+
+  // A follow action requests a point not sampled before, after the old LOD retired.
+  root.remove(old);
+  const current = makeChunk(6);
+  root.add(current);
+  old.userData.createSurfaceGeometry = () => { throw new Error('retired terrain'); };
+  expect(surface.height(new Vector3(0.1, 0, 1).normalize())).toBeCloseTo(6 * Math.sqrt(1.01));
+
+  // Pool reuse can change geometry on an existing mesh, too.
+  const replaced = current.geometry;
+  current.geometry = new PlaneGeometry(10, 10);
+  current.geometry.translate(0, 0, 7);
+  expect(surface.height(new Vector3(0.2, 0, 1).normalize())).toBeCloseTo(7 * Math.sqrt(1.04));
+  // Previously exposed boundaries retain their cached heights.
+  expect(surface.height(new Vector3(0, 0, 1))).toBeCloseTo(5);
+  surface.dispose();
+  old.geometry.dispose();
+  old.material.dispose();
+  replaced.dispose();
+  current.geometry.dispose();
+  current.material.dispose();
+});

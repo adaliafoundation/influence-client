@@ -716,12 +716,12 @@ const PackEntitlements = ({ color, product }) => (
     {!!product.coreSampleAllowance && (
       <PackEntitlement
         color={color}
-        data-tooltip-content={product.features?.[2]}
+        data-tooltip-content={`${product.coreSampleAllowance} sampling uses. Each Follow, Cross-cut or Characterize spends one, including misses and accidents.`}
         data-tooltip-id="launcherTooltip"
         data-tooltip-place="top">
         <PackThumbnail alt="" src={getProductIcon(Product.IDS.CORE_DRILL, 'w400')} />
         <PackEntitlementContent>
-          <label>Core Samples</label>
+          <label>Prospecting Samples</label>
           <strong>{product.coreSampleAllowance}</strong>
         </PackEntitlementContent>
       </PackEntitlement>

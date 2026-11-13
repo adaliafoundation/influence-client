@@ -97,7 +97,7 @@ const MissionCampaign = ({ view, manager, onGuide, initiallyExpanded = false, pr
           <List>
             {view.missions.map((mission) => <MissionRow key={mission.id} mission={mission} pending={manager.getPending(mission.id)}
               eligible={view.eligible} presentation={presentation} image={images[mission.id]}
-              detail={!presentation && mission.id === 1 ? `${view.progress?.sampleCount || 0} / 3 samples` : undefined}
+              detail={!presentation && mission.id === 1 ? `${mission.earned || mission.completed || mission.claimed ? 1 : 0} / 1 campaign` : undefined}
               onClick={() => setSelectedId(mission.id)} />)}
           </List>
         </CampaignContents>

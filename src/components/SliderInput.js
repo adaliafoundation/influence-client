@@ -13,7 +13,7 @@ const Wrapper = styled.div`
 `;
 
 const Bar = styled.div`
-  background: #444;
+  background: ${p => p.$available === undefined ? '#444' : `linear-gradient(to right, rgba(${p.theme.colors.mainRGB}, 0.3) ${p.$available}%, #292929 ${p.$available}%)`};
   border-radius: 3px;
   height: 5px;
   width: 100%;
@@ -59,17 +59,18 @@ const Slider = styled.div`
   `}
 `;
 
-const SliderInput = ({ disabled, min = 0, max = 1, increment = 1, value, onChange }) => {
+const SliderInput = ({ disabled, min = 0, max = 1, availableMax = max, increment = 1, value, onChange, ariaLabel = 'Slider' }) => {
   const sliderRef = useRef();
   const updating = useRef(false);
   const expectedChange = useRef();
 
   const handleChange = useCallback((newValue) => {
     if (disabled) return;
+    newValue = Math.min(Math.max(min, newValue), availableMax);
     const incrementedNewValue = (newValue === max || newValue === min) ? newValue : Math.round((1 / increment) * newValue) * increment;
     expectedChange.current = incrementedNewValue;
-    if (onChange) onChange(incrementedNewValue);
-  }, [disabled, increment, min, max, onChange]);
+    if (onChange) onChange(Math.min(availableMax, incrementedNewValue));
+  }, [disabled, increment, min, max, availableMax, onChange]);
 
   useEffect(() => {
     const mouseHandler = (e) => {
@@ -84,38 +85,35 @@ const SliderInput = ({ disabled, min = 0, max = 1, increment = 1, value, onChang
       }
     };
 
-    const keyHandler = (e) => {
-      let incr = 0;
-      if (e.code === 'ArrowLeft') incr = -increment;
-      if (e.code === 'ArrowRight') incr = increment;
-
-      if (incr !== 0) {
-        if (max - min === 1) incr *= 0.01;
-        handleChange(Math.min(Math.max(min, value + incr), max));
-      }
-    };
-
-    sliderRef.current.addEventListener('mousedown', mouseHandler);
-    sliderRef.current.addEventListener('mouseleave', mouseHandler);
-    sliderRef.current.addEventListener('mousemove', mouseHandler);
-    sliderRef.current.addEventListener('mouseup', mouseHandler);
-    // window.addEventListener('keydown', keyHandler); // no longer neeeded
+    const slider = sliderRef.current;
+    slider.addEventListener('mousedown', mouseHandler);
+    slider.addEventListener('mouseleave', mouseHandler);
+    slider.addEventListener('mousemove', mouseHandler);
+    slider.addEventListener('mouseup', mouseHandler);
     return () => {
-      if (sliderRef.current) {
-        sliderRef.current.removeEventListener('mousedown', mouseHandler);
-        sliderRef.current.removeEventListener('mouseleave', mouseHandler);
-        sliderRef.current.removeEventListener('mousemove', mouseHandler);
-        sliderRef.current.removeEventListener('mouseup', mouseHandler);
+      if (slider) {
+        slider.removeEventListener('mousedown', mouseHandler);
+        slider.removeEventListener('mouseleave', mouseHandler);
+        slider.removeEventListener('mousemove', mouseHandler);
+        slider.removeEventListener('mouseup', mouseHandler);
       }
-      window.removeEventListener('keydown', keyHandler);
     }
-  }, [increment, min, max, handleChange, value]);
+  }, [min, max, handleChange]);
 
   const percentage = useMemo(() => Math.max(0, Math.min(100, (value - min) / (max - min))), [value, min, max]) || 0;
   return (
     <Wrapper>
-      <Slider ref={sliderRef} animating={expectedChange.current !== value}>
-        <Bar><InnerBar value={percentage} /></Bar>
+      <Slider ref={sliderRef} animating={expectedChange.current !== value}
+        role="slider" aria-label={ariaLabel} aria-valuemin={min} aria-valuemax={availableMax}
+        aria-valuenow={value} aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
+        onKeyDown={(event) => {
+          if (['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            handleChange(event.key === 'Home' ? min : event.key === 'End' ? availableMax
+              : value + (['ArrowLeft', 'ArrowDown'].includes(event.key) ? -increment : increment));
+          }
+        }}>
+        <Bar $available={availableMax < max ? (availableMax - min) / (max - min) * 100 : undefined}><InnerBar value={percentage} /></Bar>
         <Handle value={percentage}><NavIcon thicker selected selectedColor="white" /></Handle>
       </Slider>
     </Wrapper>

@@ -4,6 +4,7 @@ import { verifyMissionAction } from './missionBindings';
 const targets = {
   ConstructionPlan: 'lot', ConstructionStart: 'building', ConstructionFinish: 'building',
   SampleDepositStart: 'lot', SampleDepositFinish: 'deposit',
+  ProspectingFinalize: 'lot', BaselineExtractResourceStart: 'extractor',
   ExtractResourceStart: 'extractor', ExtractResourceFinish: 'extractor',
   ProcessProductsStart: 'processor', ProcessProductsFinish: 'processor',
   SendDelivery: 'origin', ReceiveDelivery: 'delivery', ResupplyFood: 'origin',

@@ -20,7 +20,7 @@ it('starts at the origin and opens the first ring and one deeper slice after dri
   expect(lotsByLayer(reachableSections(state))).toEqual([[1], [], [], [], []]);
   const layers = reachableSections({ ...state, cells: [[1, 1, 0, 0]] });
   expect(lotsByLayer(layers)).toEqual([[1, 2], [1, 2], [], [], []]);
-  expect(selectSection(layers, 1, 3, null)).toEqual({
+  expect(selectSection(layers, 1, 3)).toEqual({
     depth: 1, selected: { lot: 1, depth: 1 }, source: 0
   });
 });
@@ -36,4 +36,30 @@ it('opens deep sideways options without exposing shallow tiles or collapsed rout
   expect(layers[3].find(({ lot }) => lot === 3).sources).toEqual([0]);
   expect(layers[4].some(({ lot }) => lot === 3)).toBe(false);
   expect(layers[4].some(({ lot }) => lot === 2)).toBe(true);
+});
+
+it('automatically selects the closest valid bore, including vertical distance', () => {
+  const current = {
+    ...state,
+    cells: [[1, 1, 0, 1], [1, 2, 1, 1]],
+    history: []
+  };
+  const layers = reachableSections(current);
+  const target = layers[0].find(({ lot }) => lot === 2);
+  expect(target.sources).toEqual([1, 0]);
+  expect(selectSection(layers, 0, 2).source).toBe(1);
+
+  const blocked = reachableSections({
+    ...current,
+    history: [{ event: 2, sourceLot: 2, sourceDepth: 1, lot: 2, depth: 0 }]
+  });
+  expect(selectSection(blocked, 0, 2).source).toBe(0);
+});
+
+it('breaks equal-distance ties consistently by sample index', () => {
+  const layers = reachableSections({
+    ...state,
+    cells: [[1, 2, 0, 1], [1, 2, 2, 1]]
+  });
+  expect(selectSection(layers, 1, 2).source).toBe(0);
 });

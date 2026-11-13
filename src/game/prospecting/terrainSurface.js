@@ -1,34 +1,61 @@
 import { Box2, DoubleSide, Matrix4, Mesh, MeshBasicMaterial, Raycaster, Vector2, Vector3 } from 'three';
 
-// Sample displaced terrain in asteroid-local space, without mutating the live meshes.
+// Sample current displaced terrain in asteroid-local space, without mutating live meshes.
 // Only bake chunks intersected by the patch, and reuse each bake for all its vertices.
 export function createTerrainSurface(root) {
-  root.updateWorldMatrix(true, true);
-  const inverse = root.matrixWorld.clone().invert();
   const material = new MeshBasicMaterial({ side: DoubleSide });
-  const chunks = [];
+  const chunks = new Map();
   const baked = new Map();
   const heights = new Map();
   const raycaster = new Raycaster();
-  root.traverseVisible((object) => {
-    if (!object.userData.isAsteroidTerrain) return;
-    const mesh = new Mesh(object.geometry, material);
-    mesh.matrixWorld.copy(new Matrix4().multiplyMatrices(inverse, object.matrixWorld));
-    const bounds = new Box2();
-    const positions = object.geometry.getAttribute('position');
-    const count = (object.userData.terrainResolution + 1) ** 2;
-    for (let i = 0; i < count; i++) {
-      bounds.expandByPoint(new Vector2(positions.getX(i) / positions.getZ(i), positions.getY(i) / positions.getZ(i)));
+  const loadedChunks = () => {
+    const loaded = [];
+    const active = new Set();
+    root.traverseVisible((object) => {
+      if (!object.userData.isAsteroidTerrain) return;
+      const positions = object.geometry.getAttribute('position');
+      const displacement = object.material.displacementMap;
+      const matrix = new Matrix4();
+      for (let node = object; node !== root; node = node.parent) {
+        if (node.matrixAutoUpdate) node.updateMatrix();
+        matrix.premultiply(node.matrix);
+      }
+      let chunk = chunks.get(object);
+      // Terrain meshes are pooled and can be rebuilt or moved to another cube face.
+      if (!chunk || chunk.positions !== positions || chunk.displacement !== displacement ||
+          chunk.textureVersion !== displacement?.version || !chunk.mesh.matrixWorld.equals(matrix)) {
+        baked.get(object)?.geometry.dispose();
+        baked.delete(object);
+        const mesh = new Mesh(object.geometry, material);
+        mesh.matrixWorld.copy(matrix);
+        const bounds = new Box2();
+        const count = (object.userData.terrainResolution + 1) ** 2;
+        for (let i = 0; i < count; i++) {
+          bounds.expandByPoint(new Vector2(positions.getX(i) / positions.getZ(i), positions.getY(i) / positions.getZ(i)));
+        }
+        chunk = { object, mesh, bounds, inverse: matrix.clone().invert(),
+          positions, displacement, textureVersion: displacement?.version };
+        chunks.set(object, chunk);
+      }
+      loaded.push(chunk);
+      active.add(object);
+    });
+    for (const object of chunks.keys()) {
+      if (!active.has(object)) {
+        baked.get(object)?.geometry.dispose();
+        baked.delete(object);
+        chunks.delete(object);
+      }
     }
-    chunks.push({ object, mesh, bounds, inverse: mesh.matrixWorld.clone().invert() });
-  });
+    return loaded;
+  };
   return {
     height(direction) {
       const key = direction.toArray().map((n) => n.toFixed(10)).join(',');
       if (heights.has(key)) return heights.get(key);
       raycaster.set(new Vector3(), direction);
       // Cube-face angular bounds avoid ray-testing every triangle of every chunk.
-      const candidates = chunks.filter(({ bounds, inverse }) => {
+      const candidates = loadedChunks().filter(({ bounds, inverse }) => {
         const local = direction.clone().transformDirection(inverse);
         return local.z > 0 && bounds.containsPoint(new Vector2(local.x / local.z, local.y / local.z));
       });

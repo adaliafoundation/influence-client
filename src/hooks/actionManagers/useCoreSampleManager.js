@@ -9,6 +9,7 @@ import useLot from '~/hooks/useLot';
 import useUnresolvedActivities from '~/hooks/useUnresolvedActivities';
 import actionStages from '~/lib/actionStages';
 import { getStarterCoreSampleSource } from '~/lib/starterPacks';
+import { prospectingOnchain } from '~/game/prospecting/store';
 
 const useCoreSampleManager = (lotId) => {
   const reportBlocked = useFailureReporter();
@@ -132,7 +133,6 @@ const useCoreSampleManager = (lotId) => {
             sampleId: pendingImprovementSample.id,
             origin: tx.vars.origin,
             originSlot: tx.vars.origin_slot,
-            origin: tx.vars.origin,
           };
 
           const alreadySample = activeSamples.find((a) => a.action.sampleId === pendingImprovementSample.id);
@@ -158,9 +158,10 @@ const useCoreSampleManager = (lotId) => {
       activeSamples.filter((c) => c.stage === actionStages.COMPLETED),
       Date.now()
     ];
-  }, [actionItems, blockTime, completingSamples, pendingTransactions, getPendingTx, getStatus, payload, lot?.deposits]);
+  }, [accountCrewIds, actionItems, blockTime, completingSamples, crew?.id, lotId, pendingTransactions, getPendingTx, getStatus, payload, lot?.deposits]);
 
   const startSampling = useCallback((resourceId, coreDrillSource) => {
+    if (prospectingOnchain()) return;
     const source = coreDrillSource || getStarterCoreSampleSource(crew);
     if (!source) return;
 
@@ -173,6 +174,7 @@ const useCoreSampleManager = (lotId) => {
   }, [crew, execute, payload]);
 
   const startImproving = useCallback(async (depositId, coreDrillSource, depositOwnerCrew) => {
+    if (prospectingOnchain()) return;
     const sample = (lot?.deposits || []).find((c) => c.id === depositId);
     const permission = await recheckAuthorization('can', [crew, sample, Permission.IDS.USE_DEPOSIT], [crew, sample]);
     if (permission.status === 'unresolved' || (permission.status === 'denied' && !depositOwnerCrew)) return reportBlocked(permission);
@@ -203,12 +205,13 @@ const useCoreSampleManager = (lotId) => {
     return execute(
       'SampleDepositFinish',
       {
-        deposit: { id: selectedAction.action?.sampleId, label: Entity.IDS.DEPOSIT },
-        ...payload
+        ...payload,
+        deposit: { id: selectedAction.action.sampleId, label: Entity.IDS.DEPOSIT },
+        caller_crew: { id: selectedAction.action.owner, label: Entity.IDS.CREW }
       },
       { lotId, isNew: selectedAction.action?.isNew }
     )
-  }, [currentSamplings, execute, payload]);
+  }, [currentSamplings, execute, lotId, payload]);
 
   return {
     currentSamplingActions: currentSamplings,

@@ -108,6 +108,11 @@ const api = {
     return response.data;
   },
 
+  getProspectingCampaigns: async (params) => {
+    const response = await instance.get(`/${apiVersion}/prospecting/campaigns`, { params });
+    return response.data;
+  },
+
   getMissionObservationCandidates: async (params) => {
     const response = await instance.get(`/${apiVersion}/missions/observation-candidates`, { params });
     return response.data;

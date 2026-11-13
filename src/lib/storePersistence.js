@@ -5,7 +5,7 @@ const persistedKeys = [
   'isNew', 'objectivePreferences',
   'simulation', 'crewTutorials', 'hasSeenIntroVideo',
   'currentSession', 'sessions', 'lastConnectedWalletId', 'selectedCrewId',
-  'crewAssignments', 'chatHistory', 'dmPrivateKey',
+  'crewAssignments', 'chatHistory',
   'bridgeTransfers', 'activeFundingIntentId', 'fundingIntents',
   'starterPackCheckout', 'starterPackCustomizationDrafts',
   'crewmatePurchaseCheckout', 'crewmatePurchaseDrafts',

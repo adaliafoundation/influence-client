@@ -13,7 +13,7 @@ export default function ProspectingCamera({ attachTo, origin }) {
       lock.current = null;
     };
   }, [controls, attachTo, origin]);
-  // Set the anchor before the shared controls process mouse/touch input.
+  // Follow asteroid motion before the shared controls process mouse/touch input.
   useFrame(() => lock.current?.update(), -1);
   // Constrain after mouse controls and asteroid motion, before the render pass.
   useFrame(() => lock.current?.constrain(), 0.5);

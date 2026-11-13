@@ -40,7 +40,7 @@ import useShip from '~/hooks/useShip';
 import useStore from '~/hooks/useStore';
 import hudMenus from './hudMenus';
 import ProspectingHUD from '../../prospecting/ProspectingHUD';
-import { prospectingEnabled } from '../../prospecting/store';
+import { prospectingEnabled, useProspecting } from '../../prospecting/store';
 import { COACHMARK_IDS } from '~/contexts/CoachmarkContext';
 import useSimulationEnabled from '~/hooks/useSimulationEnabled';
 import useCoachmarkRefSetter from '~/hooks/useCoachmarkRefSetter';
@@ -261,6 +261,7 @@ const MenuButton = ({ badge, coachmarkId, menuKey, label, useAltColor, icon, onO
 };
 
 const HudMenu = () => {
+  const prospectingActive = useProspecting((s) => s.active);
   const history = useHistory();
   const { authenticated } = useSession();
   const { authorize, crew } = useCrewContext();
@@ -484,7 +485,7 @@ const HudMenu = () => {
           icon: <CoreSampleIcon />,
           Component: ProspectingHUD,
           noDetail: true,
-          isVisible: prospectingEnabled() && scope === 'lot'
+          isVisible: prospectingEnabled() && scope === 'lot' && prospectingActive
         },
         {
           key: 'LOT_INVENTORY',
@@ -654,6 +655,7 @@ const HudMenu = () => {
 
     return [menuButtons, pageButtons];
   }, [
+    prospectingActive,
     authorize,
     ship,
     asteroid,

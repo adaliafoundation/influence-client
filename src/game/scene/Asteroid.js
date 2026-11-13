@@ -201,8 +201,6 @@ const AsteroidComponent = () => {
   const rotationAxis = useRef();
   const rotation = useRef(0);
   const settingCameraPosition = useRef();
-  const forceUpdate = useRef(0);
-  const lastUpdateStart = useRef(0);
 
   const maxStretch = useMemo(
     () => config?.stretch ? Math.max(config.stretch.x, config.stretch.y, config.stretch.z) : 1,
@@ -716,17 +714,14 @@ const AsteroidComponent = () => {
         intensityMult: EMISSIVE_INTENSITY[categoryKey],
         ...settings
       });
-      forceUpdate.current = Date.now();
     } else if (geometry.current.emissiveParams) {
       geometry.current.setEmissiveParams();
-      forceUpdate.current = Date.now();
     }
   }, [resourceMap, terrainInitialized, !asteroidData?.Celestial?.abundances]);
 
   useEffect(() => {
     if (geometry.current && terrainUpdateNeeded) {
       // vvv BENCHMARK 2ms (zoomed-out), 4-20ms+ (zoomed-in)
-      lastUpdateStart.current = Date.now();
       // if (!disableChunks.current)
       geometry.current.setCameraPosition(terrainUpdateNeeded);
       settingCameraPosition.current = false;
@@ -1132,8 +1127,7 @@ const AsteroidComponent = () => {
       // vvv BENCHMARK <0.01ms
       const cameraHeight = rotatedCameraPosition.length();
       const updateQuadtreeEvery = geometry.current.smallestActiveChunkSize * UPDATE_DISTANCE_MULT;
-      const updateQuadCube = forceUpdate.current > lastUpdateStart.current
-        || !geometry.current.cameraPosition
+      const updateQuadCube = !geometry.current.cameraPosition
         || Math.abs(geometry.current.cameraPosition.length() - cameraHeight) > updateQuadtreeEvery
         || geometry.current.cameraPosition.distanceTo(rotatedCameraPosition) > updateQuadtreeEvery * cameraHeight / (config.radius * maxStretch)
       ;

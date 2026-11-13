@@ -32,6 +32,14 @@ test('processing checks source now and both facility and destination through com
   ]);
 });
 
+test('baseline checks real extractor and destination rights without inventing a deposit', () => {
+  const destination = { id: 5, label: Entity.IDS.BUILDING };
+  expect(productionChecks({ ...request, kind: 'baseline', destination })).toEqual([
+    ['canUntil', [crew, facility, Permission.IDS.EXTRACT_RESOURCES, 200]],
+    ['canUntil', [crew, destination, Permission.IDS.ADD_PRODUCTS, 200]]
+  ]);
+});
+
 test('a quoted lease must cover the refreshed completion time, inclusively', () => {
   expect(acquisitionMatches(decision, 1, request, { lease })).toBe(true);
   expect(acquisitionMatches(decision, 1, { ...request, completionTime: 201 }, { lease })).toBe(false);

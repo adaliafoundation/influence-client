@@ -35,6 +35,7 @@ import {
 import { ActionDialogInner, theming, useAsteroidAndLot } from '../ActionDialog';
 import useEntity from '~/hooks/useEntity';
 import useActionCrew from '~/hooks/useActionCrew';
+import { prospectingOnchain } from '~/game/prospecting/store';
 
 const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction, stage, ...props }) => {
   const { startSampling, finishSampling } = coreSampleManager;
@@ -330,9 +331,9 @@ const NewCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAction
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
         disabled={stage === actionStage.NOT_STARTED && (
-          lotAbundance === 0 || (!drillSource && !usingCoreSampleEntitlement)
+          prospectingOnchain() || lotAbundance === 0 || (!drillSource && !usingCoreSampleEntitlement)
         )}
-        goLabel={hasCoreSampleEntitlement ? 'Prospect with Starter Pack' : 'Prospect'}
+        goLabel={prospectingOnchain() ? 'Replaced by Prospecting' : hasCoreSampleEntitlement ? 'Prospect with Starter Pack' : 'Prospect'}
         onGo={() => startSampling(resourceId, drillSource)}
         finalizeLabel="Analyze"
         isSequenceable

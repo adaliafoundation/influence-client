@@ -32,6 +32,8 @@ import Extract from './actionDialogs/Extract';
 import FeedCrew from './actionDialogs/FeedCrew';
 import FormAgreement from './actionDialogs/FormAgreement';
 import NewCoreSample from './actionDialogs/NewCoreSample';
+import LegacySamplingRedirect from '../../prospecting/LegacySamplingRedirect';
+import { prospectingOnchain } from '../../prospecting/store';
 import Deconstruct from './actionDialogs/Deconstruct';
 import DelegateCrew from './actionDialogs/DelegateCrew';
 import ImproveCoreSample from './actionDialogs/ImproveCoreSample';
@@ -324,7 +326,10 @@ const ActionDialog = ({ type, params }) => {
 
 const ActionDialogWrapper = () => {
   const actionDialog = useStore(s => s.actionDialog);
-  return actionDialog?.type ? <ActionDialogGate><ActionDialog {...actionDialog} /></ActionDialogGate> : null;
+  if (!actionDialog?.type) return null;
+  if (prospectingOnchain() && ['NEW_CORE_SAMPLE', 'IMPROVE_CORE_SAMPLE'].includes(actionDialog.type))
+    return <LegacySamplingRedirect params={actionDialog.params} />;
+  return <ActionDialogGate><ActionDialog {...actionDialog} /></ActionDialogGate>;
 };
 
 export default ActionDialogWrapper;

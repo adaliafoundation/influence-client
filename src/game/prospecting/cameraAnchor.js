@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
+import { REACH } from './geometry';
 
 export function lockProspectingCamera(controls, terrain, origin) {
   const camera = controls.object;
@@ -8,6 +9,8 @@ export function lockProspectingCamera(controls, terrain, origin) {
     up: camera.up.clone(),
     near: camera.near,
     noPan: controls.noPan,
+    panTarget: controls.panTarget,
+    panSpeed: controls.panSpeed,
     minDistance: controls.minDistance,
     maxDistance: controls.maxDistance,
     rotateSpeed: controls.rotateSpeed,
@@ -23,6 +26,9 @@ export function lockProspectingCamera(controls, terrain, origin) {
   const tangent = new Vector3();
   const before = new Vector3();
   const correction = new Quaternion();
+  const pan = new Vector3();
+  const boundedTarget = new Vector3();
+  const shift = new Vector3();
   const locate = () => {
     terrain.updateWorldMatrix(true, false);
     return terrain.localToWorld(anchor.copy(origin));
@@ -40,15 +46,17 @@ export function lockProspectingCamera(controls, terrain, origin) {
     motion.copy(rotation).multiply(previousRotation.clone().invert());
     camera.position.sub(previous).applyQuaternion(motion).add(anchor);
     camera.up.applyQuaternion(motion);
+    controls.target.sub(previous).applyQuaternion(motion).add(anchor);
     previous.copy(anchor);
     previousRotation.copy(rotation);
-    controls.target.copy(anchor);
-    camera.lookAt(anchor);
+    camera.lookAt(controls.target);
   };
   return {
     update() {
       follow();
-      controls.noPan = true;
+      controls.noPan = false;
+      controls.panTarget = true;
+      controls.panSpeed = 0.8;
       controls.minDistance = 100;
       controls.maxDistance = 15000;
       controls.rotateSpeed = 1;
@@ -57,6 +65,12 @@ export function lockProspectingCamera(controls, terrain, origin) {
     constrain() {
       follow();
       normal.copy(origin).normalize().transformDirection(terrain.matrixWorld);
+      // Keep the pivot in the starting lot's tangent plane, within campaign reach.
+      pan.subVectors(controls.target, anchor).projectOnPlane(normal).clampLength(0, REACH);
+      boundedTarget.copy(anchor).add(pan);
+      shift.subVectors(boundedTarget, controls.target);
+      camera.position.add(shift);
+      controls.target.copy(boundedTarget);
       eye.subVectors(camera.position, controls.target);
       const distance = eye.length();
       before.copy(eye).normalize();
@@ -85,6 +99,8 @@ export function lockProspectingCamera(controls, terrain, origin) {
       camera.updateProjectionMatrix();
       for (const key of [
         'noPan',
+        'panTarget',
+        'panSpeed',
         'minDistance',
         'maxDistance',
         'rotateSpeed',

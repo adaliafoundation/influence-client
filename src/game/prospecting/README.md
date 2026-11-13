@@ -1,40 +1,102 @@
-# In-scene prospecting playtest
+# In-scene prospecting
 
-First client implementation slice: asteroid-integrated interaction and rendering. Enabled only when `App.enableDevTools` is true. No SDK, server or contract changes.
+The client uses SDK **2.9.0-rc.2** and retains the existing Voronoi/depth-cut asteroid
+view. Two explicit modes keep local playtests separate from gameplay transactions.
 
-## Try it
+- `App.prospectingMode=local` is the default. `App.enableDevTools` exposes the local
+  simulation and mining preview, using instant local entropy and rendering metadata.
+- `App.prospectingMode=chain` exposes the actual game campaign and extraction flows.
+  Set `REACT_APP_APP_PROSPECTINGMODE=chain` only against a Dispatcher whose matching
+  systems and verifier are registered and activated. This flag also enables the
+  prospecting interface outside dev tools. Missing systems fail rather than falling
+  back to simulated results. No deployed addresses or activation constants are changed.
 
-1. Run the normal client development environment (`npm run docker-up`).
-2. Select a scanned asteroid and zoom to a lot. A direct example is `/lot/1073741829394` (Elyon, lot 250); close the launcher if it is covering the scene.
-3. Open the Prospecting tab in the right-hand sidebar (beside Resources), choose a material, and enter prospecting. Closing or switching the sidebar pane exits the view and preserves the in-memory campaign.
-4. Select sections directly on the asteroid. Move the depth cut to remove upper layers. Mouse rotation and zoom stay anchored to the starting lot; panning is disabled until exit. Selecting another section or changing depth does not move the pivot.
-5. Follow discovers a section, Cross-cut measures quantity, and Characterize measures rate. Select an earlier section in “Drill from” to branch from it. One to ten samples; one selected claim.
-6. Exit restores normal terrain rendering. Reopening the same origin/material resumes the in-memory playtest. Reloading loses it. “New playtest” explicitly resets the local campaign.
+## Chain playthrough
+
+1. Select a resource in Resources and open Prospect on a permissioned starting lot.
+2. Unlock the shared inbox/private-data key, then start the on-chain campaign. Choose
+   a Core Drill inventory, or use an available starter sample allowance.
+3. Follow, Cross-cut or Characterize a reachable segment. A sample's complete intent
+   and salt are encrypted and saved before submission. Its target lot, commitment,
+   index and inventory are public; the method, source, depth and observations stay private.
+4. Wait for the scheduled work and fixed future-block draw. Reconciliation verifies
+   the saved intent against the accepted core, durably saves its result, then reveals
+   it. A matching core recovers a wallet submission even when its hash was lost.
+   Rejected/unknown submissions retain the same action and commitment; no new entropy
+   is chosen during recovery. A submitted transaction needs a confirmed revert to retry.
+5. Select one productive claim after 1–10 samples. Generate and verify its Groth16
+   proof in the browser, then create the claim on chain. The transaction uses the
+   ordinary fee/session/mission-observation pipeline. Proof generation alone creates
+   no spendable claim. Finalization remains possible after origin permission revocation.
+6. The resulting Deposit/Claim is indexed by the server. Its extractor must be on
+   the claim's own lot. The regular extraction dialog offers constant-rate claims
+   and baseline resources above the global cutoff, with the existing destination,
+   capacity, facility lease and deposit-purchase flow. Trace resources require claims.
+
+An abandoned campaign retains its real 24-hour replacement deadline. Replacement
+retires the old campaign ID and proof. There is one occupying campaign per origin,
+not one per crew/account or material. Starting extraction does not invalidate old
+samples; any RUNNING target slot blocks a new sample, including finished jobs that
+await collection. Existing extraction finish uses its stored output and timing.
+
+The starter prospecting mission retains its ID/reward and requires one finalized
+campaign claim of at least 1,000 tonnes. Historical partial sample counters do not
+satisfy this objective. Existing completed mission flags remain valid.
+
+## Legacy sampling transition
+
+In chain mode, the prospecting sidebar also shows this lot's pending legacy samples
+and improvements, including their existing timers and completion transactions.
+Activity links and old sampling action links redirect to this pane; legacy dialogs
+are used only before activation. Completion uses `SampleDepositFinish` with the
+sample owner's crew, independently of the selected crew, campaign encryption keys
+or new proof generation. An in-flight legacy job is never converted into a new
+campaign or awarded a second balance. Existing jobs retain their committed results.
+
+The resources pane and extraction flow treat finished deposits without `Claim`
+metadata as default-grade claims, preserving identity, permissions and balances.
+Running extractions continue to use their stored output and finish time. New grants
+provide 10 / 15 / 20 sampling uses; existing granted balances are not rewritten.
 
 ## Implementation
 
-- `geometry.js`: true spherical Voronoi boundaries from SDK lot directions and existing terrain-adjusted lot positions. Neighbor candidates provide an undisplayed outer ring. Shared radial interpolation keeps adjacent polygons aligned. The mesh is a visualization, not a production lot-boundary authority.
-- `ProspectingScene.js`: five radial 100 m bands at actual scene scale (no depth exaggeration), selectable prisms, revealed-grade colors, processed-section edges, upper-layer cutaway, and an opaque excavation floor/perimeter to occlude far-side terrain. Existing asteroid transforms and camera are reused.
-- `ProspectingCamera.js` / `cameraAnchor.js`: fixed starting-lot orbit limited to 60° from overhead, local zoom distances, and restoration of the previous camera on exit.
-- `terrainPresentation.js`: opaque, normally lit terrain with a cutaway matching the visible Voronoi lots, including chunks activated by terrain LOD updates. Chunk-local cube-face coordinates are transformed into lot space before clipping.
-- `rules.js`: deterministic rules version 7 ported from the sandbox proof engine; its existing verified fixture is replayed in tests. This is the future SDK extraction boundary.
-- `store.js`: local sampling adapter with fresh browser randomness and recorded actions/entropy. Quantity is boosted 50% after the reference calculation; rate is unchanged. No old proof is represented as verifying the boosted quantity.
-- `ProspectingHUD.js`: existing ButtonAlt, Dropdown, SliderInput and HUD typography; hosted by the standard right-hand HUD menu, with no modal or second canvas. The N/S axis, pole markers, trajectory line, lot markers, captain location marker, hoppers, and crew movement arcs are hidden while prospecting.
+`chainCampaign.js` implements durable sample intents, chain reconciliation, private
+transcript checks and finalization. `useChainCampaign.js` connects it to the current
+crew, RPC provider and normal transaction context. `useCampaignStorage.js` owns
+wallet-key unlock, local storage and eventual peer replication. `campaignRecord.js`
+keeps local schema 1 separate from chain schema 2; neither can be relabeled as the other.
 
-## Deliberate first-slice limits
+Chain records are encrypted under chain/Dispatcher/account/asteroid/origin/material
+**and campaign ID**, preserving earlier claims when a new campaign starts. Missing
+private data for an already-sampled campaign blocks continuation and requires
+backup recovery; the client never seeds a fresh transcript over accepted work.
+The public server campaign-history endpoint can discover campaign IDs, while the
+RPC provider remains authoritative for commitments, timing and current status.
 
-This is not completion of all client-stage work. Samples resolve instantly, there is no real permission/inventory/extraction-conflict enforcement, and claim selection does not generate a proof or start extraction. Future-block randomness is not available here. The SDK computes actual lot abundance; unscanned resources are not fabricated.
+Rendering reach and ore-chance shading are previews. Paid actions use canonical
+fixed-point metadata and approach masks from SDK `Prospecting.Game` RPC reads.
+Quality stays neutral at 10000 BPS. The circuit supplies the agreed +50% quantity
+adjustment once; the UI and contracts do not add another multiplier.
 
-The 1.5 km approach and 3.5 km origin limits use a spherical surface-distance approximation in the rendering adapter. Production fixed-point geometry and proof metadata need reconciliation against canonical SDK positions, particularly for stretched terrain. Do not submit this adapter's metadata to contracts.
+## Private backups and tests
 
-Private campaign records currently live only in memory. Encrypted persistence, recovery and libp2p replication still need implementation before campaign data can be treated as durable. Browser proving needs the +50% public claim quantity wired into updated circuits and keys; it is not connected in this slice. No production transactions are issued by this mode.
+Run the server's `npm run private-data` worker and configure its printed multiaddr
+in `REACT_APP_APP_PRIVATEDATAPEERS`. Public browser deployment needs WSS/TLS, a
+persistent volume and an operated capacity policy. Local writes do not wait for
+remote acknowledgments. See [PRIVATE_DATA.md](PRIVATE_DATA.md).
 
-## Checks
+Use the repositories' pinned Node 22 runtime. Focused tests cover durable writes,
+uncertain broadcasts, fixed entropy, encrypted recovery, campaign isolation,
+permissions and the baseline authorization path. The production build compiles
+both browser and serving bundles. Matching development proving assets remain in
+`public/prospecting-proofs`; regenerate them through influence-starknet's `proofs/fieldwork` builder. One padded
+circuit and key serve every campaign length; keep the deployed verifier in sync.
 
-Focused Jest tests cover small/large spherical cells, finite prism geometry, depth spacing, replay of a verified sandbox campaign, and restoration of terrain after late LOD additions. Run:
+The contracts runtime harness can exercise this client controller on an isolated
+local chain. Actual wallet signing, deployment-specific indexing and the full
+asteroid interaction still require a manual integration playtest. Production
+trusted setup and key selection remain deferred; no activation is performed here.
 
-```sh
-CI=true npm test -- --watchAll=false --runInBand --runTestsByPath src/game/prospecting/geometry.spec.js src/game/prospecting/rules.spec.js src/game/prospecting/terrainPresentation.spec.js src/game/scene/asteroid/helpers/TerrainChunk.spec.js
-```
-
-The excavation samples the active terrain displacement geometry on entry, with contour points at most 100 m apart. Survey layers begin below 25 m of overburden and retain 100 m thickness (displayed depths are relative to that survey roof). The opaque floor is 2 m below the lowest layer; wall depth bias separates it from survey highlights. Terrain LOD changes can still introduce small differences from the entry-time surface snapshot.
+The worker requires the rc.2 padded proof format. Publish/install that SDK release
+before rebuilding client/server containers. Installing only rc.1 alongside the new
+asset manifest deliberately fails rather than producing a mismatched proof.

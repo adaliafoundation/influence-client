@@ -61,3 +61,23 @@ test.each(['indexed', 'failed'])('pending transaction removal signals its explic
   await expect(settled).resolves.toEqual({ status, txHash: '0x123' });
   expect(useStore.getState().pendingTransactions).toEqual([{ txHash: '0x456' }]);
 });
+
+test('never persists private-data keys and clears them at session boundaries', () => {
+  useStore.getState().dispatchSessionStarted({ ...login });
+  useStore.getState().dispatchPrivateDataKey({ owner: address, chainId: '0x1', privateKey: 'SECRET-PRIVATE-DATA-KEY' });
+  expect(useStore.getState().privateDataKey.privateKey).toBe('SECRET-PRIVATE-DATA-KEY');
+  expect(localStorage.getItem('influence')).not.toContain('SECRET-PRIVATE-DATA-KEY');
+  useStore.getState().dispatchSessionSuspended();
+  expect(useStore.getState().privateDataKey).toBeNull();
+});
+
+test('rewrites version 11 storage without restoring the legacy plaintext key', async () => {
+  localStorage.setItem('influence', JSON.stringify({
+    version: 11, state: { dmPrivateKey: 'LEGACY-KEY', privateDataKey: { privateKey: 'NEW-KEY' }, isNew: false }
+  }));
+  await useStore.persist.rehydrate();
+  expect(useStore.getState().privateDataKey).toBeNull();
+  expect(localStorage.getItem('influence')).not.toContain('LEGACY-KEY');
+  expect(localStorage.getItem('influence')).not.toContain('NEW-KEY');
+  expect(JSON.parse(localStorage.getItem('influence')).version).toBe(12);
+});

@@ -1,7 +1,11 @@
+import { getExtractionDuration } from '../../../prospecting/mining';
+import MiningPreview from '../../../prospecting/MiningPreview';
+import { prospectingEnabled, prospectingOnchain } from '../../../prospecting/store';
 import useProductionAuthorization from '~/hooks/useProductionAuthorization';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Asteroid, Crewmate, Deposit, Extractor, Inventory, Lot, Permission, Product, Time } from '@influenceth/sdk';
+import { Asteroid, Claim, Crewmate, Deposit, Extractor, Inventory, Lot, Mining, Permission, Product, Time } from '@influenceth/sdk';
+import Dropdown from '~/components/Dropdown';
 import cloneDeep from 'lodash/cloneDeep';
 
 
@@ -20,7 +24,7 @@ import formatters from '~/lib/formatters';
 import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatFixed, getProcessorLeaseConfig, getProcessorLeaseSelections } from '~/lib/utils';
 import theme from '~/theme';
 import { ActionDialogInner, theming, useAsteroidAndLot } from '../ActionDialog';
-import { ResourceAmountSlider, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, getBonusDirection, formatResourceVolume, formatSampleMass, formatSampleVolume, TravelBonusTooltip, TimeBonusTooltip, ActionDialogBody, FlexSection, FlexSectionInputBlock, EmptyResourceImage, FlexSectionSpacer, Section, SectionTitle, SectionBody, ProgressBarSection, CoreSampleSelectionDialog, SublabelBanner, InventorySelectionDialog, InventoryInputBlock, TransferDistanceDetails, getTripDetails, BuildingInputBlock, LeaseTooltip, LeaseDetailsLabel, BuyingDetailsLabel, AssetSellerIndicator, formatTimeRequirements } from './components';
+import { ResourceAmountSlider, ActionDialogFooter, ActionDialogHeader, ActionDialogStats, getBonusDirection, formatResourceVolume, formatSampleMass, formatSampleVolume, TravelBonusTooltip, TimeBonusTooltip, ActionDialogBody, ActionDialogTabs, FlexSection, FlexSectionInputBlock, EmptyResourceImage, FlexSectionSpacer, Section, SectionTitle, SectionBody, ProgressBarSection, CoreSampleSelectionDialog, SublabelBanner, InventorySelectionDialog, InventoryInputBlock, TransferDistanceDetails, getTripDetails, BuildingInputBlock, LeaseTooltip, LeaseDetailsLabel, BuyingDetailsLabel, AssetSellerIndicator, formatTimeRequirements } from './components';
 
 const SampleAmount = styled.span`
   color: ${p => p.theme.colors.depositSize};
@@ -46,13 +50,20 @@ const Warning = styled.div`
 
 const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
   const createAlert = useStore(s => s.dispatchAlertLogged);
-  const { currentExtraction, startExtraction, finishExtraction } = extractionManager;
+  const { currentExtraction, startExtraction, startBaselineExtraction, finishExtraction } = extractionManager;
   const crew = useActionCrew(currentExtraction);
   const blockTime = useBlockTime();
   const { accountCrewIds, crewCan, crewAuthorization } = useCrewContext();
 
   const [amount, setAmount] = useState(0);
   const [selectedCoreSample, setSelectedCoreSample] = useState();
+  const [baselineResource, setBaselineResource] = useState(null);
+  const onchain = prospectingOnchain();
+  const baseline = onchain && !!(baselineResource || currentExtraction?.isBaseline);
+  const resourceId = currentExtraction?.resourceId || (baseline ? baselineResource : selectedCoreSample?.Deposit?.resource);
+  const baselineOptions = useMemo(() => [{ label: 'Use a claim', value: 'claim' }, ...Object.values(Product.TYPES)
+    .filter(product => product.i >= 1 && product.i <= 22 && Mining.canBaselineMine(Mining.getGlobalAbundancePpm(asteroid.Celestial.abundances, product.i)))
+    .map(product => ({ label: `${product.name} · baseline (25% reference rate)`, value: String(product.i) }))], [asteroid]);
   const [sampleSelectorOpen, setSampleSelectorOpen] = useState(false);
   const [destinationSelectorOpen, setDestinationSelectorOpen] = useState(false);
 
@@ -93,11 +104,11 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
     // apply asteroid bonus to extraction time
     try {
-      const asteroidBonus = Asteroid.Entity.getBonusByResource(asteroid, selectedCoreSample?.Deposit?.resource);
+      const asteroidBonus = Asteroid.Entity.getBonusByResource(asteroid, resourceId);
       if (asteroidBonus.totalBonus !== 1) {
         abilities[Crewmate.ABILITY_IDS.EXTRACTION_TIME].totalBonus *= asteroidBonus.totalBonus;
         abilities[Crewmate.ABILITY_IDS.EXTRACTION_TIME].others = [{
-          text: `${Product.TYPES[selectedCoreSample?.Deposit?.resource].category} Yield Bonus`,
+          text: `${Product.TYPES[resourceId].category} Yield Bonus`,
           bonus: asteroidBonus.totalBonus - 1,
           direction: 1
         }];
@@ -107,7 +118,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     }
 
     return bonusIds.map((id) => abilities[id] || {});
-  }, [crew, selectedCoreSample?.Deposit?.resource]);
+  }, [crew, resourceId]);
 
   const usableSamples = useMemo(() => {
     return (lot?.deposits || []).filter((d) => (
@@ -122,26 +133,26 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
     setAmount(0);
     if (sample) {
       setTimeout(() => {
-        setAmount(sample.Deposit.remainingYield);
+        setAmount(onchain ? Math.min(sample.Deposit.remainingYield, Mining.MAX_QUANTITY_PER_RUN) : sample.Deposit.remainingYield);
       }, 0);
     }
-  }, []);
+  }, [onchain]);
 
   useEffect(() => {
     let defaultSelection;
 
     // handle "currentExtraction" state
     if (currentExtraction) {
+      setAmount(currentExtraction.yield);
       const currentSample = (lot?.deposits || []).find((c) => c.id === currentExtraction.depositId);
       if (currentSample) {
         const activeSample = cloneDeep(currentSample);
         activeSample.Deposit.remainingYield += (currentExtraction.isCoreSampleUpdated ? currentExtraction.yield : 0)
         setSelectedCoreSample(activeSample);
-        setAmount(currentExtraction.yield);
       }
 
     // handle default not_started state
-    } else if (!selectedCoreSample) {
+    } else if (!selectedCoreSample && !baselineResource) {
       if (props?.preselect) {
         defaultSelection = usableSamples.find((s) => s.id === props.preselect.depositId);
       } else if (usableSamples.length === 1) {
@@ -151,14 +162,27 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
         selectCoreSample(defaultSelection);
       }
     }
-  }, [currentExtraction, !selectedCoreSample, lot?.deposits, usableSamples]);
+  }, [currentExtraction, !selectedCoreSample, baselineResource, lot?.deposits, usableSamples]);
 
   const resource = useMemo(() => {
-    if (!selectedCoreSample) return null;
-    return Product.TYPES[selectedCoreSample.Deposit.resource];
-  }, [selectedCoreSample]);
+    return Product.TYPES[resourceId] || null;
+  }, [resourceId]);
+  const maxAmount = onchain ? Math.min(Mining.MAX_QUANTITY_PER_RUN,
+    baseline ? Mining.MAX_QUANTITY_PER_RUN : selectedCoreSample?.Deposit?.remainingYield || 0)
+    : selectedCoreSample?.Deposit?.remainingYield || 0;
+  useEffect(() => {
+    if (stage === actionStage.NOT_STARTED && amount > maxAmount) setAmount(maxAmount);
+  }, [stage, amount, maxAmount]);
 
-  const extractionTime = useMemo(() => {
+  const extractionTime = useMemo(() => getExtractionDuration(currentExtraction, () => {
+    if (onchain) {
+      if (!resource || !amount) return 0;
+      const ppm = Math.round(Asteroid.Entity.getAbundanceAtLot(asteroid, Lot.toIndex(lot.id), resourceId) * 1e6);
+      return Mining.quote({ mode: baseline ? 'baseline' : 'claim', resource: resourceId, lotId: lot.id, quantity: amount,
+        ...(baseline ? { globalAbundancePpm: Mining.getGlobalAbundancePpm(asteroid.Celestial.abundances, resourceId), localAbundancePpm: ppm }
+          : { claim: Claim.fromEntity(selectedCoreSample, { localAbundancePpm: ppm }) }),
+        bonusBps: Math.round((extractionBonus.totalBonus || 1) * 10000), timeAcceleration: crew?._timeAcceleration || 24 }).realSeconds;
+    }
     if (!selectedCoreSample) return 0;
     return Extractor.getExtractionTimeReal(
       amount * (resource?.massPerUnit || 0),
@@ -167,7 +191,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       extractionBonus.totalBonus || 1,
       crew?._timeAcceleration
     );
-  }, [amount, crew?._timeAcceleration, extractionBonus, resource, selectedCoreSample]);
+  }), [amount, crew?._timeAcceleration, extractionBonus, resource, selectedCoreSample, onchain, baseline, resourceId, asteroid, lot.id, currentExtraction]);
 
   const { totalTime: crewTravelTime, tripDetails } = useMemo(() => {
     if (!asteroid?.id || !crew?._location?.lotId || !lot?.id) return {};
@@ -239,7 +263,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       )
     },
     {
-      label: 'Extraction Time',
+      label: currentExtraction ? 'Committed Job Duration' : 'Extraction Time',
       value: formatTimer(extractionTime),
       direction: getBonusDirection(extractionBonus),
       isTimeStat: true,
@@ -280,13 +304,13 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
   }, [blockTime, crew?.Crew?.readyAt, prepaidLeaseConfig, taskTimeRequirement?.total]);
 
   const productionAuthorization = useProductionAuthorization({
-    kind: 'extract', crew, facility: lot?.building, deposit: selectedCoreSample, destination, purchase: isPurchase && { price: selectedCoreSample?.PrivateSale?.amount, recipient: depositOwner?.Crew?.delegatedTo },
+    kind: baseline ? 'baseline' : 'extract', crew, facility: lot?.building, deposit: selectedCoreSample, destination, purchase: isPurchase && { price: selectedCoreSample?.PrivateSale?.amount, recipient: depositOwner?.Crew?.delegatedTo },
     duration: taskTimeRequirement?.total, lease: leasePayment > 0 && { recipient: buildingOwner?.Crew?.delegatedTo, term: actualLeaseTerm, termPrice: leasePayment }
   });
 
   const onStartExtraction = useCallback(async () => {
     if ((await productionAuthorization.recheck()).status !== 'allowed') return;
-    if (!(amount && selectedCoreSample && destination && destinationInventory)) return;
+    if (!(amount && (selectedCoreSample || baseline) && destination && destinationInventory)) return;
     if (isPurchase && !depositOwner) return;
     if (leasePayment && !buildingOwner?.Crew?.delegatedTo) return;
 
@@ -311,6 +335,8 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       return;
     }
 
+    if (baseline) return startBaselineExtraction(safeAmount, resourceId, destination, destinationInventory.slot,
+      leasePayment > 0 && { recipient: buildingOwner.Crew.delegatedTo, term: actualLeaseTerm, termPrice: leasePayment });
     return startExtraction(
       safeAmount,
       selectedCoreSample,
@@ -324,6 +350,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
       }
     );
   }, [productionAuthorization,
+    baseline, resourceId, startBaselineExtraction,
     actualLeaseTerm,
     amount,
     buildingOwner,
@@ -392,9 +419,19 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
 
       <ActionDialogBody>
 
+        {onchain && stage === actionStage.NOT_STARTED && <Section>
+          <SectionTitle>Mining Source</SectionTitle>
+          <SectionBody><Dropdown options={baselineOptions} initialSelection={baselineResource ? String(baselineResource) : 'claim'}
+            onChange={option => {
+              setBaselineResource(option.value === 'claim' ? null : Number(option.value));
+              setSelectedCoreSample(null);
+              setAmount(0);
+            }} /></SectionBody>
+        </Section>}
+
         <FlexSection>
           <FlexSectionInputBlock
-            title="Deposit"
+            title={onchain ? baseline ? 'Baseline Resource' : 'Claim' : 'Deposit'}
             titleDetails={(isPurchase && stage === actionStage.NOT_STARTED) ? <BuyingDetailsLabel /> : ''}
             image={
               resource
@@ -408,8 +445,8 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
             }
             isSelected={stage === actionStage.NOT_STARTED}
             label={resource ? `${resource.name} Deposit` : 'Select'}
-            onClick={() => { setSampleSelectorOpen(true) }}
-            disabled={stage !== actionStage.NOT_STARTED}
+            onClick={() => { if (!baseline) setSampleSelectorOpen(true) }}
+            disabled={baseline || stage !== actionStage.NOT_STARTED}
             style={{ whiteSpace: 'nowrap' }}
             sublabel={
               selectedCoreSample
@@ -428,7 +465,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
                       </SublabelBanner>
                     )
                 )
-                : 'Sampled Deposit'
+                : baseline ? 'Unlimited baseline · 25% reference rate' : onchain ? 'Select a claim' : 'Sampled Deposit'
             }
             {...extraDepositProps} />
 
@@ -502,7 +539,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
                 amount={amount || 0}
                 extractionTime={extractionTime || 0}
                 min={0}
-                max={selectedCoreSample?.Deposit?.remainingYield || 0}
+                max={maxAmount}
                 resource={resource}
                 setAmount={setAmount} />
             </SectionBody>
@@ -515,7 +552,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
             startTime={currentExtraction?.startTime}
             stage={stage}
             title="Progress"
-            totalTime={crewTravelTime + extractionTime}
+            totalTime={currentExtraction?.startTime ? currentExtraction.finishTime - currentExtraction.startTime : crewTravelTime + extractionTime}
           />
         )}
 
@@ -534,7 +571,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
           stage !== actionStage.READY_TO_COMPLETE &&
           (
             !destinationLot ||
-            !selectedCoreSample ||
+            (!selectedCoreSample && !baseline) ||
             amount === 0 ||
             !productionAuthorization.allowed
           )
@@ -556,7 +593,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
             initialSelection={selectedCoreSample}
             lotId={lot?.id}
             onClose={() => setSampleSelectorOpen(false)}
-            onSelected={setSelectedCoreSample}
+            onSelected={sample => { setBaselineResource(null); selectCoreSample(sample); }}
             open={sampleSelectorOpen}
           />
 
@@ -565,7 +602,7 @@ const Extract = ({ asteroid, lot, extractionManager, stage, ...props }) => {
             asteroidId={asteroid?.id}
             excludeSites
             otherEntity={lot?.building}
-            itemIds={[selectedCoreSample?.Deposit?.resource]}
+            itemIds={[resourceId]}
             itemIdsRequireAllAllowed
             onClose={() => setDestinationSelectorOpen(false)}
             onSelected={setDestinationSelection}
@@ -581,6 +618,8 @@ const Wrapper = (props) => {
   const { asteroid, lot, isLoading } = useAsteroidAndLot(props);
   const extractionManager = useExtractionManager(lot?.id);
   const { actionStage } = extractionManager;
+  const [miningTab, setMiningTab] = useState(prospectingEnabled() ? 1 : 0);
+  const canPreview = prospectingEnabled() && !prospectingOnchain() && extractionManager.extractionStatus === 'READY';
 
   useEffect(() => {
     if (!asteroid || !lot) {
@@ -595,12 +634,17 @@ const Wrapper = (props) => {
       actionImage="Extraction"
       isLoading={reactBool(isLoading)}
       stage={actionStage}>
-      <Extract
-        asteroid={asteroid}
-        lot={lot}
-        extractionManager={extractionManager}
-        stage={actionStage}
-        {...props} />
+      {canPreview && <ActionDialogTabs tabs={[{ label: 'Current Mining' }, { label: 'Claim Preview' }]}
+        selected={miningTab} onSelect={setMiningTab} />}
+      {canPreview && miningTab === 1 && asteroid && lot
+        ? <MiningPreview asteroid={asteroid} lot={lot} onClose={props.onClose} />
+        : <Extract
+            asteroid={asteroid}
+            lot={lot}
+            extractionManager={extractionManager}
+            stage={actionStage}
+            {...props} />}
+
     </ActionDialogInner>
   )
 };

@@ -1,44 +1,21 @@
 /** @jest-environment node */
-import { zero, transition, unpackMeta, claim } from './rules';
+import { Prospecting } from '@influenceth/sdk';
 import fixture from './__fixtures__/campaign.json';
 
-jest.mock('@zkpassport/poseidon2', () =>
-  jest.requireActual(
-    '../../../node_modules/@zkpassport/poseidon2/dist/cjs/index.cjs'
-  )
-);
-
-it('replays the verified five-sample sandbox campaign without changing its claim', () => {
+it('replays the verified sandbox transcript with the quantity bonus applied once', () => {
   const { input: p, expected } = fixture;
-  let state = Array.from({ length: 10 }, zero);
-  state.origin = p.origin;
-  const history = [];
-  for (let i = 0; i < 5; i++) {
-    const action = {
-      method: p.methods[i],
-      target: p.targets[i],
-      source: p.sources[i],
-      depth: p.depths[i],
-      salt: p.salts[i]
-    };
-    const result = transition(
-      state,
-      history,
-      p.context,
-      i,
-      action,
-      p.meta[i],
-      p.blockedApproaches[i],
-      p.randomness[i],
-      p.quality
-    );
-    expect(result.commitment).toBe(p.commitments[i]);
-    state = result.state;
-    history.push(result);
+  const identity = { chainId: '0x1', game: '0x2', owner: '0x3', asteroidId: 1,
+    originIndex: Number(p.origin), resource: 1 };
+  let record = Prospecting.createRecord({ identity, context: p.context, mode: 'local-simulation' });
+  for (let i = 0; i < p.methods.length; i++) {
+    record = Prospecting.appendSample(record, {
+      action: { method: Number(p.methods[i]), target: Number(p.targets[i]), source: Number(p.sources[i]),
+        depth: Number(p.depths[i]), salt: String(p.salts[i]) },
+      meta: String(p.meta[i]), mask: String(p.blockedApproaches[i]), randomness: String(p.randomness[i])
+    });
   }
-  const cell = state[p.selected];
-  const sample = history.findIndex((h) => h.lot === cell[1]);
-  expect(claim(cell, unpackMeta(p.meta[sample]).abundance)).toEqual(
-    expected.result
-  );
+  record = Prospecting.finalizeRecord(record, Number(p.selected));
+  const { finalized, history } = Prospecting.replayCampaign(record);
+  expect(history.map((entry) => entry.commitment)).toEqual(p.commitments.map(String));
+  expect(finalized).toMatchObject({ ...expected.result, quantity: Math.floor(expected.result.quantity * 1.5) });
 });

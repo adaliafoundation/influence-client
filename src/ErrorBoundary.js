@@ -94,8 +94,13 @@ class ErrorBoundary extends Component {
       delete redactedStore.state.sessions[key].gameplaySession;
     });
 
-    // remove inbox private key
-    delete redactedStore.dmPrivateKey;
+    // Exclude both legacy inbox keys and the shared private-data key.
+    for (const state of [redactedStore, redactedStore.state]) {
+      if (state) {
+        delete state.dmPrivateKey;
+        delete state.privateDataKey;
+      }
+    }
 
     // TODO (maybe):
     //  - current block number and block time

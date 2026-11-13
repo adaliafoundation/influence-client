@@ -31,6 +31,7 @@ const TrackballModControls = function (object, domElement) {
   this.noRotate = false;
   this.noZoom = false;
   this.noPan = false;
+  this.panTarget = false;
   this.staticMoving = true;
   this.dynamicDampingFactor = 0.3;
   this.minDistance = 0;
@@ -237,8 +238,12 @@ const TrackballModControls = function (object, domElement) {
         pan.copy(_eye).cross(_this.object.up).setLength(mouseChange.x);
         pan.add(objectUp.copy(_this.object.up).setLength(mouseChange.y));
 
-        // Pans the passed scene object instead of the camera to maximize precision at target
-        _this.targetScene.position.sub(pan);
+        if (_this.panTarget) {
+          _this.target.add(pan);
+        } else {
+          // Scene panning preserves precision at astronomical distances.
+          _this.targetScene.position.sub(pan);
+        }
 
         if (_this.staticMoving) {
           _panStart.copy(_panEnd);

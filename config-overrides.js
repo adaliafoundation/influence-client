@@ -23,7 +23,8 @@ const adjustWorkbox = () => config => {
       p.config.maximumFileSizeToCacheInBytes = 30 * 1024 * 1024;
       p.config.exclude = [
         ...(p.config.exclude || []),
-        /runtime-config\.js$/
+        /runtime-config\.js$/,
+        /prospecting-proofs\//
       ];
     }
   });
@@ -96,6 +97,13 @@ const addCompatibilityAliases = () => config => {
     'react-ticker': path.resolve(__dirname, 'src/compat/react-ticker.js')
   };
 
+  // Garaga's browser crypto dependency imports these Node core module names.
+  config.resolve.fallback = {
+    ...config.resolve.fallback,
+    stream: require.resolve('stream-browserify'),
+    vm: require.resolve('vm-browserify')
+  };
+
   return config;
 };
 
@@ -134,3 +142,11 @@ module.exports = override(
   addJsonImportAttributesCompatibility(),
   addSVGR()
 );
+
+module.exports.jest = (config) => ({
+  ...config,
+  moduleNameMapper: {
+    ...config.moduleNameMapper,
+    '^@influenceth/sdk$': '<rootDir>/src/test/sdk.cjs'
+  }
+});

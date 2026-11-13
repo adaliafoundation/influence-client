@@ -35,6 +35,7 @@ import { disposeLotMeshes } from './helpers/disposeLotMeshes';
 import Crews from './Crews';
 import ProspectingScene from '../../prospecting/ProspectingScene';
 import { useProspecting } from '../../prospecting/store';
+import { setProspectingLotVisibility } from '../../prospecting/lotPresentation';
 import Deliveries from './Deliveries';
 
 const { MAX_LOTS_RENDERED } = constants;
@@ -860,14 +861,12 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   useFrame((state) => {
     const survey = useProspecting.getState();
     const prospecting = survey.active && survey.asteroidId === asteroidId;
-    for (const mesh of [
-      ...Object.values(lotMeshes.current),
+    setProspectingLotVisibility(lotMeshes.current, [
       lotLeasesMesh.current,
       mouseHoverMesh.current,
-      selectionMesh.current
-    ]) {
-      if (mesh) mesh.visible = !prospecting;
-    }
+      selectionMesh.current,
+      mouseableMesh.current
+    ], prospecting);
     if (prospecting || !lotTally) return;
 
     if (getCameraIsAnimating()) {

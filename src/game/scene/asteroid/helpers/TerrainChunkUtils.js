@@ -372,6 +372,27 @@ export function getExtraPasses(chunkSize, resolution) {
   return Math.ceil(Math.log2(1 / chunkSize) + (resolution / CHUNK_RESOLUTION) - 1)
 };
 
+export function rebuildChunkEmissiveMap({ config, emissiveParams, groupMatrix, offset, resolution, width }) {
+  const localToWorld = groupMatrix;
+  const chunkSize = width / (2 * config.radius);
+  const chunkOffset = offset.clone().multiplyScalar(1 / config.radius);
+  const resolutionPlusOne = resolution + 1;
+  const textureResolution = OVERSAMPLE_CHUNK_TEXTURES ? resolutionPlusOne + 2 : resolutionPlusOne;
+  const textureSize = OVERSAMPLE_CHUNK_TEXTURES ? chunkSize * (1 + 2 / resolution) : chunkSize;
+  return emissiveParams && generateEmissiveMap(
+    {
+      cubeTransform: localToWorld,
+      chunkSize: textureSize,
+      chunkOffset,
+      chunkResolution: textureResolution,
+      extraPasses: getExtraPasses(chunkSize, resolution),
+      extraPassesMax: getExtraPasses(getMinChunkSize(config.radius) / (2 * config.radius), resolution) - 1,
+      oversample: OVERSAMPLE_CHUNK_TEXTURES
+    },
+    emissiveParams
+  );
+}
+
 export function rebuildChunkMaps({ config, edgeStrides, emissiveParams, groupMatrix, offset, resolution, width }) {
   const localToWorld = groupMatrix;
   const chunkSize = width / (2 * config.radius);
@@ -400,19 +421,7 @@ export function rebuildChunkMaps({ config, edgeStrides, emissiveParams, groupMat
     heightTexture, textureResolution, textureSize * (2 * config.radius), OVERSAMPLE_CHUNK_TEXTURES, config
   );
 
-  // conditionally add emissive bitmap
-  const emissiveBitmap = emissiveParams && generateEmissiveMap(
-    {
-      cubeTransform: localToWorld,
-      chunkSize: textureSize,
-      chunkOffset,
-      chunkResolution: textureResolution,
-      extraPasses: getExtraPasses(chunkSize, resolution),
-      extraPassesMax: getExtraPasses(getMinChunkSize(config.radius) / (2 * config.radius), resolution) - 1,
-      oversample: OVERSAMPLE_CHUNK_TEXTURES
-    },
-    emissiveParams
-  );
+  const emissiveBitmap = rebuildChunkEmissiveMap({ config, emissiveParams, groupMatrix, offset, resolution, width });
 
   // done with interim data textures
   heightTexture.dispose();

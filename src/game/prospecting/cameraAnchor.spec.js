@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { Group, PerspectiveCamera, Vector3 } from 'three';
+import { REACH } from './geometry';
 import { lockProspectingCamera } from './cameraAnchor';
 
 test('anchors to the terrain lot, follows its motion, and restores the original camera', () => {
@@ -26,7 +27,7 @@ test('anchors to the terrain lot, follows its motion, and restores the original 
   lock.update();
   expect(controls.target.toArray()).toEqual([30, 0, 4000]);
   expect(camera.position.equals(originalPosition)).toBe(true);
-  expect(controls.noPan).toBe(true);
+  expect(controls.noPan).toBe(false);
   expect(controls.minDistance).toBe(100);
 
   const offset = camera.position.clone().sub(controls.target);
@@ -60,4 +61,44 @@ test('anchors to the terrain lot, follows its motion, and restores the original 
   expect(controls.minDistance).toBe(5000);
   expect(controls.rotateSpeed).toBe(0.2);
   expect(controls.prospectingAnchor).toBe(false);
+});
+
+test('bounds panning without changing zoom, follows terrain rotation, and restores controls', () => {
+  const terrain = new Group();
+  const origin = new Vector3(0, 0, 4000);
+  const camera = new PerspectiveCamera();
+  camera.position.set(0, 0, 6000);
+  const controls = {
+    object: camera, target: new Vector3(), noPan: true, panTarget: false, panSpeed: 0.3,
+    minDistance: 5000, maxDistance: 100000, rotateSpeed: 0.2, zoomSpeed: 1.2
+  };
+  const lock = lockProspectingCamera(controls, terrain, origin);
+  lock.update();
+  const drag = new Vector3(700, 300, 50);
+  controls.target.add(drag);
+  camera.position.add(drag);
+  const eye = camera.position.clone().sub(controls.target);
+  lock.constrain();
+  expect(controls.target.toArray()).toEqual([700, 300, 4000]);
+  expect(camera.position.clone().sub(controls.target).distanceTo(eye)).toBeLessThan(1e-9);
+  lock.update();
+  expect(controls.target.toArray()).toEqual([700, 300, 4000]);
+
+  const excess = new Vector3(REACH * 2, 0, 0);
+  controls.target.add(excess);
+  camera.position.add(excess);
+  lock.constrain();
+  expect(controls.target.distanceTo(origin)).toBeCloseTo(REACH);
+  expect(camera.position.clone().sub(controls.target).distanceTo(eye)).toBeLessThan(1e-9);
+
+  const targetBeforeRotation = controls.target.clone();
+  terrain.rotation.y = 0.2;
+  lock.constrain();
+  expect(controls.target.distanceTo(targetBeforeRotation.applyAxisAngle(new Vector3(0, 1, 0), 0.2))).toBeLessThan(1e-9);
+  lock.restore();
+  expect(controls.target.toArray()).toEqual([0, 0, 0]);
+  expect(camera.position.toArray()).toEqual([0, 0, 6000]);
+  expect(controls.noPan).toBe(true);
+  expect(controls.panSpeed).toBe(0.3);
+  expect(controls.panTarget).toBe(false);
 });

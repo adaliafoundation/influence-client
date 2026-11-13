@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Deposit, Permission } from '@influenceth/sdk';
 
+import { prospectingEnabled } from '../../../prospecting/store';
 import { ExtractionIcon } from '~/components/Icons';
 import useExtractionManager from '~/hooks/actionManagers/useExtractionManager';
 import ActionButton, { getCrewDisabledReason } from './ActionButton';
@@ -68,7 +69,7 @@ const Extract = ({ onSetAction, asteroid, blockTime, crew, lot, preselect, simul
         permissionTarget: lot?.building
       });
       if (crewDisabledReason) return crewDisabledReason;
-      if (myUsableSamples?.length === 0) return 'requires core sample';
+      if (myUsableSamples?.length === 0 && !prospectingEnabled()) return 'requires core sample';
     } else if (!currentExtraction?._isAccessible) {
       return 'in use';
     }

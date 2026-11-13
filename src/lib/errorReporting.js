@@ -2,7 +2,7 @@ import { errorMessages } from './errorMessages';
 import { isWalletRequestTimeout } from './walletErrors';
 
 const reported = new WeakSet();
-const privateField = /token|secret|password|private.?key|sessionDappKey|gameplaySession|authorization|cookie|signature|seed|mnemonic|headers|config|request/i;
+const privateField = /token|secret|password|private.?key|privateDataKey|sessionDappKey|gameplaySession|authorization|cookie|signature|seed|mnemonic|headers|config|request/i;
 const redactText = value => value
   .replace(/((?:private[_-]?key|secret|password|mnemonic|access[_-]?token|sessionDappKey)["']?\s*[:=]\s*["']?)[^\s"',}]+/gi, '$1[redacted]')
   .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [redacted]')
