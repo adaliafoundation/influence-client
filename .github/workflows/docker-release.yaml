@@ -39,13 +39,6 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Require the main workflow branch and a supported channel
-        env:
-          CHANNEL: ${{ inputs.channel || 'production' }}
-        run: |
-          test "$GITHUB_REF" = refs/heads/main
-          [[ "$CHANNEL" = production || "$CHANNEL" = prerelease ]]
-
       - name: Resolve requested SHA
         id: requested
         env:
@@ -55,6 +48,22 @@ jobs:
           COMMIT_SHA="${INPUT_SHA:-$EVENT_SHA}"
           [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout workflow policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release channel and selected branch ancestry
+        env:
+          COMMIT_SHA: ${{ steps.requested.outputs.sha }}
+          CHANNEL: ${{ inputs.channel || 'production' }}
+        run: bash scripts/verify-release.sh "$COMMIT_SHA" "$CHANNEL"
+
+      - name: Test release policy
+        run: node --test scripts/verify-release.test.cjs
 
       - name: Checkout requested commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -70,11 +79,12 @@ jobs:
           RELEASE_PREFIX: ${{ inputs.channel == 'prerelease' && 'stack-prerelease' || 'production' }}
         run: |
           test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
-          git merge-base --is-ancestor "$COMMIT_SHA" refs/remotes/origin/main
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          echo "name=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "candidate=$IMAGE:candidate-$COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
-          echo "release=$IMAGE:$RELEASE_PREFIX-$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "name=$IMAGE"
+            echo "candidate=$IMAGE:candidate-$COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            echo "release=$IMAGE:$RELEASE_PREFIX-$COMMIT_SHA"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Check critical npm vulnerabilities before building
         run: >-
@@ -181,17 +191,18 @@ jobs:
       - name: Sign and verify the candidate digest
         env:
           IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          WORKFLOW_REF: ${{ github.ref }}
         run: |
           cosign sign --yes "$IMAGE"
           # Sigstore identifies the signing workflow, including when called by another workflow.
           cosign verify "$IMAGE" \
-            --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/docker-release.yaml@refs/heads/main" \
+            --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/docker-release.yaml@$WORKFLOW_REF" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
   publish:
     name: ${{ inputs.channel == 'prerelease' && 'Publish prerelease image and request deployment' || 'Publish production image' }}
     needs: release
-    if: github.ref == 'refs/heads/main'
+    if: inputs.channel == 'prerelease' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ inputs.channel || 'production' }}
@@ -243,7 +254,7 @@ jobs:
           echo 'Production image published. Deployment on the host is manual.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish the verified main-head prerelease channel
-        if: inputs.channel == 'prerelease'
+        if: inputs.channel == 'prerelease' && github.ref == 'refs/heads/main'
         env:
           IMAGE: ${{ needs.release.outputs.image }}
           DIGEST: ${{ needs.release.outputs.digest }}
@@ -259,7 +270,7 @@ jobs:
           test "$(docker buildx imagetools inspect "$IMAGE:stack-prerelease" --format '{{.Manifest.Digest}}')" = "$DIGEST"
 
       - name: Notify prerelease deployment after publication
-        if: inputs.channel == 'prerelease' && vars.STACK_PRERELEASE_WEBHOOK_URL != ''
+        if: inputs.channel == 'prerelease' && github.ref == 'refs/heads/main' && vars.STACK_PRERELEASE_WEBHOOK_URL != ''
         env:
           WEBHOOK_URL: ${{ vars.STACK_PRERELEASE_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.STACK_PRERELEASE_WEBHOOK_TOKEN }}
