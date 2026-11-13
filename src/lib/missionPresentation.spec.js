@@ -23,7 +23,8 @@ test('pending transactions take precedence over indexed flags', () => {
 });
 
 test('individual objectives only complete with supporting campaign evidence', () => {
-  expect(getMissionObjectives(StarterMission.TYPES[1], { sampleCount: 2 }).map(o => o.complete)).toEqual([true, true, false]);
+  expect(getMissionObjectives(StarterMission.TYPES[1], { sampleCount: 2 }).map(o => o.complete)).toEqual([false]);
+  expect(getMissionObjectives({ ...StarterMission.TYPES[1], earned: true }, { sampleCount: 1 })[0].complete).toBe(true);
   expect(getMissionObjectives(StarterMission.TYPES[7], { upstreamRoutes: [true], finalProductIds: ['23'] }).map(o => o.complete)).toEqual([true, true, false]);
   expect(getMissionObjectives(StarterMission.TYPES[3], { warehouseId: '999' }).map(o => o.complete)).toEqual([false, false]);
   expect(getMissionObjectives(StarterMission.TYPES[0], { warehouseId: '999' })[0].complete).toBe(true);

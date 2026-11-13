@@ -141,6 +141,11 @@ const customConfigs = {
   ConstructionStart: { equalityTest: ['building.id'] },
 
   ExtractResourceStart: { equalityTest: ['extractor.id', 'extractor_slot'] },
+  BaselineExtractResourceStart: { equalityTest: ['extractor.id', 'extractor_slot'] },
+  ProspectingStart: { equalityTest: ['origin.id'] },
+  ProspectingSample: { equalityTest: ['campaign_id', 'expected_index'] },
+  ProspectingFinalize: { equalityTest: ['campaign_id'], isUnblockable: true },
+  ProspectingAbandon: { equalityTest: ['campaign_id'], isUnblockable: true },
   ExtractResourceFinish: { equalityTest: ['extractor.id', 'extractor_slot'] },
 
   ProcessProductsStart: { equalityTest: ['processor.id', 'processor_slot'] },
@@ -361,7 +366,7 @@ const customConfigs = {
           }
         },
         {
-          system: 'ExtractResourceStart',
+          system: vars.baselineResource ? 'BaselineExtractResourceStart' : 'ExtractResourceStart',
           vars
         }
       ].filter((c) => !!c);

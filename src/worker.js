@@ -5,6 +5,7 @@ import porkchop from '~/lib/porkchop';
 import {
   initChunkTextures,
   rebuildChunkGeometry,
+  rebuildChunkEmissiveMap,
   rebuildChunkMaps
 } from '~/game/scene/asteroid/helpers/TerrainChunkUtils';
 import { getLotGeometry, getLotRegions, getClosestLots } from '~/game/scene/asteroid/helpers/LotGeometry';
@@ -31,6 +32,10 @@ onmessage = function(event) {
         ...cache.asteroid,
         ...event.data.chunk
       });
+      break;
+    case 'rebuildTerrainEmissiveMap':
+      if (event.data.asteroid) cache.asteroid = event.data.asteroid;
+      rebuildTerrainEmissiveMap({ ...cache.asteroid, ...event.data.chunk });
       break;
     case 'rebuildTerrainMaps':
       if (event.data.asteroid) cache.asteroid = event.data.asteroid;
@@ -102,6 +107,16 @@ const rebuildTerrainGeometry = function (chunk) {
     normals.buffer
   ]);
 }
+
+const rebuildTerrainEmissiveMap = function (chunk) {
+  chunk.offset = new Vector3(...chunk.offset);
+  chunk.groupMatrix = new Matrix4().fromArray(chunk.groupMatrix);
+  initChunkTextures().then(() => {
+    const bitmap = rebuildChunkEmissiveMap(chunk);
+    const transferable = typeof ImageBitmap !== 'undefined' && bitmap instanceof ImageBitmap ? [bitmap] : [];
+    postMessage({ bitmap }, transferable);
+  }).catch((error) => postMessage({ error: error?.message || 'Unable to build resource overlay' }));
+};
 
 const rebuildTerrainMaps = function (chunk) {
   chunk.offset = new Vector3(chunk.offset[0], chunk.offset[1], chunk.offset[2]);

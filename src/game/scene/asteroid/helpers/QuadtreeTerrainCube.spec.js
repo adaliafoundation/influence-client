@@ -99,7 +99,7 @@ it('schedules neighboring edge rebuilds independently', () => {
     neighbors: { N: { size: new Vector3(200, 200, 0) } }
   }]));
   cube.builder = {};
-  cube.chunks = Object.fromEntries(['a', 'b'].map((key) => [`${key} [1111] []`, { key, stitchingSig: '1111' }]));
+  cube.chunks = Object.fromEntries(['a', 'b'].map((key) => [`${key} [1111]`, { key, stitchingSig: '1111' }]));
   cube.sides = [{ quadtree: {
     setCameraPosition: jest.fn(), populateEdges: jest.fn(), populateNonsideNeighbors: jest.fn(),
     getChildren: () => nodes
@@ -107,4 +107,22 @@ it('schedules neighboring edge rebuilds independently', () => {
   cube.setCameraPosition(new Vector3());
   expect(cube.queuedChanges).toHaveLength(2);
   expect(cube.queuedChanges[0].add).toHaveLength(1);
+});
+
+it('does not schedule terrain replacement when only the selected resource changes', () => {
+  const cube = Object.create(QuadtreeTerrainCube.prototype);
+  const child = { ...node('a'), neighbors: {}, distanceToCamera: 1 };
+  cube.builder = { resourceOverlay: { set: jest.fn() } };
+  cube.chunks = { 'a [1111]': { key: 'a', stitchingSig: '1111' } };
+  cube.sides = [{ quadtree: {
+    setCameraPosition: jest.fn(), populateEdges: jest.fn(), populateNonsideNeighbors: jest.fn(),
+    getChildren: () => ({ a: child })
+  } }];
+  cube.setEmissiveParams({ resource: 1 });
+  cube.setCameraPosition(new Vector3());
+  expect(cube.queuedChanges).toEqual([]);
+  cube.setEmissiveParams(null);
+  cube.setCameraPosition(new Vector3());
+  expect(cube.queuedChanges).toEqual([]);
+  expect(cube.builder.resourceOverlay.set).toHaveBeenLastCalledWith(null);
 });

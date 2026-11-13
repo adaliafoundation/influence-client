@@ -65,7 +65,7 @@ test.each([0, 1, 2, 3, 4, 5, 6, 7, 8])('migrates version %s while preserving acc
   expect(useStore.getState().selectedCrewId).toBe(42);
   expect(useStore.getState().pendingTransactions).toEqual(saved.pendingTransactions);
   expect(useStore.getState().starterPackCheckout).toBeNull();
-  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(11);
+  expect(JSON.parse(localStorage.getItem(STORE_NAME)).version).toBe(12);
 });
 
 test('migrates version 9 bridge records without clearing current purchase or account work', async () => {
@@ -95,7 +95,7 @@ test('migrates version 9 bridge records without clearing current purchase or acc
   }
   expect(state.bridgeTransfers).toEqual({ current: transfer });
   const stored = JSON.parse(localStorage.getItem(STORE_NAME));
-  expect(stored.version).toBe(11);
+  expect(stored.version).toBe(12);
   expect(stored.state.bridgeTransfers).toEqual({ current: transfer });
 });
 

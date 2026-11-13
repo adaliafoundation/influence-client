@@ -1,5 +1,7 @@
 {
   "App": {
+    "prospectingMode": "local",
+    "privateDataPeers": "",
     "deployment": "development",
     "disableIntroAnimation": false,
     "disableLauncherLanding": false,

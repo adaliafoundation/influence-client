@@ -28,6 +28,10 @@ jest.mock('~/hooks/useStore', () => (selector) => selector({
 jest.mock('~/lib/utils', () => ({}), { virtual: true });
 jest.mock('~/theme', () => ({}), { virtual: true });
 jest.mock('../../actionButtons', () => ({}));
+jest.mock('../../actionButtons/Prospect', () => () => null);
+jest.mock('~/game/prospecting/store', () => ({
+  prospectingEnabled: () => false, prospectingOnchain: () => false
+}), { virtual: true });
 jest.mock('./ListForSalePanel', () => ({}));
 jest.mock('./components', () => ({
   HudMenuCollapsibleSection: ({ children }) => <div>{children}</div>,

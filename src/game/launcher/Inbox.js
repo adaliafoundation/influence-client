@@ -18,11 +18,11 @@ import useIpfsContent from '~/hooks/useIpfsContent';
 import useSession from '~/hooks/useSession';
 import useStore from '~/hooks/useStore';
 import useUser from '~/hooks/useUser';
+import usePrivateDataKey from '~/hooks/usePrivateDataKey';
 import useWalletCrews from '~/hooks/useWalletCrews';
 import useWalletInbox from '~/hooks/useWalletInbox';
 import api from '~/lib/api';
 import formatters from '~/lib/formatters';
-import { resolveChainId } from '~/lib/utils';
 import LauncherDialog from './components/LauncherDialog';
 
 const Wrapper = styled.div`
@@ -191,19 +191,22 @@ const MessageInner = ({ message }) => {
   const queryClient = useQueryClient();
   const { accountAddress } = useSession();
 
-  const dmPrivateKey = useStore(s => s.dmPrivateKey);
+  const { privateKey: dmPrivateKey } = usePrivateDataKey();
 
   const { data: ipfsContent, isLoading } = useIpfsContent(message?.ipfs?.hash);
   
   const [decryptedContent, setDecryptedContent] = useState();
   const [decryptionError, setDecryptionError] = useState();
   useEffect(() => {
+    let cancelled = false;
+    setDecryptedContent();
     setDecryptionError();
     const iAmRecipient = Address.areEqual(accountAddress, message?.recipient);
     const decryptable = ipfsContent?.[iAmRecipient ? 'recipient' : 'sender'];
     if (decryptable && dmPrivateKey) {
       Encryption.decryptContent(dmPrivateKey, decryptable)
         .then((content) => {
+          if (cancelled) return;
           setDecryptedContent(content);
           if (!message?.read && iAmRecipient) {
             api.markMessageAsRead(message.id).then(() => {
@@ -225,12 +228,14 @@ const MessageInner = ({ message }) => {
           }
         })
         .catch((e) => {
+          if (cancelled) return;
           console.error(e);
           setDecryptedContent();
           setDecryptionError(true);
         });
     }
-  }, [dmPrivateKey, ipfsContent, message]);
+    return () => { cancelled = true; };
+  }, [accountAddress, dmPrivateKey, ipfsContent, message, queryClient]);
 
   return (
     <Content>
@@ -350,104 +355,61 @@ const Thread = ({ correspondent }) => {
   );
 };
 
-const EnableInbox = () => {
-  const { chainId, walletAccount } = useSession();
+const EnablePrivateData = () => {
+  const { accountAddress, chainId } = useSession();
   const { data: user, isLoading } = useUser();
   const { execute, getStatus } = useContext(ChainTransactionContext);
 
-  const dispatchDmPrivateKey = useStore(s => s.dispatchDmPrivateKey);
+  const { remember: dispatchPrivateDataKey, unlock, deriveKey, unlocking: isRecovering, phase, error } = usePrivateDataKey();
 
-  const getPrivateKeyFromSeed = useCallback(async (seed) => {
-    const signature = await walletAccount.signMessage({
-      domain: {
-        name: 'Influence',
-        chainId: resolveChainId(chainId, 'hex'),
-        version: '1.1.0'
-      },
-      message: { message: 'Messaging Hash', nonce: seed.substr(0, 24) },
-      primaryType: 'Message',
-      types: {
-        Message: [
-          { name: 'message', type: 'string' },
-          { name: 'nonce', type: 'string' }
-        ],
-        StarkNetDomain: [
-          { name: 'name', type: 'felt' },
-          { name: 'chainId', type: 'felt' },
-          { name: 'version', type: 'felt' }
-        ]
-      }
-    });
-    if (signature) {
-      const signedSeed = `${seed}${BigInt(`${signature.join('')}`).toString(16)}`;
-      return await Encryption.generatePrivateKeyFromSeed(signedSeed);
-    }
-    return null;
-  }, [chainId, walletAccount]);
-
-  // TODO (later):
-  // - add button to connected-inbox to change encryption key (or settings)
-  //  - when this happens, unpin all messages (OR re-encrypt with new key?)
-  const [pendingKeypair, setPendingKeypair] = useState();
-  const rekeyInbox = useCallback(async () => {
-    const seed = Encryption.generateSeed();
-    const privateKey = await getPrivateKeyFromSeed(seed);
-    if (privateKey) {
+  const [setupError, setSetupError] = useState('');
+  const [isSettingUp, setIsSettingUp] = useState(false);
+  const scope = useRef();
+  scope.current = { accountAddress, chainId };
+  const enablePrivateData = useCallback(async () => {
+    setSetupError('');
+    setIsSettingUp(true);
+    const matchesAccount = () => scope.current.accountAddress === accountAddress && (!chainId || scope.current.chainId === chainId);
+    try {
+      if (user?.publicKey) throw new Error('An encryption identity already exists. Recover it rather than replacing its key.');
+      // Keep the recovery seed stable across rejected or interrupted setup attempts.
+      const existingSeed = await api.getInboxSeed();
+      const seed = existingSeed || Encryption.generateSeed();
+      const privateKey = await deriveKey(seed);
+      if (!privateKey || !matchesAccount()) return;
+      if (!existingSeed) await api.updateUser({ directMessagingSeed: seed });
+      if (!matchesAccount()) return;
       const publicKey = Encryption.getPublicKeyFromPrivateKey(privateKey);
-      const messagingKeys = Encryption.publicKeyToMessagingKeys(publicKey);
-      const submission = await execute('RekeyInbox', messagingKeys);
-      setPendingKeypair([publicKey, privateKey, seed]);
-      return submission;
-    }
-  }, [execute]);
+      await execute('RekeyInbox', Encryption.publicKeyToMessagingKeys(publicKey));
+      if (matchesAccount()) dispatchPrivateDataKey(privateKey);
+    } catch (e) { setSetupError(e.message); }
+    finally { setIsSettingUp(false); }
+  }, [accountAddress, chainId, user?.publicKey, deriveKey, execute, dispatchPrivateDataKey]);
 
-  const isRekeying = useMemo(() => {
-    return getStatus('RekeyInbox') === 'pending';
-  }, [getStatus]);
+  const isRekeying = getStatus('RekeyInbox') === 'pending';
 
-  // once detect the rekeying is underway, clear the local private key, then save the new seed and new private key
-  useEffect(() => {
-    if (isRekeying) {
-      dispatchDmPrivateKey();
-      if (pendingKeypair[1] && pendingKeypair[2]) {
-        api.updateUser({ directMessagingSeed: pendingKeypair[2] }).then(() => {
-          dispatchDmPrivateKey(pendingKeypair[1]);
-          setPendingKeypair();
-        });
-      }
-    }
-  }, [isRekeying]);
-
-  const [isRecovering, setIsRecovering] = useState();
-  const recoverKey = useCallback(async () => {
-    setIsRecovering(true);
-    const seed = await api.getInboxSeed();
-    if (seed) {
-      const privateKey = await getPrivateKeyFromSeed(seed);
-      if (privateKey) {
-        dispatchDmPrivateKey(privateKey);
-      }
-    }
-    setIsRecovering(false);
-  }, []);
+  const recoverKey = useCallback(() => {
+    unlock().catch(() => {}); // The shared hook exposes the error in this pane.
+  }, [unlock]);
 
   if (isLoading) return <PageLoader />;
 
   if (user?.hasSeed && user?.publicKey) {
     return (
       <Wrapper>
-        <Title>Connect to Your Inbox</Title>
+        <Title>Unlock Private Data</Title>
         <RecoveryBody>
           <p>
-            By signing your recovery seed, you can regenerate your private key
-            to gain access to your inbox.
+            Sign with your Starknet account to unlock inbox messages and private
+            prospecting records. The key stays in memory until you close or reload the app.
           </p>
+          {error && <p role="alert">{error}</p>}
           <Button
             disabled={isRecovering}
             isTransaction
             loading={isRecovering}
             onClick={recoverKey}
-            size="large">Recover Key</Button>
+            size="large">{isRecovering ? phase === 'connecting' ? 'Connecting Wallet…' : phase === 'signing' ? 'Check Wallet…' : 'Unlocking…' : 'Unlock Private Data'}</Button>
         </RecoveryBody>
       </Wrapper>
     );
@@ -455,23 +417,24 @@ const EnableInbox = () => {
 
   return (
     <Wrapper>
-      <Title>Inbox Setup</Title>
+      <Title>Private Data Encryption</Title>
       <RecoveryBody>
         <p>
-          To enable decentralized direct messaging, you must first create an encryption
-          key-pair for your messages.
+          Set up one encryption key for your inbox, private prospecting records,
+          and future encrypted data shared through Influence.
         </p>
         <p>
-          The public key will be published on-chain so that anyone sending to you can
-          encrypt their message, such that it can only be decrypted by you (with your 
-          unpublished private key).
+          Your public key is published on-chain. Your private key is recovered through
+          your Starknet account and kept in memory; encrypted data can be saved locally
+          or replicated to peers.
         </p>
+        {(setupError || user?.publicKey) && <p role="alert">{setupError || 'Your encryption identity exists, but its recovery seed is missing. Restore the seed before creating another key.'}</p>}
         <Button
-          disabled={isRekeying}
+          disabled={isRekeying || isSettingUp || !!user?.publicKey}
           isTransaction
-          loading={isRekeying}
-          onClick={rekeyInbox}
-          size="large">Enable Direct Messaging</Button>
+          loading={isRekeying || isSettingUp}
+          onClick={enablePrivateData}
+          size="large">Enable Private Data</Button>
       </RecoveryBody>
     </Wrapper>
   );
@@ -497,7 +460,7 @@ const InboxWrapper = () => {
   const { dataUpdatedAt, isLoading, threads } = useWalletInbox();
 
   const dispatchLauncherPage = useStore(s => s.dispatchLauncherPage);
-  const dmPrivateKey = useStore(s => s.dmPrivateKey);
+  const { privateKey: dmPrivateKey } = usePrivateDataKey();
 
   // redirect if not logged in
   useEffect(() => {
@@ -527,7 +490,7 @@ const InboxWrapper = () => {
   }
 
   if (!user?.publicKey || !user?.hasSeed || !dmPrivateKey) {
-    return <LauncherDialog singlePane={<EnableInbox />} />
+    return <LauncherDialog singlePane={<EnablePrivateData />} />
   }
 
   if (threads?.length === 0) {

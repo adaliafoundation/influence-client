@@ -201,8 +201,6 @@ const AsteroidComponent = () => {
   const rotationAxis = useRef();
   const rotation = useRef(0);
   const settingCameraPosition = useRef();
-  const forceUpdate = useRef(0);
-  const lastUpdateStart = useRef(0);
 
   const maxStretch = useMemo(
     () => config?.stretch ? Math.max(config.stretch.x, config.stretch.y, config.stretch.z) : 1,
@@ -654,7 +652,7 @@ const AsteroidComponent = () => {
     if (!config?.radius) return;
     applyingZoomLimits.current = true;
     setTimeout(() => {
-      if (automatingCamera.current) {
+      if (automatingCamera.current || controls.prospectingAnchor) {
         applyingZoomLimits.current = false;
         return;
       }
@@ -716,17 +714,14 @@ const AsteroidComponent = () => {
         intensityMult: EMISSIVE_INTENSITY[categoryKey],
         ...settings
       });
-      forceUpdate.current = Date.now();
     } else if (geometry.current.emissiveParams) {
       geometry.current.setEmissiveParams();
-      forceUpdate.current = Date.now();
     }
   }, [resourceMap, terrainInitialized, !asteroidData?.Celestial?.abundances]);
 
   useEffect(() => {
     if (geometry.current && terrainUpdateNeeded) {
       // vvv BENCHMARK 2ms (zoomed-out), 4-20ms+ (zoomed-in)
-      lastUpdateStart.current = Date.now();
       // if (!disableChunks.current)
       geometry.current.setCameraPosition(terrainUpdateNeeded);
       settingCameraPosition.current = false;
@@ -1020,7 +1015,7 @@ const AsteroidComponent = () => {
         // lock to surface if within "lock" radius OR lot is selected
         // TODO: consider automatically deselecting lot if zoom out enough
         lockToSurface.current = (controls.object.position.length() < 1.1 * config.radius) || selectedLot;
-        if (lockToSurface.current && !automatingCamera.current) {
+        if (lockToSurface.current && !automatingCamera.current && !controls.prospectingAnchor) {
           controls.object.up.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.position.applyAxisAngle(rotationAxis.current, updatedRotation - rotation.current);
           controls.object.updateProjectionMatrix();
@@ -1109,7 +1104,7 @@ const AsteroidComponent = () => {
     // control dynamic zoom limit (zoom out if too low... else, just update boundary)
     if (frameTimeLeft(frameStart, chunkSwapThisCycle.current) <= 0) return;
     if (controls && Object.values(geometry.current?.chunks).length) {
-      if (automatingCamera.current) {
+      if (automatingCamera.current || controls.prospectingAnchor) {
         applyingZoomLimits.current = false;
       } else if (applyingZoomLimits.current) {
         if (applyingZoomLimits.current !== true) {
@@ -1132,8 +1127,7 @@ const AsteroidComponent = () => {
       // vvv BENCHMARK <0.01ms
       const cameraHeight = rotatedCameraPosition.length();
       const updateQuadtreeEvery = geometry.current.smallestActiveChunkSize * UPDATE_DISTANCE_MULT;
-      const updateQuadCube = forceUpdate.current > lastUpdateStart.current
-        || !geometry.current.cameraPosition
+      const updateQuadCube = !geometry.current.cameraPosition
         || Math.abs(geometry.current.cameraPosition.length() - cameraHeight) > updateQuadtreeEvery
         || geometry.current.cameraPosition.distanceTo(rotatedCameraPosition) > updateQuadtreeEvery * cameraHeight / (config.radius * maxStretch)
       ;

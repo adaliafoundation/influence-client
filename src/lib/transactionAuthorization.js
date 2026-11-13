@@ -13,6 +13,9 @@ const permissionChecks = {
   CreateSellOrder: [['exchange', P.LIMIT_SELL], ['storage', P.REMOVE_PRODUCTS]],
   FillSellOrder: [['exchange', P.BUY], ['destination', P.ADD_PRODUCTS]],
   SampleDepositStart: [['origin', P.REMOVE_PRODUCTS]],
+  ProspectingStart: [['origin', P.USE_LOT]],
+  ProspectingSample: [['campaign_origin', P.USE_LOT], ['origin', P.REMOVE_PRODUCTS]],
+  BaselineExtractResourceStart: [['extractor', P.EXTRACT_RESOURCES], ['destination', P.ADD_PRODUCTS]],
   RecruitAdalian: [['station', P.RECRUIT_CREWMATE]],
   InitializeArvadian: [['station', P.RECRUIT_CREWMATE]]
 };
@@ -56,7 +59,7 @@ export const recheckTransactionAuthorization = async (key, vars, recheck) => {
   for (const [field, permission] of permissionChecks[key] || []) {
     const target = vars[field];
     // Starter allowance actions use an explicit empty origin.
-    if (field === 'origin' && ['SampleDepositStart', 'ResupplyFood'].includes(key) && Number(target?.id) === 0) continue;
+    if (field === 'origin' && ['SampleDepositStart', 'ProspectingSample', 'ResupplyFood'].includes(key) && Number(target?.id) === 0) continue;
     const result = await recheck('can', [crew, target, permission], [crew, target].filter(Boolean));
     if (result.status !== 'allowed') return result;
   }

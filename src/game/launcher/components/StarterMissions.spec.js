@@ -93,15 +93,15 @@ test('keeps a completed reward claim available for an ineligible crew', async ()
   expect(manager.complete).toHaveBeenCalledWith(0);
 });
 
-test('shows recorded partial sample progress without marking the mission complete', () => {
+test('does not count historical samples as a completed prospecting campaign', () => {
   setup({ missions: [{ ...StarterMission.TYPES[1], accepted: true }] });
   fireEvent.click(screen.getByRole('button', { name: /Your foothold/i }));
-  expect(screen.getByText('2 / 3 samples')).toBeVisible();
+  expect(screen.getByText('0 / 1 campaign')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /Prospect the Surface: In progress/ }));
   fireEvent.load(screen.getByRole('dialog').querySelector('img'));
   const progress = screen.getByRole('region', { name: 'Mission progress' });
   expect(within(progress).getByText('Mission accepted')).toBeInTheDocument();
-  expect(within(progress).getAllByRole('img', { name: 'Objective completed' })).toHaveLength(2);
+  expect(within(progress).queryAllByRole('img', { name: 'Objective completed' })).toHaveLength(0);
   expect(within(progress).queryByText('In progress')).not.toBeInTheDocument();
   expect(within(progress).getByRole('img', { name: 'Objective incomplete' })).toBeInTheDocument();
   expect(within(progress).getByRole('button', { name: 'Complete mission' })).toBeDisabled();

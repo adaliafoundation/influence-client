@@ -99,6 +99,7 @@ class QuadtreeTerrainCube {
 
   setEmissiveParams(params) {
     this.emissiveParams = params;
+    this.builder.resourceOverlay.set(params);
   }
 
   setShadowsEnabled(state) {
@@ -145,8 +146,7 @@ class QuadtreeTerrainCube {
         node.stitchingStrides = stitchingStrides;
         node.emissiveParams = this.emissiveParams && { ...this.emissiveParams, k };
         node.stitchingSig = STITCHING_DIRECTIONS.map((orientation) => node.stitchingStrides[orientation]).join('');
-        node.emissiveSig = node.emissiveParams?.resource || '';
-        node.renderSig = `${node.key} [${node.stitchingSig}] [${node.emissiveSig}]`;
+        node.renderSig = `${node.key} [${node.stitchingSig}]`;
         updatedChunks[k] = node;
       });
     });
@@ -164,7 +164,7 @@ class QuadtreeTerrainCube {
         const chunk = this.chunks[renderSig];
 
         // if this existing chunk still exists in updatedChunks, will either need to update
-        // due to stitching or emissive change, or don't need to do anything
+        // due to stitching changes, or don't need to do anything
         if (updatedChunks[chunk.key]) {
 
           // calculate "renderSig"... if not same as old chunk, needs rebuild

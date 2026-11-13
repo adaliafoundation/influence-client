@@ -34,3 +34,22 @@ it('subtracts skirt depth after height displacement in both surface and shadow s
   chunk.reconfigure({ side: 1, width: 100 });
   expect(chunk._terrainUniforms.uSkirtDepth.value).toBe(10);
 });
+
+it('retains the emissive texture and shader variant when toggling a cached resource', () => {
+  const { MeshStandardMaterial, Color } = require('three');
+  const chunk = Object.create(TerrainChunk.prototype);
+  chunk._material = new MeshStandardMaterial();
+  const texture = { isTexture: true, dispose: jest.fn() };
+  const params = { resource: 1, color: new Color('#36a7cd'), intensityMult: 2 };
+  chunk.setResourceOverlay(params, texture);
+  const version = chunk._material.version;
+  expect(chunk.hasResourceOverlay(params)).toBe(true);
+  chunk.setResourceOverlay(null);
+  expect(chunk._material.emissiveIntensity).toBe(0);
+  expect(chunk._material.emissiveMap).toBe(texture);
+  chunk.setResourceOverlay(params);
+  expect(chunk._material.emissiveIntensity).toBe(0.1);
+  expect(chunk._material.version).toBe(version);
+  expect(texture.dispose).not.toHaveBeenCalled();
+  chunk._material.dispose();
+});

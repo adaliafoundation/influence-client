@@ -25,6 +25,8 @@ export const MISSION_ACTIONS = {
   ConstructionStart: {},
   ConstructionFinish: { binding: 'Built', target: 'building' },
   SampleDepositStart: {},
+  ProspectingFinalize: {},
+  BaselineExtractResourceStart: { constructed: true, target: 'extractor' },
   SampleDepositFinish: { binding: 'Sample', target: 'deposit' },
   ExtractResourceStart: { constructed: true, target: 'extractor' },
   ExtractResourceFinish: { constructed: true, binding: 'Extraction', target: 'extractor', slot: 'extractor_slot' },
@@ -58,9 +60,9 @@ export const verifyMissionAction = async ({ key, vars, assignment, view, getBind
       return false;
     }
   }
-  if (key === 'ExtractResourceStart') {
-    const deposit = await getEntity(vars.deposit);
-    const resource = deposit?.Deposit?.resource;
+  if (key === 'ExtractResourceStart' || key === 'BaselineExtractResourceStart') {
+    const deposit = key === 'ExtractResourceStart' ? await getEntity(vars.deposit) : null;
+    const resource = deposit?.Deposit?.resource || vars.resource;
     const requirements = StarterMission.TYPES[StarterMission.IDS.BEGIN_EXTRACTION].requirements;
     if (!Product.TYPES[resource] || resource < requirements.rawProductIdMin || resource > requirements.rawProductIdMax) {
       return false;

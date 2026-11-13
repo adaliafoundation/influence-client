@@ -6,6 +6,7 @@ import useCoreSampleManager from '~/hooks/actionManagers/useCoreSampleManager';
 import { useAsteroidAndLot } from '../ActionDialog';
 import { ActionDialogFooter, CoreSampleSelectionDialog, InventorySelectionDialog } from './components';
 
+jest.mock('~/game/prospecting/store', () => ({ prospectingOnchain: () => false }), { virtual: true });
 jest.mock('@influenceth/sdk', () => ({
   Permission: { IDS: { USE_DEPOSIT: 1 } }, Asteroid: {}, Lot: {},
   Crewmate: { ABILITY_IDS: { HOPPER_TRANSPORT_TIME: 1, FREE_TRANSPORT_DISTANCE: 2, CORE_SAMPLE_QUALITY: 3, CORE_SAMPLE_TIME: 4 } },

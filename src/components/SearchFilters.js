@@ -1,3 +1,4 @@
+import { prospectingOnchain } from '~/game/prospecting/store';
 import { useCallback, useEffect, useMemo } from 'react';
 import { Asteroid, Building, Crewmate, Permission, Product, Ship } from '@influenceth/sdk';
 
@@ -418,9 +419,9 @@ const SearchFilters = ({ assetType, highlighting, isListView = false }) => {
 
         <BooleanFilter
           {...filterProps}
-          title="Core Samples"
+          title={prospectingOnchain() ? "Claims" : "Core Samples"}
           fieldName="hasCoresForSale"
-          label="Core Samples for Sale" />
+          label={prospectingOnchain() ? "Claims for Sale" : "Core Samples for Sale"} />
       </>
     );
   }

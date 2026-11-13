@@ -21,14 +21,15 @@ const useProductionAuthorization = ({ kind, crew, facility, origin, destination,
   }), [kind, crew?.id, crew?.Crew?.readyAt, facility?.id, origin?.id, destination?.id, deposit?.id, duration]);
   const { completionTime } = request;
   const entities = [crew, facility, origin, destination, deposit].filter(Boolean);
-  const decision = authorize('production', [request], entities);
+  const productionDecision = kind === 'baseline' ? null : authorize('production', [request], entities);
   const checks = productionChecks(request).map(([method, args]) => authorize(method, args, entities));
+  const decision = productionDecision || checks.find(check => check.status !== 'allowed') || { status: 'allowed' };
   const acquisitions = { lease, purchase };
-  const hasSelections = !!(kind === 'extract' ? deposit : origin) && (kind === 'assemble' || !!destination);
+  const hasSelections = !!(kind === 'baseline' ? facility : kind === 'extract' ? deposit : origin) && (kind === 'assemble' || !!destination);
   const allowed = hasSelections && (!lease && !purchase ? decision.status === 'allowed'
     : checks.every((check, index) => check.status === 'allowed' || acquisitionMatches(check, index, request, acquisitions)));
   const checkCurrent = async () => {
-    if (!lease && !purchase) return recheckAuthorization('production', [{ ...request, duration }], entities);
+    if (!lease && !purchase && kind !== 'baseline') return recheckAuthorization('production', [{ ...request, duration }], entities);
     let finalRequest = request;
     for (let index = 0; index < checks.length; index += 1) {
       const [method, args] = productionChecks(finalRequest)[index];
@@ -40,7 +41,7 @@ const useProductionAuthorization = ({ kind, crew, facility, origin, destination,
         finalRequest = { ...request, evaluationTime: blockTime, completionTime: Time.getProductionCompletionTime(blockTime, currentCrew.Crew.readyAt, duration) };
       }
       if (result.status === 'denied' && !acquisitionMatches(result, index, finalRequest, acquisitions)) return result;
-      if (result.status === 'allowed' && ((index === 0 && purchase) || (index === 1 && lease))) return { status: 'denied', reason: errorMessages.productionChanged };
+      if (result.status === 'allowed' && ((index === 0 && purchase) || (index === (kind === 'baseline' ? 0 : 1) && lease))) return { status: 'denied', reason: errorMessages.productionChanged };
     }
     return { status: 'allowed' };
   };

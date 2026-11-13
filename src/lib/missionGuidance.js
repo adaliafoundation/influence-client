@@ -17,11 +17,11 @@ export const gameplayGuides = {
   sample: {
     title: "Prospect the surface",
     pages: [
-      "Now it’s time for you to take a sneak peek at what is under the surface. Open the Resources pane and select the resource you want to prospect. The surface overlay shows where it is more abundant. Look for a location that is close to your crew and your planned buildings to keep travel and future transport distances manageable.",
-      "One of the most important new inventions since we arrived here in this asteroid belt was the Core Drill. This handheld instrument that can be operated by one person alone on the surface of an asteroid can be credited with saving us all from starving to death when we first arrived. Without it, we’d waste our time and energy digging around randomly. Click on a promising lot, then click Start Core Sample. In the sampling window, check the selected resource and the discovery minimum and maximum. Abundance helps you choose a site, but the deposit’s actual size is revealed by sampling.",
-      "Open the Tool section. Use the available starter-pack core drill if present, otherwise, select an accessible inventory containing one. Review the travel time and sampling time, then click Prospect.",
-      "Let the sampling timer finish. Return to the sampled lot and click Analyze Sample, then finish the action in the window. Starting the sample alone does not reveal the deposit or finish the requirement.",
-      "Inspect the revealed deposit and compare its size with the requirement in Objectives. For each distinct deposit required by the mission, start and analyze a new sample. Improving the same deposit does not give you another distinct deposit."
+      "Open the Resources pane and select a material. The surface overlay helps you choose an abundant location near your crew and future buildings. Select a lot you have permission to use, then click Prospect.",
+      "Unlock private data to preserve your discoveries, then start a prospecting campaign. Each accepted sample consumes one Core Drill or an available starter-pack sample allowance. Choose an accessible drill inventory if you need one.",
+      "Follow explores a new underground section. Cross-cut measures how much ore it contains, while Characterize measures how quickly it can be extracted. Additional samples can improve the claim, but drills can stick, bores can collapse, and cross-cutting can cause a cave-in.",
+      "Wait for each committed sample to finish before choosing another. Your crew travels to the starting lot even when you explore laterally. Sampling is blocked beneath a lot while its extractor is running or awaiting collection.",
+      "Choose one productive section when you are satisfied. Select the claim, generate its proof in your browser, and create the claim on chain. A single completed campaign yielding at least 1,000 tonnes satisfies this mission; individual samples and old partial progress do not."
     ],
     highlights: ["hudMenuResources", "actionButtonCoreSample", null, "actionButtonCoreSample", null]
   },

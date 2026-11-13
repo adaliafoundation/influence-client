@@ -33,6 +33,9 @@ import useConstants from '~/hooks/useConstants';
 import { getLotGeometryHeightMaps, getLotGeometryHeightMapResolution } from './helpers/LotGeometry';
 import { disposeLotMeshes } from './helpers/disposeLotMeshes';
 import Crews from './Crews';
+import ProspectingScene from '../../prospecting/ProspectingScene';
+import { useProspecting } from '../../prospecting/store';
+import { setProspectingLotVisibility } from '../../prospecting/lotPresentation';
 import Deliveries from './Deliveries';
 
 const { MAX_LOTS_RENDERED } = constants;
@@ -82,6 +85,7 @@ const lotUseTextures = {
 };
 
 const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, cameraAutomationVersion, cameraNormalized, config, getCameraIsAnimating, getLockToSurface, getRotation }) => {
+  const prospectingActive = useProspecting((s) => s.active && s.asteroidId === asteroidId);
   const { token } = useSession();
   const { crew } = useCrewContext();
   const { data: TIME_ACCELERATION } = useConstants('TIME_ACCELERATION');
@@ -848,15 +852,22 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   }, [cameraNormalized?.string, regionsByDistance?.length, regionTally]);
 
   useEffect(() => {
-    if (!lastClick) return;
+    if (!lastClick || useProspecting.getState().active) return;
     dispatchLotSelected(Lot.toId(asteroidId, highlighted.current));
   }, [lastClick]);
 
   const mouseThrottleTime = useMemo(() => MOUSE_THROTTLE_TIME / (TIME_ACCELERATION / 24), [TIME_ACCELERATION]);
 
   useFrame((state) => {
-    // if no lots, nothing to do
-    if (!lotTally) return;
+    const survey = useProspecting.getState();
+    const prospecting = survey.active && survey.asteroidId === asteroidId;
+    setProspectingLotVisibility(lotMeshes.current, [
+      lotLeasesMesh.current,
+      mouseHoverMesh.current,
+      selectionMesh.current,
+      mouseableMesh.current
+    ], prospecting);
+    if (prospecting || !lotTally) return;
 
     if (getCameraIsAnimating()) {
       rescaleRenderedLotMatrices(getLotScale(state.camera.position.length() - config.radius));
@@ -937,7 +948,9 @@ const Lots = ({ attachTo: overrideAttachTo, asteroidId, axis, cameraAltitude, ca
   if (!positionsReady) return null;
   return (
     <>
+      <ProspectingScene attachTo={attachTo} positions={positions.current} lotTally={lotTally} asteroidId={asteroidId} />
       <Crews
+        hidden={prospectingActive}
         attachTo={attachTo}
         asteroidId={asteroidId}
         getLotPosition={getLotPosition}

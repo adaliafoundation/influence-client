@@ -24,10 +24,7 @@ export const getMissionObjectives = (mission, progress = {}) => {
     case StarterMission.IDS.MAKE_LANDFALL:
       return [objective('Plan your campaign Warehouse', !!progress.warehouseId)];
     case StarterMission.IDS.PROSPECT_THE_SURFACE:
-      return Array.from({ length: requirements.distinctDeposits }, (_, index) => objective(
-        `Sample ${index + 1}: reveal at least ${requirements.minInitialYieldKg.toLocaleString()} kg in a distinct deposit`,
-        (progress.sampleCount || 0) > index
-      ));
+      return [objective(`Complete a prospecting campaign and finalize a claim of at least ${(requirements.minInitialYieldKg / 1000).toLocaleString()} tonnes`)];
     case StarterMission.IDS.BEGIN_EXTRACTION:
       return [objective('Construct an Extractor'), objective(`Finish a single raw-resource extraction of at least ${(requirements.minExtractionMassGrams / 1000).toLocaleString()} kg`)];
     case StarterMission.IDS.ESTABLISH_STORAGE:

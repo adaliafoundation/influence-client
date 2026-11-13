@@ -1,7 +1,8 @@
 
 import TerrainChunk from './TerrainChunk';
+import TerrainResourceOverlay from './TerrainResourceOverlay';
 import TerrainChunkPreparer from './TerrainChunkPreparer';
-import { initChunkTextures, rebuildChunkMaps } from './TerrainChunkUtils';
+import { initChunkTextures, rebuildChunkMaps, rebuildChunkEmissiveMap } from './TerrainChunkUtils';
 import constants from '~/lib/constants';
 import terrainPerformance from '~/lib/terrainPerformance';
 import { reportBackgroundWorkError, withBackgroundWorkTimeout } from '../../../../lib/backgroundWork';
@@ -32,6 +33,10 @@ class TerrainChunkManager {
     this.prunedConfig = prunedConfig; // for passing to webworker
 
     this.disposed = false;
+    this.resourceOverlay = new TerrainResourceOverlay(
+      (chunk, params) => this.generateResourceMap(chunk, params),
+      (error) => reportBackgroundWorkError(error, 'Resource overlay')
+    );
     this.pendingBuilds = new Set();
     this.maxConcurrent = 2;
     this.shadowsEnabled = false;
@@ -50,6 +55,7 @@ class TerrainChunkManager {
   }
 
   dispose() {
+    this.resourceOverlay.dispose();
     this.disposed = true;
     this.preparer?.dispose();
     // The same asteroid may have a replacement manager or a thumbnail building.
@@ -122,6 +128,33 @@ class TerrainChunkManager {
     if (timing.animating) timing.animationWait += now - timing.lastObservedAt;
     timing.lastObservedAt = now;
     timing.animating = animating;
+  }
+
+  generateResourceMap(chunk, emissiveParams) {
+    const groupMatrix = chunk._params.group.matrix.clone();
+    const offset = chunk._params.offset.clone();
+    const data = {
+      emissiveParams, groupMatrix: groupMatrix.toArray(),
+      offset: offset.toArray(), resolution: chunk._resolution, width: chunk._params.width
+    };
+    return withBackgroundWorkTimeout(new Promise((resolve, reject) => {
+      this.workerPool.processInBackground({
+        topic: 'rebuildTerrainEmissiveMap',
+        asteroid: { key: this.asteroidId, config: this.prunedConfig }, chunk: data,
+        _terrainManagerId: this.managerId, _cacheable: 'asteroid',
+        _concurrencyGroup: 'terrainResource', _maxConcurrent: this.maxConcurrent,
+        _priority: WorkerQueuePriority.terrainGeometry
+      }, ({ bitmap, error }) => {
+        if (this.disposed) { bitmap?.close?.(); bitmap?.dispose?.(); resolve(null); return; }
+        if (!error) resolve(bitmap);
+        else {
+          // Match the existing terrain-map path when worker WebGL is unavailable.
+          try { resolve(rebuildChunkEmissiveMap({ ...data, config: this.config,
+            groupMatrix, offset })); }
+          catch (cause) { reject(cause); }
+        }
+      });
+    }), 'Resource overlay generation');
   }
 
   allocateChunk(params) {
@@ -353,6 +386,7 @@ class TerrainChunkManager {
     // recycle old chunks
     let chunk;
     while (chunk = this._old.pop()) { // eslint-disable-line
+      this.resourceOverlay.remove(chunk);
       const poolToUse = !!chunk._params.emissiveParams?.color ? this.emissivePool : this.pool;
       if (ENABLE_TERRAIN_CHUNK_RESOURCE_POOL && chunk.isReusable() && poolToUse.length < this.targetPoolSize) {
         chunk.detachFromGroup();
@@ -365,6 +399,7 @@ class TerrainChunkManager {
     // show new chunks
     while (chunk = this._new.pop()) { // eslint-disable-line
       chunk.show();
+      this.resourceOverlay.add(chunk);
       const timing = this.chunkTimings.get(chunk);
       if (timing) {
         terrainPerformance.finish('prepared to visible swap wait', timing.preparedAt);

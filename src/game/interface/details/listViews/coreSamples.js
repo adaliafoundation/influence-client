@@ -1,3 +1,4 @@
+import { prospectingOnchain } from '~/game/prospecting/store';
 import { useMemo } from 'react';
 import { Lot, Product } from '@influenceth/sdk';
 
@@ -26,7 +27,7 @@ const useColumns = () => {
       },
       {
         key: 'resource',
-        label: 'Deposit',
+        label: prospectingOnchain() ? 'Claim' : 'Deposit',
         sortField: 'Deposit.resource',
         selector: row => {
           const loc = Lot.toPosition(row.Location?.location);

@@ -42,6 +42,7 @@ import CrewIndicator from '~/components/CrewIndicator';
 import styled from 'styled-components';
 import theme from '~/theme';
 import useCrewContext from '~/hooks/useCrewContext';
+import { prospectingOnchain } from '~/game/prospecting/store';
 
 const InputLabel = styled.div`
   align-items: center;
@@ -404,8 +405,8 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
       <ActionDialogFooter
         crewAvailableTime={crewTimeRequirement}
         taskCompleteTime={taskTimeRequirement}
-        disabled={stage === actionStage.NOT_STARTED && (!selectedSample || !drillSource || (!crewCan(Permission.IDS.USE_DEPOSIT, selectedSample) && !isPurchase))}
-        goLabel={isPurchase ? 'Purchase & Optimize' : 'Optimize'}
+        disabled={stage === actionStage.NOT_STARTED && (prospectingOnchain() || !selectedSample || !drillSource || (!crewCan(Permission.IDS.USE_DEPOSIT, selectedSample) && !isPurchase))}
+        goLabel={prospectingOnchain() ? 'Replaced by Prospecting' : isPurchase ? 'Purchase & Optimize' : 'Optimize'}
         onGo={onImprove}
         finalizeLabel="Analyze"
         isSequenceable

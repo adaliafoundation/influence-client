@@ -111,3 +111,8 @@ test('shows the actionable STRK setup warning', () => {
   }));
   expect(notify.mock.calls[0][0].data.content).toBe(errorMessages.accountSetupFunding);
 });
+
+test('redacts the shared private-data key as a complete value', () => {
+  expect(sanitizeErrorReport({ privateDataKey: { owner: 'account', privateKey: 'SECRET' } }))
+    .toEqual({ privateDataKey: '[redacted]' });
+});

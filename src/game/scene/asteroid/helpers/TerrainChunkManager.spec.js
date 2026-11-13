@@ -294,3 +294,15 @@ describe('texture initialization failures', () => {
     expect(useBackgroundWorkError.getState().error).toBeNull();
   });
 });
+
+it('requests only an emissive map for an overlay change, without rebuilding geometry', async () => {
+  const { manager, chunk, jobs } = setup();
+  const pending = manager.generateResourceMap(chunk, { resource: 1 });
+  expect(jobs).toHaveLength(3);
+  expect(jobs[2].message.topic).toBe('rebuildTerrainEmissiveMap');
+  const bitmap = { close: jest.fn() };
+  jobs[2].callback({ bitmap });
+  await expect(pending).resolves.toBe(bitmap);
+  expect(chunk.updateGeometry).not.toHaveBeenCalled();
+  expect(chunk.updateMaps).not.toHaveBeenCalled();
+});

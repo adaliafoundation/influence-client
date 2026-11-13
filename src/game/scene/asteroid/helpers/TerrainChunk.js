@@ -66,6 +66,17 @@ class TerrainChunk {
 
     // initialize mesh
     this._plane = new Mesh(this._geometry, this._material);
+    this._plane.userData.isAsteroidTerrain = true;
+    this._plane.userData.terrainResolution = resolution;
+    this._plane.userData.createSurfaceGeometry = () => {
+      const geometry = this._geometry.clone();
+      applyDisplacementToGeometry(geometry, this._resolution, this._config.radius, this._stretch, this._material);
+      // Skirts hide LOD seams; they are not part of the ground surface.
+      geometry.setDrawRange(0, this._resolution * this._resolution * 6);
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+      return geometry;
+    };
 
     // add customDepthMaterial
     if (shadowsEnabled) {
@@ -304,8 +315,10 @@ class TerrainChunk {
     this._material.emissive.setHex(0x000000);
     this._material.emissiveIntensity = 0;
     materialNeedsUpdate = this.updateMaterialTexture('emissiveMap', null) || materialNeedsUpdate;
+    this._emissiveResource = null;
 
     if (this._params.emissiveParams && data.emissiveBitmap) {
+      this._emissiveResource = this._params.emissiveParams.resource;
       this._material.color.setHex(0x222222); // darker modulation for color map so light doesn't wash out emissivity map
       this._material.emissive.set(this._params.emissiveParams.color);
       materialNeedsUpdate = this.updateMaterialTexture(
@@ -321,6 +334,23 @@ class TerrainChunk {
     if (materialNeedsUpdate) {
       this._material.needsUpdate = true;
     }
+  }
+
+  hasResourceOverlay(params) {
+    return !!this._material.emissiveMap && this._emissiveResource === params.resource;
+  }
+
+  setResourceOverlay(params, bitmap) {
+    if (bitmap) {
+      const changed = this.updateMaterialTexture('emissiveMap', bitmap);
+      this._emissiveResource = params.resource;
+      if (changed) this._material.needsUpdate = true;
+    }
+    const enabled = params && this.hasResourceOverlay(params);
+    this._material.color.setHex(enabled ? 0x222222 : 0xffffff);
+    this._material.emissive.set(enabled ? params.color : 0x000000);
+    this._material.emissiveIntensity = enabled ? 0.05 * (params.intensityMult || 1) : 0;
+    if (this._materialOverrides) this._material.setValues(this._materialOverrides);
   }
 
   getMesh() {

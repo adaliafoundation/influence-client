@@ -88,6 +88,12 @@ test.each(['buildingId', 'shipId'])('keeps the stationed crew marker at its lot 
   expect(marker.position.y).toBeGreaterThan(3);
   expect(marker.scale.x).toBe(1);
   const initialHeight = marker.position.y;
+  view.rerender(<Crews {...props} hidden />);
+  useFrame.mock.calls.at(-1)[0]({});
+  expect(main.visible).toBe(false);
+  view.rerender(<Crews {...props} />);
+  useFrame.mock.calls.at(-1)[0]({});
+  expect(main.visible).toBe(true);
 
   // Advance the camera without rerendering, as an animated zoom does.
   camera.position.z = 3500;
