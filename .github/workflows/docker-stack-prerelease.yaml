@@ -2,7 +2,7 @@ name: Release prerelease image
 
 on:
   push:
-    branches: [main]
+    branches: [prerelease]
   workflow_dispatch:
 
 permissions:
