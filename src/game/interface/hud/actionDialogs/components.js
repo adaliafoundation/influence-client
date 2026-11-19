@@ -5305,6 +5305,7 @@ export const ActionDialogFooter = ({
   buttonsLoading,
   crewAvailableTime,
   disabled,
+  disabledReason,
   finalizeLabel,
   goLabel,
   goLabelPrice,
@@ -5401,7 +5402,8 @@ export const ActionDialogFooter = ({
               {!submission?.busy && waitForCrewReady && allowedOrLaunched && !isReady && <CrewBusyButton isSequenceable={isSequenceable} />}
               {(submission?.busy || !waitForCrewReady || (isReady && allowedOrLaunched)) && (
                 <Button
-                  disabled={nativeBool(disabled || userIsLoading)}
+                  disabled={nativeBool(disabled || userIsLoading )}
+                  disabledTooltipText={disabledReason ? `Disabled: ${disabledReason}` : undefined}
                   isTransaction
                   loading={reactBool(buttonsLoading)}
                   submissionId="dialog-go"
