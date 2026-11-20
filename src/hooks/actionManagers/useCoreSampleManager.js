@@ -104,14 +104,19 @@ const useCoreSampleManager = (lotId) => {
       });
 
     pendingTransactions.forEach((tx) => {
-      if (tx.key === 'SampleDepositStart') {
-        if (tx.vars.lot?.id === lotId && tx.vars.caller_crew?.id === crew?.id) {
+      // mixed-system batch entries are in tx.vars.samplingCalls as { key, vars }
+      const bulkVarSets = tx.key === 'BulkSampleDepositStart' ? (tx.vars?.samplingCalls || []) : [];
+      const startVarSets = tx.key === 'SampleDepositStart'
+        ? [{ key: 'SampleDepositStart', vars: tx.vars }]
+        : bulkVarSets.filter(({ key }) => key === 'SampleDepositStart');
+      startVarSets.forEach(({ vars }) => {
+        if (vars.lot?.id === lotId && vars.caller_crew?.id === crew?.id) {
           const current = { ...template };
           current.isNew = true;
-          current.owner = tx.vars.caller_crew.id;
-          current.origin = tx.vars.origin;
-          current.originSlot = tx.vars.origin_slot;
-          current.resourceId = tx.vars.resource;
+          current.owner = vars.caller_crew.id;
+          current.origin = vars.origin;
+          current.originSlot = vars.origin_slot;
+          current.resourceId = vars.resource;
           current.sampleId = null;
 
           activeSamples.push({
@@ -120,8 +125,15 @@ const useCoreSampleManager = (lotId) => {
             stage: actionStages.STARTING
           })
         }
-      } else if (['PurchaseDepositAndImprove', 'SampleDepositImprove'].includes(tx.key)) {
-        const pendingImprovementSample = lot?.deposits?.find((d) => d.id === tx.vars.deposit?.id);
+      });
+      const improveVarSets = [
+        ...(['PurchaseDepositAndImprove', 'SampleDepositImprove'].includes(tx.key) ? [tx.vars] : []),
+        ...bulkVarSets
+          .filter(({ key }) => key === 'SampleDepositImprove')
+          .map(({ vars }) => vars)
+      ];
+      improveVarSets.forEach((vars) => {
+        const pendingImprovementSample = lot?.deposits?.find((d) => d.id === vars.deposit?.id);
         if (pendingImprovementSample) {
           const current = {
             ...template,
@@ -130,9 +142,8 @@ const useCoreSampleManager = (lotId) => {
             owner: pendingImprovementSample.Control.controller.id,
             resourceId: pendingImprovementSample.Deposit.resource,
             sampleId: pendingImprovementSample.id,
-            origin: tx.vars.origin,
-            originSlot: tx.vars.origin_slot,
-            origin: tx.vars.origin,
+            origin: vars.origin,
+            originSlot: vars.origin_slot,
           };
 
           const alreadySample = activeSamples.find((a) => a.action.sampleId === pendingImprovementSample.id);
@@ -150,7 +161,7 @@ const useCoreSampleManager = (lotId) => {
             })
           }
         }
-      }
+      });
     });
 
     return [

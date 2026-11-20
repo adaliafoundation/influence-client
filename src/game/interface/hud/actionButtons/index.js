@@ -1,5 +1,6 @@
 import { ActionAuthorizationProvider } from './ActionAuthorizationContext';
 import AssembleShip from './AssembleShip';
+import BatchCoreSampling from './BatchCoreSampling';
 import ClaimArrivalReward from './ClaimArrivalReward';
 import ClaimPrepareReward from './ClaimPrepareReward';
 import Construct from './Construct';
@@ -41,6 +42,7 @@ import ViewAgreements from './ViewAgreements';
 
 const ActionsButtons = {
   AssembleShip,
+  BatchCoreSampling,
   ClaimArrivalReward,
   ClaimPrepareReward,
   Construct,
