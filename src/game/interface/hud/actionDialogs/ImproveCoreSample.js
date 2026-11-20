@@ -5,6 +5,7 @@ import { CoreSampleIcon, ImproveCoreSampleIcon, ResourceIcon, SwayIcon, WarningI
 import ResourceThumbnail from '~/components/ResourceThumbnail';
 import useStore from '~/hooks/useStore';
 import useCoreSampleManager from '~/hooks/actionManagers/useCoreSampleManager';
+import useClosestAccessibleInventory from '~/hooks/useClosestAccessibleInventory';
 import actionStage from '~/lib/actionStages';
 import { reactBool, formatTimer, locationsArrToObj, getCrewAbilityBonuses, formatPrice, keyify } from '~/lib/utils';
 
@@ -94,8 +95,14 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   // if an active sample is detected, set "sample" for remainder of dialog's lifespan
   const [sampleId, setSampleId] = useState(prepop.sampleId);
   const [drillSource, setDrillSource] = useState();
+  const [hasUserSelectedDrillSource, setHasUserSelectedDrillSource] = useState(false);
   const [sampleSelectorOpen, setSampleSelectorOpen] = useState(false);
   const [sourceSelectorOpen, setSourceSelectorOpen] = useState(false);
+  const closestDrillSource = useClosestAccessibleInventory(
+    stage === actionStage.NOT_STARTED ? asteroid?.id : null,
+    Product.IDS.CORE_DRILL,
+    stage === actionStage.NOT_STARTED && lot?.id ? { lotIndex: Lot.toIndex(lot.id) } : undefined
+  );
 
   const improvableSamples = useMemo(() => {
     return (lot?.deposits || [])
@@ -131,8 +138,28 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
   const initialDrillLotIndex = originEntity ? locationsArrToObj(originEntity.Location.locations || []).lotIndex : undefined;
   const initialDrillSlot = currentSamplingAction?.originSlot || null;
   useEffect(() => {
-    if (initialDrillLotIndex != null) setDrillSource({ lotIndex: initialDrillLotIndex, slot: initialDrillSlot });
-  }, [initialDrillLotIndex, initialDrillSlot]);
+    if (initialDrillLotIndex != null && !hasUserSelectedDrillSource) {
+      setDrillSource({ lotIndex: initialDrillLotIndex, slot: initialDrillSlot });
+    }
+  }, [hasUserSelectedDrillSource, initialDrillLotIndex, initialDrillSlot]);
+
+  const onSelectDrillSource = useCallback((selection) => {
+    setDrillSource(selection);
+    setHasUserSelectedDrillSource(true);
+  }, []);
+
+  useEffect(() => {
+    if (
+      stage !== actionStage.NOT_STARTED
+      || prepop.origin
+      || currentSamplingAction?.origin
+      || drillSource
+      || hasUserSelectedDrillSource
+      || !closestDrillSource
+    ) return;
+
+    setDrillSource(closestDrillSource);
+  }, [closestDrillSource, currentSamplingAction?.origin, drillSource, hasUserSelectedDrillSource, prepop.origin, stage]);
 
   const lotAbundance = useMemo(() => {
     if (!resourceId || !asteroid?.Celestial?.abundances || !lot?.id) return 0;
@@ -431,7 +458,7 @@ const ImproveCoreSample = ({ asteroid, lot, coreSampleManager, currentSamplingAc
             itemIds={[Product.IDS.CORE_DRILL]}
             isSourcing
             onClose={() => setSourceSelectorOpen(false)}
-            onSelected={setDrillSource}
+            onSelected={onSelectDrillSource}
             open={sourceSelectorOpen}
             requirePresenceOfItemIds
           />
